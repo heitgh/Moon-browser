@@ -1,7 +1,7 @@
 # 🌙 Moon Browser
 
 <p align="center">
-  <img src="assets/Moon.png" alt="Moon Browser Logo" width="220" />
+  <img src="assets/Moon.png" alt="Moon Browser Logo" width="200" />
 </p>
 
 <h3 align="center">O Navegador Inteligente, Ergonômico e Hiper-Personalizável para Heavy Users</h3>
@@ -20,13 +20,14 @@
 
 <p align="center">
   <a href="#-sobre-o-projeto">Sobre</a> •
-  <a href="#-seja-um-apoiador-fundador-catarse">Apoiar no Catarse</a> •
+  <a href="#-interface-do-navegador">Interface</a> •
+  <a href="#-seja-um-apoiador-fundador-catarse">Catarse</a> •
   <a href="#-comunidade-no-discord">Discord</a> •
   <a href="#-pilares-do-moon">Pilares</a> •
   <a href="#-tech-stack">Tech Stack</a> •
   <a href="#-estrutura-do-repositorio">Estrutura</a> •
   <a href="#-como-começar">Como Começar</a> •
-  <a href="#-desenvolvedores">Desenvolvedores</a>
+  <a href="#-desenvolvedores--nexuinc">Desenvolvedores</a>
 </p>
 
 ---
@@ -40,15 +41,38 @@
 
 ## 🌙 Sobre o Projeto
 
-O **Moon Browser** é um navegador de alta performance construído **dos usuários para os usuários**. Ele foi projetado especificamente para desenvolvedores, pesquisadores, designers e profissionais que passam **mais de 8 horas por dia no computador**.
+O **Moon Browser** é um navegador de alta performance sendo desenvolvido pela **Nexu.inc** e construído **dos usuários para os usuários**. Ele foi projetado especificamente para desenvolvedores, pesquisadores, designers e profissionais que passam **mais de 8 horas por dia no computador**.
 
 Combinando o minimalismo fluido e ergonômico com um nível insano de customização, o Moon redefine a experiência de navegação através da **Ergonomia Cognitiva e Visual**. Em vez de você se adaptar ao navegador, o Moon adapta sua interface, cores, tipografia e fluxo de trabalho de acordo com suas necessidades e nível de fadiga visual ao longo do dia.
 
 ---
 
+## 📸 Interface do Navegador
+
+<p align="center">
+  <img src="assets/page.png" alt="Tela Inicial do Moon Browser" width="100%" />
+  <br><em><b>Tela Inicial:</b> Design limpo com barra de pesquisa customizada e wallpapers dinâmicos.</em>
+</p>
+
+<br>
+
+<p align="center">
+  <img src="assets/page1.png" alt="Painel de Temas e Customização" width="100%" />
+  <br><em><b>Central de Ajustes:</b> Controle de transparência, desfoque (blur), overlay e galeria de wallpapers em tempo real.</em>
+</p>
+
+<br>
+
+<p align="center">
+  <img src="assets/page2.png" alt="Navegação do Moon Browser" width="100%" />
+  <br><em><b>Navegação Fluida:</b> Barra lateral retrátil para acesso rápido a ferramentas, VPN e painéis.</em>
+</p>
+
+---
+
 ## 🤝 Seja um Apoiador Fundador (Catarse)
 
-O Moon Browser é um projeto totalmente independente e focado em privacidade. Não dependemos de corporações de anúncios ou investidores que comprometam seus dados.
+O Moon Browser é um projeto totalmente independente desenvolvido pela **Nexu.inc** e focado em privacidade. Não dependemos de corporações de anúncios ou investidores que comprometam seus dados.
 
 Ao apoiar nossa campanha no Catarse, você garante:
 * 🔑 **Acesso Antecipado (Early Build Access):** Teste as compilações do Moon meses antes do público geral.
@@ -83,8 +107,8 @@ Entrar na nossa comunidade no Discord é a melhor forma de se manter atualizado 
 * **Hibernação Inteligente de Abas:** Gerenciamento otimizado de recursos para manter o consumo de RAM sempre sob controle.
 
 ### 🎨 3. Hiper-Personalização No-Code
+* **Galeria de Wallpapers & Efeitos:** Adicione links de imagens, controle níveis de transparência, Blur (desfoque) e tom de iluminação do fundo.
 * **Interface Totalmente Modular:** Alterne módulos na barra lateral (favoritos, histórico, notas, tradutor e extensões) de acordo com o seu fluxo de trabalho.
-* **Barra Lateral e Gavetas Flutuantes (Drawers):** Acesso instantâneo a ferramentas internas sem precisar trocar de aba.
 
 ---
 
@@ -103,7 +127,7 @@ Entrar na nossa comunidade no Discord é a melhor forma de se manter atualizado 
 
 ```text
 Moon-browser/
-├── assets/             # Ícones, imagens e recursos visuais do projeto
+├── assets/             # Logos, backgrounds e screenshots do projeto (page.png, page1.png, page2.png)
 ├── index.html          # Interface principal do navegador (Toolbar, Sidebar, Drawers)
 ├── main.js             # Processo principal do Electron (Janela, ciclo de vida)
 ├── package.json        # Dependências e scripts de execução do Node.js
