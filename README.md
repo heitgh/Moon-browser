@@ -133,3 +133,47 @@ Moon-browser/
 ├── package.json        # Dependências e scripts de execução do Node.js
 ├── .gitignore          # Arquivos e pastas ignorados pelo Git (ex: node_modules)
 └── README.md           # Documentação e apresentação do projeto
+```
+
+---
+
+## 🚀 Como Começar (Desenvolvimento)
+
+### Pré-requisitos
+* **Node.js** `>= 18.x`
+* **npm**
+* **Git**
+
+### Passo a Passo
+
+1. **Clone o repositório:**
+   ```bash
+   git clone [https://github.com/SEU-USUARIO/Moon-browser.git](https://github.com/SEU-USUARIO/Moon-browser.git)
+   cd Moon-browser
+   ```
+
+2. **Instale as dependências:**
+   ```bash
+   npm install
+   ```
+
+3. **Execute o projeto em modo de desenvolvimento:**
+   ```bash
+   npm start
+   ```
+
+---
+
+## 👥 Desenvolvedores & Nexu.inc
+
+O **Moon Browser** é um projeto idealizado e mantido pela **Nexu.inc**.
+
+### 💻 Equipe de Desenvolvimento
+* **Julio Cesar Lopes Prates** — *Lead Developer / Desenvolvedor Geral* (Arquiteto de Software e Desenvolvedor Principal)
+* **Ariel Apolinario** — *Participante & Colaborador* (Apoio no desenvolvimento e testes do projeto)
+
+---
+
+<p align="center">
+  Uma iniciativa <b>Nexu.inc</b> — Desenvolvido com foco no conforto de quem vive na tela. 🌙
+</p>
