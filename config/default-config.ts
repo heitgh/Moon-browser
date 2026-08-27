@@ -1,0 +1,2 @@
+export interface MoonConfig{readonly environment:"development"|"production";readonly dataPath?:string;readonly logLevel:"debug"|"info"|"warn"|"error";readonly telemetry:boolean;readonly autoUpdate:boolean;readonly restoreSession:boolean;readonly defaultSearchProvider:string;readonly homepage:string;}
+export const DEFAULT_CONFIG:MoonConfig={environment:"production",logLevel:"info",telemetry:false,autoUpdate:false,restoreSession:true,defaultSearchProvider:"duckduckgo",homepage:"moon://home"};

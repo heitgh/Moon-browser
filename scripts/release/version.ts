@@ -1,0 +1,2 @@
+import { readFile,writeFile } from "node:fs/promises";
+const version=process.argv[2];if(!version||!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version))throw new Error("Usage: version <semver>");for(const path of["package.json","apps/desktop/package.json","apps/mobile/package.json"]){const data=JSON.parse(await readFile(path,"utf8"))as Record<string,unknown>;data.version=version;await writeFile(path,`${JSON.stringify(data,null,2)}\n`);}console.log(version);

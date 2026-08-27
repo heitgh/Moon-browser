@@ -1,0 +1,3 @@
+import type { ContextItem } from "../engine/context-engine.js";
+export interface SpaceRule { readonly id:string; readonly name:string; readonly workspaceId:string; readonly domains?:readonly string[]; readonly keywords?:readonly string[]; readonly minimumScore:number; readonly enabled:boolean; }
+export function evaluateSpaceRule(rule:SpaceRule,item:ContextItem):number{if(!rule.enabled)return 0;let score=0;if(item.url&&rule.domains?.some(domain=>{try{return new URL(item.url!).hostname.endsWith(domain);}catch{return false;}}))score+=60;const text=`${item.title} ${item.content??""}`.toLocaleLowerCase();for(const keyword of rule.keywords??[])if(text.includes(keyword.toLocaleLowerCase()))score+=10;return score>=rule.minimumScore?score:0;}

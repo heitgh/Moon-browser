@@ -1,0 +1,2 @@
+export interface PluginWidgetDefinition{readonly id:string;readonly pluginId:string;readonly title:string;readonly location:"home"|"sidebar"|"toolbar";readonly defaultSpan?:1|2|3|4;readonly render:(container:HTMLElement)=>void|Promise<void>;readonly refresh?:()=>void|Promise<void>;}
+export interface WidgetApi{register(widget:PluginWidgetDefinition):()=>void;mount(id:string,container:HTMLElement):Promise<void>;refresh(id:string):Promise<void>;}

@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs><linearGradient id="a" x2="1" y2="1"><stop stop-color="#090c18"/><stop offset=".5" stop-color="#24113a"/><stop offset="1" stop-color="#071b28"/></linearGradient><filter id="b"><feTurbulence baseFrequency=".004" numOctaves="4"/><feColorMatrix values=".8 0 0 0 .2  0 .25 0 0 .1  0 0 1 0 .25  0 0 0 .55 0"/><feGaussianBlur stdDeviation="24"/></filter></defs>
+  <rect width="1920" height="1080" fill="url(#a)"/><rect x="-100" y="-100" width="2120" height="1280" filter="url(#b)" opacity=".62"/>
+</svg>

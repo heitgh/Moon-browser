@@ -1,0 +1,4 @@
+export type TrackingProtectionLevel="off"|"standard"|"strict";
+export interface TrackingProtectionSettings{readonly level:TrackingProtectionLevel;readonly globalPrivacyControl:boolean;readonly doNotTrack:boolean;readonly stripTrackingParameters:boolean;readonly exceptions:readonly string[];}
+const TRACKING_PARAMETERS=new Set(["utm_source","utm_medium","utm_campaign","utm_term","utm_content","fbclid","gclid","msclkid"]);
+export function sanitizeTrackingUrl(value:string,settings:TrackingProtectionSettings):string{if(!settings.stripTrackingParameters)return value;const url=new URL(value);if(settings.exceptions.some(domain=>url.hostname.endsWith(domain)))return value;for(const key of[...url.searchParams.keys()])if(TRACKING_PARAMETERS.has(key.toLocaleLowerCase()))url.searchParams.delete(key);return url.toString();}

@@ -1,0 +1,3 @@
+import type { WebContents } from "electron";
+import type { NavigationPolicy } from "./navigation-policy.js";
+export function installWebSecurity(contents: WebContents, policy: NavigationPolicy): () => void { const onNavigate = (event: Electron.Event, url: string) => { if (!policy.validate(url)) event.preventDefault(); }; const onWindow = (details: Electron.HandlerDetails) => policy.validate(details.url) ? { action: "allow" as const } : { action: "deny" as const }; contents.on("will-navigate", onNavigate); contents.setWindowOpenHandler(onWindow); return () => contents.removeListener("will-navigate", onNavigate); }

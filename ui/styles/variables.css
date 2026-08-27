@@ -1,0 +1,58 @@
+:root {
+  color-scheme: dark;
+  --moon-bg: #0b0d12;
+  --moon-surface: #141720;
+  --moon-surface-raised: #1b1f2a;
+  --moon-text: #f4f5f8;
+  --moon-text-muted: #a6adbb;
+  --moon-accent: #8b72ff;
+  --moon-success: #10b981;
+  --moon-warning: #f59e0b;
+  --moon-danger: #ff647c;
+  --moon-border: color-mix(in srgb, var(--moon-text) 12%, transparent);
+
+  /* Typography: 13 px is the readable UI floor; 11 px is reserved for metadata. */
+  --moon-font-micro: 11px;
+  --moon-font-caption: 12px;
+  --moon-font-ui: 13px;
+  --moon-font-body: 14px;
+  --moon-font-title-sm: 16px;
+  --moon-font-title-md: 20px;
+  --moon-font-title-lg: 28px;
+
+  /* Four-pixel spatial rhythm. */
+  --moon-space-1: .25rem;
+  --moon-space-2: .5rem;
+  --moon-space-3: .75rem;
+  --moon-space-4: 1rem;
+  --moon-space-5: 1.25rem;
+  --moon-space-6: 1.5rem;
+  --moon-space-8: 2rem;
+  --moon-space-10: 2.5rem;
+
+  --moon-radius-xs: 6px;
+  --moon-radius-sm: 8px;
+  --moon-radius-md: 12px;
+  --moon-radius-lg: 18px;
+  --moon-radius-pill: 999px;
+
+  --moon-control-height: 40px;
+  --moon-control-height-compact: 36px;
+  --moon-control-height-touch: 44px;
+  --moon-tabs-height: 40px;
+  --moon-toolbar-height-default: 48px;
+  --moon-workspaces-height: 40px;
+  --moon-rail-width-default: 56px;
+
+  --moon-shadow-low: 0 8px 24px rgb(0 0 0 / .24);
+  --moon-shadow-medium: 0 18px 48px rgb(0 0 0 / .38);
+  --moon-shadow-high: 0 28px 80px rgb(0 0 0 / .55);
+  --moon-focus-ring: 0 0 0 3px color-mix(in srgb, var(--moon-user-accent, var(--moon-accent)) 42%, transparent);
+
+  --moon-motion-instant: 80ms;
+  --moon-motion-fast: 140ms;
+  --moon-motion-normal: 220ms;
+  --moon-motion-deliberate: 320ms;
+  --moon-ease-standard: cubic-bezier(.2, 0, 0, 1);
+  --moon-ease-emphasized: cubic-bezier(.2, .8, .2, 1);
+}

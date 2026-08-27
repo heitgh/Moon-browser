@@ -1,0 +1,29 @@
+appId: com.moon.browser
+productName: Moon Browser
+artifactName: Moon-Browser-${version}-${os}-${arch}.${ext}
+directories:
+  output: release
+files:
+  - dist/types/**
+  - ui/styles/**
+  - assets/**
+  - index.html
+  - main.js
+  - preload.cjs
+  - package.json
+asar: true
+asarUnpack:
+  - node_modules/better-sqlite3/**
+linux:
+  category: Network;WebBrowser
+  syncDesktopName: true
+  maintainer: Heitgh <207310826+heitgh@users.noreply.github.com>
+  icon: assets/branding/moon-icon.svg
+  target:
+    - AppImage
+    - deb
+win:
+  target: nsis
+mac:
+  category: public.app-category.productivity
+  target: dmg

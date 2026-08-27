@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Moon Browser</title>
+  <defs>
+    <linearGradient id="moon-gradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a997ff"/>
+      <stop offset="1" stop-color="#6650e8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="#0b0d12"/>
+  <path d="M354 373c-112 0-203-91-203-203 0-28 6-55 16-79-58 33-97 96-97 168 0 106 86 192 192 192 72 0 135-39 168-97-24 12-50 19-76 19Z" fill="url(#moon-gradient)"/>
+  <circle cx="344" cy="151" r="24" fill="#f4f5f8" opacity=".9"/>
+</svg>

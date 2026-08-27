@@ -1,0 +1,4 @@
+import { AppEvents } from "./app-events.js";
+import { AppRouter } from "./app-router.js";
+import { AppStateStore } from "./app-state.js";
+export class MoonApp { readonly events = new AppEvents(); readonly state = new AppStateStore(); readonly router: AppRouter; constructor(readonly root: HTMLElement) { this.root.setAttribute("data-moon-app", ""); const outlet = document.createElement("main"); outlet.id = "moon-content"; this.root.replaceChildren(outlet); this.router = new AppRouter(outlet); } async start(): Promise<void> { this.events.on("app:navigate", ({ route }) => void this.router.navigate(route)); this.events.on("app:toggle-sidebar", ({ open }) => this.state.update({ sidebarOpen: open })); this.events.on("app:toggle-zen", ({ enabled }) => this.state.update({ zenMode: enabled })); this.router.start(); this.state.update({ ready: true }); this.events.emit("app:ready", undefined); } }

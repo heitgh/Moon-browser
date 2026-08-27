@@ -1,0 +1,2 @@
+import type { Session } from "electron";
+export function hardenSession(session: Session): void { session.setPermissionCheckHandler((_contents, permission) => ["clipboard-sanitized-write", "fullscreen"].includes(permission)); session.webRequest.onHeadersReceived((details, callback) => { callback({ responseHeaders: { ...details.responseHeaders, "Content-Security-Policy": details.responseHeaders?.["Content-Security-Policy"] ?? ["default-src 'self' https: data: blob:; object-src 'none'; base-uri 'self'"] } }); }); }

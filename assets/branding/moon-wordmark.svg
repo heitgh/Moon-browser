@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 140" role="img" aria-labelledby="title">
+  <title id="title">Moon</title>
+  <text x="10" y="101" fill="#f4f5f8" font-family="Inter,system-ui,sans-serif" font-size="104" font-weight="700" letter-spacing="-5">Moon</text>
+  <circle cx="457" cy="37" r="10" fill="#8b72ff"/>
+</svg>

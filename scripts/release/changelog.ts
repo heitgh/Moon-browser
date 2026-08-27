@@ -1,0 +1,2 @@
+import { execFile } from "node:child_process";import { promisify } from "node:util";import { writeFile } from "node:fs/promises";
+const exec=promisify(execFile);const from=process.argv[2]??"";const range=from?`${from}..HEAD`:"HEAD";const{stdout}=await exec("git",["log",range,"--pretty=format:%s (%h)"]);const date=new Date().toISOString().slice(0,10);const content=`# Changelog\n\n## Unreleased — ${date}\n\n${stdout.split("\n").filter(Boolean).map(line=>`- ${line}`).join("\n")}\n`;await writeFile("CHANGELOG.md",content);console.log("CHANGELOG.md");

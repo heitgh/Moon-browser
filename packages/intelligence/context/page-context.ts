@@ -1,0 +1,3 @@
+import type { IntelligenceContextRequest,IntelligenceContextSource } from "./context-source.js";
+export interface PageContextReader{read(tabId:string):Promise<{title:string;url:string;text:string}>;}
+export class PageContextSource implements IntelligenceContextSource{readonly id="page";readonly kind="page" as const;constructor(readonly reader:PageContextReader){}async collect(request:IntelligenceContextRequest){if(!request.tabId)return[];const page=await this.reader.read(request.tabId);const content=`Title: ${page.title}\nURL: ${page.url}\n\n${page.text.slice(0,80_000)}`;return[{id:`page:${request.tabId}`,kind:this.kind,content,tokensEstimate:Math.ceil(content.length/4),sensitivity:"private" as const,relevance:100}];}}

@@ -1,0 +1,3 @@
+import type { BrowserPlatform } from "@moon/platform";
+export interface MobileBrowserCapabilities { readonly multipleWindows: boolean; readonly pageCapture: boolean; readonly scriptExecution: boolean; }
+export class MobileBrowserService { constructor(readonly platform: BrowserPlatform, readonly capabilities: MobileBrowserCapabilities) {} createTab(windowId: string, url?: string) { return this.platform.createTab(windowId, { url }); } navigate(tabId: string, url: string) { return this.platform.navigate(tabId, url, { userInitiated: true }); } back(tabId: string) { return this.platform.goBack(tabId); } forward(tabId: string) { return this.platform.goForward(tabId); } reload(tabId: string) { return this.platform.reload(tabId); } }

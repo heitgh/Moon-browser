@@ -1,0 +1,2 @@
+import type { TabModel } from "@moon/core"; import { textScore, type UniversalSearchProvider } from "./search-provider.js";
+export class TabSearchProvider implements UniversalSearchProvider { readonly id = "tabs"; readonly kind = "tab" as const; constructor(readonly load: () => readonly TabModel[]) {} async search(query: string) { return this.load().map(item => ({ id: item.id, providerId: this.id, kind: this.kind, title: item.title, subtitle: item.url, score: textScore(query, item.title, item.url) + (item.active ? 5 : 0), payload: item })).filter(item => item.score > 0); } }

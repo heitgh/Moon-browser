@@ -1,0 +1,2 @@
+import type { NetworkPlatform, NetworkRequest, NetworkRuleDecision } from "../interfaces/network-platform.js";
+export class NetworkService { constructor(readonly platform: NetworkPlatform) {} evaluate(request: NetworkRequest): Promise<NetworkRuleDecision> { return this.platform.interceptRequest(request); } clearBrowsingData() { return this.platform.clearBrowsingData(); } activeConnections() { return this.platform.getActiveConnections(); } shutdown() { return this.platform.shutdown(); } }

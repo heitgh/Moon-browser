@@ -1,0 +1,2 @@
+export type Capability="browser.tabs.read"|"browser.tabs.write"|"browser.history.read"|"browser.bookmarks.write"|"system.clipboard.read"|"system.clipboard.write"|"system.filesystem.read"|"system.filesystem.write"|"network.observe"|"network.modify"|"ai.context.read"|"notifications.show";
+export interface CapabilityGrant{readonly capability:Capability;readonly subjectId:string;readonly scope?:string;readonly grantedAt:number;readonly expiresAt?:number;}

@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS bookmarks (id TEXT PRIMARY KEY, data TEXT NOT NULL CHECK(json_valid(data)), updated_at INTEGER NOT NULL) STRICT;

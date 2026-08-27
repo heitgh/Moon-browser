@@ -1,0 +1,1 @@
+import type { MoonAi } from "../ai/moon-ai.js";export class TranslatePageAction{constructor(readonly ai:MoonAi){}run(content:string,targetLanguage:string,signal?:AbortSignal){return this.ai.ask(`Translate the content to ${targetLanguage}. Preserve headings, links, technical terms, and formatting. Output only the translation.\n\n${content}`,{signal});}}

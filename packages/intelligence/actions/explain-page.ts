@@ -1,0 +1,1 @@
+import type { MoonAi } from "../ai/moon-ai.js";export class ExplainPageAction{constructor(readonly ai:MoonAi){}run(page:string,question:string,signal?:AbortSignal){return this.ai.ask(`Using only the page context below, answer the question. Say when the page does not contain the answer.\nQuestion: ${question}\n\nPage:\n${page}`,{signal});}}

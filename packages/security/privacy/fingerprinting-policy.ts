@@ -1,0 +1,2 @@
+export interface FingerprintingPolicy{readonly enabled:boolean;readonly canvas:"allow"|"noise"|"block";readonly audio:"allow"|"noise"|"block";readonly fonts:"standard"|"limited";readonly timezone:"system"|"utc";readonly hardwareConcurrency?:number;}
+export const STRICT_FINGERPRINTING_POLICY:FingerprintingPolicy={enabled:true,canvas:"noise",audio:"noise",fonts:"limited",timezone:"utc",hardwareConcurrency:4};
