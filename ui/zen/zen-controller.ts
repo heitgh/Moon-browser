@@ -1,0 +1,2 @@
+import { installZenGestures } from "./zen-gestures.js"; import type { ZenMode } from "./zen-mode.js";
+export class ZenController { #dispose?: () => void; constructor(readonly mode: ZenMode) {} start(): void { this.#dispose ??= installZenGestures(this.mode); } stop(): void { this.#dispose?.(); this.#dispose = undefined; } enter() { return this.mode.enter(); } exit() { return this.mode.exit(); } toggle() { return this.mode.toggle(); } }

@@ -1,0 +1,12 @@
+CREATE INDEX IF NOT EXISTS idx_bookmarks_updated ON bookmarks(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_extensions_updated ON extensions(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_history_updated ON history(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_settings_updated ON settings(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tabs_updated ON tabs(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_themes_updated ON themes(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_timeline_updated ON timeline(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wallpapers_updated ON wallpapers(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_workspaces_updated ON workspaces(updated_at DESC);

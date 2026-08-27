@@ -1,0 +1,3 @@
+import type { SecurityPlatform, SecurityPolicy } from "../interfaces/security-platform.js";
+export const DEFAULT_SECURITY_POLICY: SecurityPolicy = { isolationLevel: "strict", blockInsecureContent: true, blockMixedContent: true, blockPopups: true, preventFingerprinting: true, preventTracking: true, clearDataOnExit: false, allowThirdPartyCookies: false };
+export class SecurityPolicyService { constructor(readonly platform: SecurityPlatform) {} get() { return this.platform.getPolicy(); } set(policy: SecurityPolicy) { return this.platform.setPolicy(policy); } reset() { return this.platform.setPolicy(DEFAULT_SECURITY_POLICY); } }

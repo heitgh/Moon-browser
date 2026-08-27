@@ -1,0 +1,3 @@
+import { textScore, type UniversalSearchProvider } from "./search-provider.js";
+export interface SearchableSetting { readonly id: string; readonly title: string; readonly description?: string; readonly route: string; readonly keywords?: readonly string[]; }
+export class SettingsSearchProvider implements UniversalSearchProvider { readonly id = "settings"; readonly kind = "setting" as const; constructor(readonly settings: readonly SearchableSetting[]) {} async search(query: string) { return this.settings.map(item => ({ id: item.id, providerId: this.id, kind: this.kind, title: item.title, subtitle: item.description, score: textScore(query, item.title, item.description ?? "", ...(item.keywords ?? [])), payload: item })).filter(item => item.score > 0); } }

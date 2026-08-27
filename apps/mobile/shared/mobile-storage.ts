@@ -1,0 +1,2 @@
+import type { StoragePlatform, StorageQuery } from "@moon/platform";
+export class MobileStorageService { constructor(readonly platform: StoragePlatform) {} async value<T>(query: StorageQuery): Promise<T | undefined> { return (await this.platform.get<T>(query))?.value; } set<T>(query: StorageQuery, value: T) { return this.platform.set(query, value); } delete(query: StorageQuery) { return this.platform.delete(query); } transaction<T>(operation: Parameters<StoragePlatform["transaction"]>[0]) { return this.platform.transaction(operation) as Promise<T>; } }

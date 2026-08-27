@@ -1,0 +1,2 @@
+import type { PermissionPlatform, PlatformPermission, PlatformPermissionRequest, PlatformPermissionState } from "../interfaces/permission-platform.js";
+export class PermissionService { constructor(readonly platform: PermissionPlatform) {} request(request: PlatformPermissionRequest) { return this.platform.request(request); } query(permission: PlatformPermission, origin?: string): Promise<PlatformPermissionState> { return this.platform.query(permission, origin); } reset(permission: PlatformPermission, origin?: string) { return this.platform.reset(permission, origin); } }

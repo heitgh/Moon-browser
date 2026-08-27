@@ -1,0 +1,2 @@
+const SAFE_PROTOCOLS = new Set(["about:", "file:", "http:", "https:"]);
+export class NavigationPolicy { validate(value: string): boolean { try { const url = new URL(value); return SAFE_PROTOCOLS.has(url.protocol) && !url.username && !url.password; } catch { return false; } } validateExternal(value: string): boolean { try { return ["mailto:", "tel:"].includes(new URL(value).protocol); } catch { return false; } } }

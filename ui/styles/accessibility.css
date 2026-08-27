@@ -1,0 +1,5 @@
+:focus-visible { outline: 3px solid color-mix(in srgb, var(--moon-user-accent, var(--moon-accent)) 75%, white); outline-offset: 2px; }
+.sr-only { clip: rect(0 0 0 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
+@media (prefers-contrast: more) { :root { --moon-border: currentColor; } button, input, select, textarea { border-width: 2px; } }
+@media (pointer: coarse) { button, input, select, textarea { min-height: var(--moon-control-height-touch); } }
+[aria-busy="true"] { cursor: progress; opacity: .72; }

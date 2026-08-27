@@ -1,0 +1,2 @@
+import { rm } from "node:fs/promises";import { resolve } from "node:path";
+if(process.argv.includes("--confirm")===false)throw new Error("Reset deletes local development data. Run with --confirm.");for(const target of["database/moon.db","database/moon.db-shm","database/moon.db-wal","dist","coverage"].map(value=>resolve(value)))await rm(target,{recursive:true,force:true});console.log("Moon development state reset.");

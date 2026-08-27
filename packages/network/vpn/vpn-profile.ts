@@ -1,0 +1,1 @@
+export interface VpnProfile{readonly id:string;readonly name:string;readonly providerId:string;readonly serverId:string;readonly protocol:string;readonly autoConnect:boolean;readonly trustedNetworks:readonly string[];readonly createdAt:number;readonly updatedAt:number;}

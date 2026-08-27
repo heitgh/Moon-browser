@@ -1,0 +1,1 @@
+import type { MoonAi } from "../ai/moon-ai.js";export class ExtractTasksAction{constructor(readonly ai:MoonAi){}run(content:string,signal?:AbortSignal){return this.ai.ask(`Extract actionable tasks from the content. Return JSON only as an array of objects with title, description, dueDate, priority, and sourceQuote. Do not invent missing dates.\n\n${content}`,{signal});}}

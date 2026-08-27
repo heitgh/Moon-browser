@@ -1,0 +1,2 @@
+import { NavigationExecutor } from "./navigation-executor.js"; import { NavigationPlanner, type NavigationPlan } from "./navigation-planner.js";
+export class NavigationEngine { constructor(readonly planner: NavigationPlanner, readonly executor: NavigationExecutor) {} plan(input: string): NavigationPlan { return this.planner.plan(input); } async submit(input: string): Promise<NavigationPlan> { const plan = this.plan(input); await this.executor.execute(plan); return plan; } }

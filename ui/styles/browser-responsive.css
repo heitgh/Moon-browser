@@ -1,0 +1,12 @@
+@media (max-width: 800px) {
+  .moon-browser-shell { grid-template-columns: 46px 0 minmax(0, 1fr); }
+  .moon-drawer.is-open { width: 250px; }
+  .moon-drawer-header, .moon-drawer-body { min-width: 250px; }
+  .moon-window-mark, .moon-security-text, .moon-workspaces-label { display: none; }
+  .moon-security-pill { padding-inline: 7px; }
+  .moon-ai-button span { display: none; }
+  .moon-ai-button { padding-inline: 9px; }
+  .moon-settings-modal { grid-template-columns: 160px 1fr; }
+  .moon-settings-body { padding: 28px 24px; }
+  .moon-wallpaper-grid { grid-template-columns: repeat(2, 1fr); }
+}

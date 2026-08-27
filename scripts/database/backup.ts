@@ -1,0 +1,2 @@
+import Database from "better-sqlite3";import { mkdir } from "node:fs/promises";import { dirname,resolve } from "node:path";
+const source=resolve(process.env.MOON_DATABASE_PATH??"database/moon.db");const destination=resolve(process.argv[2]??`database/backups/moon-${new Date().toISOString().replace(/[:.]/g,"-")}.db`);await mkdir(dirname(destination),{recursive:true});const db=new Database(source,{readonly:true});try{await db.backup(destination);console.log(destination);}finally{db.close();}

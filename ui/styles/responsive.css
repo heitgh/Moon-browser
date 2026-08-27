@@ -1,0 +1,3 @@
+@media (max-width: 1000px) { .moon-home-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); } .moon-home-layout > * { grid-column: span min(var(--widget-span, 1), 2); } }
+@media (max-width: 640px) { .moon-shell__body { grid-template-columns: minmax(0, 1fr); } .moon-sidebar-container { bottom: 0; inset-inline-start: 0; position: fixed; top: 0; width: min(88vw, 360px); z-index: 20; } .moon-home-layout { grid-template-columns: 1fr; } .moon-home-layout > * { grid-column: 1; } }
+@media (pointer: coarse) { button, input, select { min-height: 44px; } }

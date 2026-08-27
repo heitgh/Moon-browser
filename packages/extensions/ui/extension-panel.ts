@@ -1,0 +1,2 @@
+export interface ExtensionPanelDescriptor{readonly id:string;readonly extensionId:string;readonly title:string;readonly icon?:string;readonly render:(container:HTMLElement)=>void|Promise<void>;}
+export class ExtensionPanel{readonly element=document.createElement("section");constructor(readonly descriptor:ExtensionPanelDescriptor){this.element.className="extension-panel";this.element.dataset.extensionId=descriptor.extensionId;this.element.setAttribute("aria-label",descriptor.title);}async show(){this.element.replaceChildren();await this.descriptor.render(this.element);}}

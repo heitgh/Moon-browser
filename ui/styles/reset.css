@@ -1,0 +1,7 @@
+*, *::before, *::after { box-sizing: border-box; }
+html, body { min-height: 100%; margin: 0; }
+body, h1, h2, h3, p { margin-block: 0; }
+button, input, textarea, select { color: inherit; font: inherit; }
+button { cursor: pointer; }
+img, svg, video { display: block; max-width: 100%; }
+[hidden] { display: none !important; }

@@ -1,0 +1,2 @@
+import type { Command,CommandRegistry } from "@moon/core";import type { ExtensionApiContext } from "./moon-extension-api.js";
+export class CommandsApi{constructor(readonly context:ExtensionApiContext,readonly registry:CommandRegistry){}register(command:Command<unknown,unknown>):()=>void{const id=`extension.${this.context.extensionId}.${command.id}`;return this.registry.register({...command,id});}list(){return this.registry.list().filter(command=>command.id.startsWith(`extension.${this.context.extensionId}.`));}}

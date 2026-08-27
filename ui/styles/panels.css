@@ -1,0 +1,66 @@
+.moon-panel-list { display: flex; flex-direction: column; gap: 7px; }
+.moon-workspace-row { align-items: center; background: #ffffff05; border: 1px solid var(--moon-border); border-radius: var(--moon-radius-md); display: flex; gap: var(--moon-space-3); min-height: var(--moon-control-height); padding: var(--moon-space-2); text-align: left; width: 100%; }
+.moon-workspace-row:hover, .moon-workspace-row.is-active { background: var(--moon-user-accent-soft); border-color: color-mix(in srgb, var(--moon-user-accent) 30%, transparent); }
+.moon-workspace-row > .moon-icon { height: 14px; width: 14px; }
+.moon-workspace-manage-row { align-items: center; display: flex; gap: 5px; }.moon-workspace-manage-row .moon-workspace-row { flex: 1; }
+.moon-workspace-mark, .moon-site-mark { align-items: center; background: #ffffff0a; border: 1px solid #ffffff0d; border-radius: 8px; color: var(--moon-user-accent); display: flex; font-size: 11px; font-weight: 800; height: 31px; justify-content: center; min-width: 31px; }
+.moon-list-copy { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.moon-list-copy strong { color: var(--moon-text); font-size: var(--moon-font-ui); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.moon-list-copy small { color: var(--moon-text-muted); font-size: var(--moon-font-micro); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.moon-primary-button, .moon-secondary-button { align-items: center; border-radius: var(--moon-radius-sm); display: flex; font-size: var(--moon-font-ui); font-weight: 650; gap: var(--moon-space-2); justify-content: center; min-height: var(--moon-control-height); padding: var(--moon-space-2) var(--moon-space-3); }
+.moon-primary-button { background: var(--moon-user-accent); color: #fff; margin-top: 12px; width: 100%; }
+.moon-primary-button:hover { filter: brightness(1.08); }
+.moon-primary-button .moon-icon, .moon-secondary-button .moon-icon { height: 14px; width: 14px; }
+.moon-panel-summary { align-items: center; display: flex; font-size: var(--moon-font-caption); justify-content: space-between; margin-bottom: var(--moon-space-3); }
+.moon-text-button { align-items: center; background: transparent; border-radius: var(--moon-radius-sm); color: var(--moon-user-accent); display: flex; font-size: var(--moon-font-caption); gap: var(--moon-space-1); min-height: var(--moon-control-height); padding: 0 var(--moon-space-2); }
+.moon-text-button.is-danger { color: #f27182; }
+.moon-text-button:disabled { cursor: default; opacity: .35; }
+.moon-text-button .moon-icon { height: 11px; width: 11px; }
+.moon-link-row { align-items: center; background: #ffffff04; border: 1px solid #ffffff09; border-radius: 9px; display: flex; padding: 6px; }
+.moon-link-row:hover { background: #ffffff08; border-color: #ffffff12; }
+.moon-link-main { align-items: center; background: transparent; display: flex; flex: 1; gap: 9px; min-width: 0; padding: 0; text-align: left; }
+.moon-empty { align-items: center; color: #626c7e; display: flex; flex-direction: column; padding: 54px 18px; text-align: center; }
+.moon-empty > .moon-icon { color: #50596a; height: 28px; margin-bottom: 13px; width: 28px; }
+.moon-empty strong { color: var(--moon-text); font-size: var(--moon-font-body); }
+.moon-empty p { font-size: var(--moon-font-caption); line-height: 1.55; margin-top: var(--moon-space-1); }
+.moon-ai-hero { align-items: center; color: var(--moon-user-accent); display: flex; gap: 7px; margin-bottom: 12px; }
+.moon-ai-hero strong { color: #f1f3f8; font-size: 15px; }
+.moon-preview-badge { background: var(--moon-user-accent-soft); border-radius: var(--moon-radius-xs); font-size: var(--moon-font-micro); font-weight: 800; letter-spacing: .08em; padding: var(--moon-space-1) var(--moon-space-2); }
+.moon-ai-form { display: flex; flex-direction: column; }
+.moon-ai-input { background: var(--moon-bg); border: 1px solid var(--moon-border); border-radius: var(--moon-radius-sm); color: var(--moon-text); font-size: var(--moon-font-ui); min-height: 120px; outline: 0; padding: var(--moon-space-3); resize: vertical; user-select: text; }
+.moon-ai-input:focus { border-color: var(--moon-user-accent); }
+.moon-info-card { align-items: flex-start; background: var(--moon-user-accent-soft); border: 1px solid color-mix(in srgb, var(--moon-user-accent) 22%, transparent); border-radius: 9px; display: flex; gap: 8px; margin-top: 14px; padding: 10px; }
+.moon-info-card .moon-icon { color: var(--moon-user-accent); height: 14px; min-width: 14px; width: 14px; }
+.moon-info-card p { font-size: var(--moon-font-caption); line-height: 1.5; margin: 0; }
+.moon-security-hero { align-items: center; background: #10b98113; border: 1px solid #10b9812d; border-radius: 11px; color: #49d9a5; display: grid; gap: 2px 9px; grid-template-columns: 34px 1fr; margin-bottom: 15px; padding: 12px; }
+.moon-security-hero > .moon-icon { grid-row: 1 / 3; height: 27px; width: 27px; }
+.moon-security-hero strong { color: #ddf9ee; font-size: var(--moon-font-body); }
+.moon-security-hero span { font-size: var(--moon-font-micro); font-weight: 800; }
+.moon-security-list { display: flex; flex-direction: column; gap: 8px; }
+.moon-adblock-control { align-items: center; background: #ffffff05; border: 1px solid #ffffff0d; border-radius: 10px; display: flex; gap: 10px; margin-bottom: 14px; padding: 11px; }
+.moon-adblock-toggle { background: #303744; border: 0; border-radius: var(--moon-radius-pill); height: 24px; min-width: var(--moon-control-height); padding: 0; position: relative; }
+.moon-adblock-toggle > span { background: #d4d8df; border-radius: 50%; height: 16px; left: 2px; position: absolute; top: 2px; transition: transform .15s; width: 16px; }
+.moon-adblock-toggle.is-active { background: #10b981; }
+.moon-adblock-toggle.is-active > span { transform: translateX(16px); }
+.moon-adblock-toggle:disabled { cursor: default; opacity: .45; }
+.moon-security-item { background: #ffffff04; border-radius: 8px; display: grid; gap: 2px 7px; grid-template-columns: 17px 1fr; padding: 9px; }
+.moon-check { color: #43d4a0; font-size: 11px; grid-row: 1 / 3; }
+.moon-security-item strong { color: var(--moon-text); font-size: var(--moon-font-ui); }
+.moon-security-item p { font-size: var(--moon-font-caption); margin: 0; }
+.moon-tool-hero { align-items: center; color: var(--moon-user-accent); display: flex; gap: 8px; margin-bottom: 14px; }
+.moon-tool-hero strong { color: #eef1f7; font-size: 14px; }
+.moon-notes-input { background: var(--moon-bg); border: 1px solid var(--moon-border); border-radius: var(--moon-radius-sm); color: var(--moon-text); font-size: var(--moon-font-ui); line-height: 1.55; outline: 0; padding: var(--moon-space-3); resize: vertical; user-select: text; width: 100%; }
+.moon-notes-input:focus { border-color: var(--moon-user-accent); }
+.moon-notes-status { color: var(--moon-text-muted); display: block; font-size: var(--moon-font-micro); margin-top: var(--moon-space-2); text-align: right; }
+.moon-extension-status { align-items: center; background: #ffffff05; border: 1px solid #ffffff0c; border-radius: 9px; display: flex; justify-content: space-between; margin-top: 13px; padding: 10px; }
+.moon-extension-status strong { color: var(--moon-text); font-size: var(--moon-font-ui); }.moon-extension-status span { color: #f6c85f; font-size: var(--moon-font-caption); }
+.moon-download-list { display: flex; flex-direction: column; gap: 9px; }
+.moon-download-row { background: #ffffff04; border: 1px solid #ffffff0c; border-radius: 10px; padding: 10px; }
+.moon-download-header { align-items: center; display: flex; gap: 8px; justify-content: space-between; }
+.moon-download-header strong { color: var(--moon-text); font-size: var(--moon-font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.moon-download-state { color: var(--moon-text-muted); font-size: var(--moon-font-micro); white-space: nowrap; }.moon-download-state.is-completed { color: #43d4a0; }.moon-download-state.is-failed, .moon-download-state.is-cancelled { color: #f27182; }.moon-download-state.is-paused { color: #f6c85f; }
+.moon-download-progress { accent-color: var(--moon-user-accent); height: 4px; margin: 9px 0 4px; width: 100%; }
+.moon-download-detail { color: var(--moon-text-muted); font-size: var(--moon-font-micro); }
+.moon-download-actions { display: flex; gap: 5px; margin-top: 8px; }
+.moon-download-action { align-items: center; background: #ffffff08; border: 0; border-radius: var(--moon-radius-sm); color: var(--moon-text); display: flex; font-size: var(--moon-font-caption); gap: var(--moon-space-1); min-height: var(--moon-control-height); padding: 0 var(--moon-space-3); }
+.moon-download-action:hover { background: #ffffff10; color: #fff; }.moon-download-action .moon-icon { height: 10px; width: 10px; }

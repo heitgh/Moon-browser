@@ -1,494 +1,470 @@
 <div align="center">
 
-🌙 MOON BROWSER  
-*The browser is evolving.*  
-Um navegador inteligente, ergonômico, personalizável e orientado por Inteligência Artificial.
+<img src="assets/branding/moon-logo.svg" alt="Logo do Moon Browser" width="176">
+
+# Moon Browser
+
+### A web do seu jeito — mais ergonômica, contextual e humana.
+
+O Moon é um navegador desktop open source da **Nexus Inc.**, construído sobre Electron e Chromium para unir navegação real, personalização profunda, produtividade e uma evolução responsável em direção a recursos nativos de inteligência artificial.
+
+[![Versão](https://img.shields.io/badge/vers%C3%A3o-0.5%20Demo-8b5cf6?style=for-the-badge)](#moon-browser-05-demo)
+[![Quality](https://img.shields.io/github/actions/workflow/status/heitgh/Moon-browser/quality.yml?branch=main&style=for-the-badge&label=quality)](https://github.com/heitgh/Moon-browser/actions/workflows/quality.yml)
+[![Electron](https://img.shields.io/badge/Electron-43-47848f?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Licença MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-22c55e?style=for-the-badge)](LICENSE)
+[![Discord](https://img.shields.io/badge/Discord-comunidade-5865f2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/skB4s8KWW)
 
 <br>
 
-<img src="assets/Moon.png" alt="Moon Browser" width="180">
+<img src="assets/moonpage.png" alt="Moon Browser 0.5 Demo — tela principal" width="920">
 
-<br><br>
-
-Web · IA · Contexto · Produtividade · Ergonomia · Personalização
+<sub>Substitua esta captura pelo arquivo <code>assets/moonpage.png</code>. O guia completo das imagens está na seção <a href="#capturas-do-projeto">Capturas do projeto</a>.</sub>
 
 </div>
 
----
+> [!IMPORTANT]
+> **Moon Browser 0.5 Demo é uma versão pública de testes.** Ela já navega na web e possui recursos reais, mas ainda não deve ser tratada como um navegador estável para dados críticos ou como substituto definitivo do navegador principal. Relate falhas pelo [GitHub Issues](https://github.com/heitgh/Moon-browser/issues) ou pelo [Discord](https://discord.gg/skB4s8KWW).
 
-## 🌙 SOBRE O MOON
+## Sumário
 
-O Moon Browser é um navegador desktop desenvolvido pela **Nexu.inc** com uma proposta diferente dos navegadores tradicionais. O projeto nasceu de uma pergunta:
+- [Visão do projeto](#visão-do-projeto)
+- [Moon Browser 0.5 Demo](#moon-browser-05-demo)
+- [O que já funciona](#o-que-já-funciona)
+- [Estado honesto das funcionalidades](#estado-honesto-das-funcionalidades)
+- [Capturas do projeto](#capturas-do-projeto)
+- [Arquitetura](#arquitetura)
+- [Privacidade e segurança](#privacidade-e-segurança)
+- [Roadmap](#roadmap)
+- [Backlog estratégico](#backlog-estratégico)
+- [Desenvolvimento](#desenvolvimento)
+- [Testes e qualidade](#testes-e-qualidade)
+- [Comunidade e equipe](#comunidade-e-equipe)
 
-> *E se o navegador se adaptasse ao usuário, em vez de obrigar o usuário a se adaptar ao navegador?*
+## Visão do projeto
 
-A partir dessa ideia surgiu o Moon: um navegador pensado para pessoas que passam muitas horas no computador e precisam de uma experiência que combine:
+O navegador tradicional organiza páginas. O Moon quer organizar **contextos, intenção e fluxo de trabalho**.
 
-* Desempenho e ergonomia
-* Organização e privacidade
-* Personalização e produtividade
-* Inteligência artificial, contexto e automação
+O projeto nasceu de uma pergunta simples:
 
-Agora o Moon entra em uma nova fase. Ele deixa de ser apenas um navegador simples, ergonômico e personalizável e passa a buscar uma experiência de navegação orientada por Inteligência Artificial. A proposta não é simplesmente colocar um chatbot dentro do navegador, mas transformar o navegador em uma camada inteligente entre o usuário, a Web e suas ferramentas.
+> **E se o navegador se adaptasse ao usuário, em vez de obrigar o usuário a se adaptar ao navegador?**
 
----
+Essa visão se apoia em quatro pilares:
 
-## 🚀 A NOVA VISÃO
+1. **Ergonomia digital** — uma interface confortável para uso prolongado, com menos ruído, alvos legíveis e controle de movimento.
+2. **Personalização real** — aparência, layout, Home, tipografia, busca, sidebar, workspaces, temas e wallpapers sob controle do usuário.
+3. **Produtividade contextual** — abas, notas, histórico, downloads, sessões e ferramentas organizadas em torno do que a pessoa está fazendo.
+4. **IA com consentimento** — inteligência integrada ao fluxo de navegação, sem acesso silencioso a páginas, histórico ou dados privados.
 
-O navegador tradicional funciona de maneira linear:
+O objetivo não é apenas colocar um chatbot na lateral. A visão de longo prazo é criar uma camada inteligente entre usuário, web e ferramentas, capaz de auxiliar sem retirar autonomia.
 
-```text
-Usuário ──> Pesquisa ──> Página ──> Interpretação ──> Ação
+## Moon Browser 0.5 Demo
 
-```
+`0.5.0-demo.1` representa a primeira demo pública da arquitetura reconstruída e testável do Moon no repositório oficial.
 
-O Moon pretende evoluir esse fluxo:
+O desenvolvimento dessa base aconteceu em [`heitgh/Moon-tests-1`](https://github.com/heitgh/Moon-tests-1), usado como ambiente de experimentação. A versão consolidada foi transferida para este repositório preservando tanto o histórico do projeto original quanto o histórico técnico da reconstrução.
 
-```text
-Usuário ──> Intenção ──> Moon (Contexto + Web + IA + Ferramentas) ──> Entendimento ──> Ação ──> Resultado
+> [!NOTE]
+> A antiga tag `v1.0.0` permanece como registro do protótipo inicial. A numeração `0.5 Demo` descreve com mais honestidade a maturidade do produto reconstruído; ela não apaga nem reescreve o histórico anterior.
 
-```
+### O que mudou em relação ao protótipo
 
-Isso significa que a IA não será apenas uma ferramenta separada. Ela será projetada para fazer parte da experiência de navegação.
-
----
-
-## 🧠 MOON INTELLIGENCE
-
-A próxima geração do Moon terá como um dos seus principais pilares o conceito de **Moon Intelligence**. A ideia é criar uma camada de inteligência capaz de trabalhar com o contexto permitido pelo usuário.
-
-Exemplos:
-
-* "Resuma esta página."
-* "Explique este conceito."
-* "Transforme esta documentação em um plano de estudos."
-* "Crie flashcards com base neste conteúdo."
-* "Extraia as tarefas desta página."
-* "Compare estas duas páginas."
-* "Traduza mantendo o contexto."
-* "Explique este erro de programação."
-* "Encontre as informações importantes nesta documentação."
-
-O objetivo é reduzir tarefas repetitivas, diminuir a troca de contexto e transformar o navegador em uma ferramenta mais inteligente.
-
----
-
-## 🤖 MOON AI
-
-A **Moon AI** será o principal sistema de inteligência do navegador, acessada diretamente pela Sidebar e pela interface.
-
-```text
-┌───────────────────────────────────────┐
-│              MOON BROWSER             │
-├───────────────────────────────────────┤
-│                                       │
-│  Browser UI                           │
-│   ├── Tabs                            │
-│   ├── Workspaces                      │
-│   ├── Omnibox                         │
-│   ├── Sidebar                         │
-│   └── Home                            │
-│                                       │
-│              ↓                        │
-│                                       │
-│       Context / Permission Layer      │
-│              │                        │
-│              ↓                        │
-│          Moon AI Engine               │
-│              │                        │
-│       ┌──────┼────────┐               │
-│       ▼      ▼        ▼               │
-│    Summary  Search  Automation        │
-│                                       │
-└───────────────────────────────────────┘
-
-```
-
-A implementação definitiva dessa camada será progressiva e considerará modelo de IA, providers, privacidade, permissões, custos, desempenho, armazenamento e segurança.
-
----
-
-## 🧩 CONTEXT ENGINE
-
-Em vez de tratar cada aba como uma informação isolada, o Moon organiza páginas, abas, notas, sessões e ferramentas em contextos.
-
-```text
-GitHub + Stack Overflow + React Docs + Moon AI ──> [ CONTEXTO: DEV ]
-PDF + YouTube + Google Docs + Notas          ──> [ CONTEXTO: ESTUDOS ]
-
-```
-
-Esse conceito será uma das bases para:
-
-* Spaces inteligentes
-* Sessões inteligentes
-* Pesquisa universal
-* Histórico contextual
-* Timeline
-* Automações
-* Moon AI contextual
-
----
-
-## 🗂️ WORKSPACES & SMART SPACES
-
-### Workspaces
-
-Permitem separar visualmente e cognitivamente diferentes atividades dentro do navegador:
-
-```text
-┌─────────────────────────────────────────┐
-│ Estudos │ Desenvolvimento │ Trabalho   │
-└─────────────────────────────────────────┘
-
-```
-
-### Smart Spaces
-
-O próximo passo dos Workspaces. O Moon identifica padrões de navegação e sugere agrupamentos automáticos (ex: abas do GitHub + ChatGPT + Docs sugeridas para o espaço **Desenvolvimento**). O usuário sempre mantém o controle para aceitar, editar, rejeitar, salvar ou reorganizar.
-
----
-
-## 🕒 NAVIGATION TIMELINE & SMART SESSIONS
-
-* **Navigation Timeline:** Substitui a lista simples de URLs por uma linha do tempo contextual. Permite realizar ações como *"Voltar ao que eu estava fazendo"* em vez de apenas *"Abrir uma URL antiga"*.
-* **Smart Sessions:** Registros de contexto completos. Uma sessão armazena abas, workspaces, grupos, notas, tarefas e estado da navegação para permitir *"Retomar minha sessão de ontem"*.
-
----
-
-## 🔎 UNIVERSAL SEARCH & MOON HOME
-
-* **Universal Search:** A Omnibox funciona como um *Command Center*, pesquisando na Web, abas abertas, histórico, favoritos, notas, downloads, configurações, temas, wallpapers e Moon AI.
-* **Moon Home:** Dashboard pessoal e inteligente altamente modular, incluindo relógio, tarefas, agenda, metas, tempo de foco e widgets customizáveis.
-
----
-
-## 🎨 DESIGN E ERGONOMIA
-
-* **Hiper-Personalização:** Suporte total a temas, wallpapers, transparência, blur, overlay e cores de destaque.
-* **Adaptive UI:** A interface analisa as cores do wallpaper e adapta dinamicamente os acentos, contrastes e painéis.
-* **Ergonomia Visual & Cognitiva:** Foco no uso prolongado com controle de contraste, modo escuro/claro, tipografia otimizada e redução de sobrecarga mental.
-* **Zen Mode:** Oculta temporariamente os controles de navegação para foco total no conteúdo da página.
-
----
-
-## 📚 MOON STUDY & 💻 MOON DEV
-
-### 📚 Moon Study
-
-* Bloqueio de distrações e timer Pomodoro
-* Notas vinculadas à página e captura de trechos
-* Resumos com IA, flashcards e exportação para Markdown
-
-### 💻 Moon Dev
-
-* Moon AI para programação e explicação de erros
-* JSON Viewer e API Inspector integrados
-* Markdown Editor, Snippets, DevTools aprimoradas e Terminal/SSH
-
----
-
-## 🧩 MOON EXTENSIONS
-
-Plataforma modular para a comunidade criar painéis, widgets e automações:
-
-```javascript
-moon.registerPanel({
-    id: "pomodoro",
-    title: "Pomodoro",
-    icon: "...",
-    render(container) {
-        // interface do módulo
-    }
-});
-
-```
-
----
-
-## 🛡️ PRIVACY & SECURITY
-
-Componentes atuais e futuros para proteção completa do usuário:
-
-* AdBlock nativo e controle de domínios
-* Proteção contra pop-ups e interface de VPN
-* Isolamento de processos, permissões de WebView e armazenamento protegido
-
----
-
-## 🏗️ ARQUITETURA E STACK TECNOLÓGICA
-
-```text
-┌───────────────────────────────────┐
-│          MOON BROWSER UI          │
-│        HTML + CSS + JS            │
-└────────────────┬──────────────────┘
-                 │
-                 ▼
-┌───────────────────────────────────┐
-│             ELECTRON              │
-│       Desktop Runtime Layer       │
-└────────────────┬──────────────────┘
-                 │
-                 ▼
-┌───────────────────────────────────┐
-│       CHROMIUM / WEBVIEW          │
-│         Web Rendering             │
-└───────────────────────────────────┘
-
-```
-
-| Camada | Tecnologia |
+| Protótipo inicial | Arquitetura 0.5 Demo |
 | --- | --- |
-| **Interface** | HTML5 |
-| **Estilização** | CSS3 |
-| **Lógica** | JavaScript ES6+ |
-| **Runtime** | Electron |
-| **Engine** | Chromium / WebView |
-| **Persistência** | LocalStorage / JSON |
-| **Plataforma** | Desktop |
+| Interface concentrada em HTML/JS | Aplicação modular em TypeScript |
+| Conteúdo web por estrutura legada | `WebContentsView` gerenciado no processo principal |
+| Estado principalmente em `localStorage` | Perfil local, SQLite, migrations e repositories |
+| Poucos testes automatizados | Unitários, integração, Electron e E2E |
+| Configurações acopladas à tela | Settings V3 versionado, recuperável e com preview |
+| Recursos futuros misturados à interface | Feature flags e documentação de disponibilidade |
+| Build manual e pouco verificável | CI, AppImage, pacote Debian e quality gates |
 
-### Estrutura Arquitetural Futura
+## O que já funciona
 
-```text
-moon/
-├── core/          # browser, sessions, tabs, workspaces, navigation
-├── intelligence/  # moon-ai, context, prompts, providers, tools
-├── ui/            # home, sidebar, tabs, settings, components
-├── security/      # permissions, privacy, adblock, network
-├── storage/       # sessions, settings, bookmarks, history
-├── extensions/
-├── assets/
-└── main.js
+### Navegação e organização
 
-```
+- navegação HTTP/HTTPS e pesquisa com provedor configurável;
+- múltiplas abas com voltar, avançar, recarregar, parar e abrir Home;
+- workspaces com partições Electron separadas;
+- restauração das abas não privadas ao reiniciar;
+- favoritos, histórico, notas e atalhos locais;
+- favicons validados, cacheados e exibidos em abas, Home, histórico e favoritos;
+- downloads nativos com progresso, cancelamento e acesso ao arquivo;
+- menu contextual nativo para página, link, seleção, campos editáveis, imagens e mídia.
 
----
+### Ergonomia e personalização
 
-## 🔄 PRINCÍPIO DE EVOLUÇÃO
+- Home nativa e configurável;
+- sidebar modular e recuperável por teclado;
+- configurações em modal e como página interna `moon://settings/*`;
+- modos Essencial, Todas e Avançado, com pesquisa por intenção;
+- personalização de aparência, layout, Home, tipografia, busca e workspace;
+- preview ao vivo, aplicar, cancelar, desfazer, refazer e reset granular;
+- largura e comportamento da sidebar, visibilidade dos workspaces e ordem da toolbar;
+- temas salvos, wallpapers locais e importação opcional de wallpaper remoto com validações;
+- design tokens para tipografia, espaçamento, contraste, foco, movimento e responsividade;
+- suporte a preferência de movimento reduzido e diferentes tamanhos de viewport.
 
-> **Evoluir não significa destruir.** Novas funcionalidades são adicionadas sobre uma base estável.
+### Dados e confiabilidade
 
-```text
-Nova Feature ──> Analisar Arquitetura ──> Verificar Dependências ──> Implementar Modularmente ──> Testar ──> Validar Regressões ──> Documentar ──> Release
+- SQLite no processo principal com WAL, foreign keys, migrations e transações;
+- migração idempotente do perfil legado com backup da origem e rollback;
+- exportação e importação de perfil em JSON versionado e validado;
+- recuperação parcial de configurações corrompidas e `lastKnownGood`;
+- modo seguro de configurações e diagnóstico sem incluir dados de navegação;
+- sessões privadas efêmeras, excluídas da restauração persistente.
 
-```
+### Proteção e controle
 
----
+- AdBlock real baseado em listas, com ativação controlada pelo usuário;
+- `contextIsolation`, sandbox e Node.js desativado em páginas remotas;
+- bridge preload congelada e limitada a canais permitidos;
+- validação de protocolos, URLs, payloads e posse de abas por janela;
+- prompts explícitos para permissões de sites;
+- CSP local sem carregamento remoto automático de scripts;
+- telemetria desativada por padrão;
+- formato `.moontheme` v1 com hashes, assinatura Ed25519, quarentena, preview e rollback;
+- bloqueio de traversal, arquivos executáveis, ZIP bombs, MIME falso e SVG ativo em pacotes de tema.
 
-## 📊 STATUS DO PROJETO
+## Estado honesto das funcionalidades
 
-| Sistema | Status |
-| --- | --- |
-| Interface Moon | 🟢 Implementado |
-| Home nativa | 🟢 Implementado |
-| Abas & Navegação | 🟢 Implementado |
-| Workspaces | 🟢 Implementado |
-| Sidebar modular | 🟢 Implementado |
-| Temas & Wallpapers | 🟢 Implementado |
-| Personalização & Atalhos | 🟢 Implementado |
-| Persistência & Sessões | 🟢 Implementado |
-| AdBlock & VPN | 🟡 Experimental / em evolução |
-| Moon AI & Context Engine | 🔵 Planejado |
-| Universal Search & Timeline | 🔵 Planejado |
-| Smart Spaces & Smart Sessions | 🔵 Planejado |
-| AI Study Mode & Moon Dev | 🔵 Planejado |
-| Extension API & Automação | 🔮 Visão futura |
+O Moon diferencia recurso funcional, entrega parcial, preview e plano. Código de arquitetura ou uma tela demonstrativa, sozinhos, não significam que uma funcionalidade esteja pronta.
 
----
-
-## 🗺️ ROADMAP
-
-* **🌑 PHASE 01 — FOUNDATION:** Moon UI, Native Home, Tabs, Workspaces, Sidebar, Temas, Wallpapers, Persistência Local.
-* **🌒 PHASE 02 — MOON INTELLIGENCE:** Moon AI Sidebar, AI Context Layer, Resumos, Tradução, Extração de Tarefas, Flashcards.
-* **🌓 PHASE 03 — CONTEXTUAL BROWSER:** Context Engine, Smart Spaces, Smart Sessions, Navigation Timeline.
-* **🌔 PHASE 04 — UNIVERSAL INTERFACE:** Universal Search, Command Center, Busca Global de Contexto.
-* **🌕 PHASE 05 — INTELLIGENT HOME:** Smart Dashboard, Widgets Modulares, Tarefas, Agenda, Tempo de Foco.
-* **🌖 PHASE 06 — MOON PLATFORM:** Extension API, Plugin System, Marketplace de Extensões.
-* **🌗 PHASE 07 — MOON DEV & MOON STUDY:** Ferramentas dedicadas para desenvolvimento e aprendizagem.
-
----
-
-## 🎯 PRIORIDADES
-
-| Funcionalidade | Prioridade |
-| --- | --- |
-| 🌙 Moon AI Sidebar | 10/10 |
-| 💾 Smart Sessions | 9/10 |
-| 🔎 Universal Search | 9/10 |
-| 🌌 Smart Spaces | 8/10 |
-| 🕒 Navigation Timeline | 8/10 |
-| 🧩 Extension API | 8/10 |
-| 🏠 Smart Home | 7/10 |
-| 🎨 Adaptive UI | 7/10 |
-
----
-
-## 🧠 FILOSOFIA DO MOON
-
-1. **USER FIRST:** O usuário controla a experiência.
-2. **CONTEXT FIRST:** A informação deve estar organizada em contexto.
-3. **AI NATIVE:** A inteligência artificial deve estar integrada ao fluxo.
-4. **HUMAN CONTROL:** Automação nunca deve significar perda de controle.
-5. **ERGONOMICS:** A interface deve trabalhar a favor do usuário.
-6. **MODULAR:** O navegador deve se adaptar a diferentes fluxos.
-7. **PRIVACY:** Dados e permissões devem permanecer sob controle.
-8. **OPEN EVOLUTION:** O projeto deve crescer junto com sua comunidade.
-
----
-
-## 🌐 MOON VS. NAVEGADOR TRADICIONAL
-
-| Conceito | Navegador Tradicional | Moon Browser |
+| Área | Estado na 0.5 Demo | Observação |
 | --- | --- | --- |
-| **Navegação** | Páginas | Contextos |
-| **Abas** | Lista | Workspaces / Spaces |
-| **Histórico** | URLs | Timeline |
-| **Pesquisa** | Web | Universal |
-| **IA** | Externa | Integrada |
-| **Personalização** | Limitada | Modular |
-| **Home** | Atalhos | Dashboard |
-| **Sessões** | Básicas | Contextuais |
-| **Extensões** | Complementares | Plataforma |
+| Home, navegação e abas | **Funcional** | Runtime desktop conectado ao Chromium |
+| Workspaces | **Funcional** | Partições isoladas; evolução do estado continua |
+| Favoritos, histórico e notas | **Funcional** | Ainda há migração gradual do estado do renderer para repositories |
+| Downloads | **Funcional** | Eventos e progresso reais do Electron |
+| AdBlock | **Funcional** | Serviço nativo conectado à interface |
+| Settings V3 | **Funcional** | Preview, recuperação, importação e exportação |
+| Temas e wallpapers | **Funcional / parcial** | Biblioteca avançada, favoritos e deduplicação ainda estão no backlog |
+| Moon Themes `.moontheme` | **Funcional localmente** | Conta, catálogo remoto e OAuth dependem do serviço externo |
+| Permissões de sites | **Parcial** | Decisão explícita existe; persistência e revogação por origem serão ampliadas |
+| Moon AI | **Preview desativado** | Não há provider de IA conectado; o painel não deve ser anunciado como IA operacional |
+| Extensões Chromium | **Planejado / desativado** | Contratos existem, mas instalação segura ainda não está liberada |
+| Plugins e marketplace | **Planejado / desativado** | SDK, sandbox e cadeia de confiança ainda serão concluídos |
+| Universal Search | **Planejado** | Há fundação de busca; a experiência unificada ainda não está no shell |
+| Smart Spaces e Timeline | **Planejado / desativado** | Estruturas internas não equivalem a produto conectado |
+| VPN, sync e auto-update | **Planejado / desativado** | Nenhum desses recursos é anunciado como proteção ativa |
+| Android e iOS | **Fundação arquitetural** | Existem contratos compartilhados, não aplicativos distribuíveis |
 
----
+Para a matriz técnica completa, consulte [`docs/roadmap/status.md`](docs/roadmap/status.md).
 
-## 📸 INTERFACE
+## Capturas do projeto
 
----
+As quatro imagens abaixo usam nomes fixos para facilitar futuras atualizações. Coloque os arquivos diretamente em `assets/`, em formato PNG, mantendo exatamente estes nomes.
 
-## 📁 ESTRUTURA ATUAL DO REPOSITÓRIO
+| Arquivo | Conteúdo recomendado | Uso no README |
+| --- | --- | --- |
+| `assets/moonpage.png` | Home principal, limpa e em alta resolução | Imagem de capa |
+| `assets/moon1.png` | Página web aberta, abas, toolbar e workspaces visíveis | Navegação real |
+| `assets/moon2.png` | Central de personalização ou `moon://settings/appearance` | Personalização |
+| `assets/moon3.png` | Sidebar, proteção, downloads, notas ou Moon Themes | Recursos do produto |
+
+Recomendação: use capturas em proporção `16:9`, com pelo menos `1440 × 900`, sem dados pessoais, notificações, tokens ou páginas privadas.
+
+| Navegação | Personalização |
+| --- | --- |
+| ![Moon Browser — navegação](assets/moon1.png) | ![Moon Browser — personalização](assets/moon2.png) |
+
+| Sidebar e produtividade |
+| --- |
+| ![Moon Browser — sidebar e recursos](assets/moon3.png) |
+
+<!--
+GUIA PARA ATUALIZAR AS CAPTURAS
+1. Salve a Home como assets/moonpage.png.
+2. Salve a navegação como assets/moon1.png.
+3. Salve as configurações como assets/moon2.png.
+4. Salve a sidebar/proteção como assets/moon3.png.
+5. Não altere os caminhos no README; basta substituir os arquivos.
+-->
+
+## Arquitetura
+
+O Moon aplica inversão de dependência: a UI conhece contratos; o Core concentra regras de domínio; Electron, armazenamento, rede e segurança entram por adapters.
+
+```mermaid
+flowchart TD
+    UI["Moon UI"] --> Bridge["Preload allowlisted"]
+    Bridge --> IPC["IPC Router"]
+    IPC --> App["Application Service + Core"]
+    App --> Runtime["Electron / Chromium"]
+    App --> Data["SQLite + repositories"]
+```
+
+```text
+main.js
+  └─ apps/desktop/electron/main/main.ts
+      ├─ BrowserApplicationService
+      ├─ Core: tabs, state, events, sessions e workspaces
+      ├─ BrowserManager + WebContentsView
+      └─ ProfileStorage + better-sqlite3
+
+preload.cjs
+  └─ window.moonBrowser — bridge explícita e limitada
+
+index.html
+  └─ ui/browser-shell.ts — shell, Home, painéis e Settings V3
+```
+
+### Estrutura do repositório
 
 ```text
 Moon-browser/
-│
-├── assets/
-│   ├── Moon.png
-│   ├── page.png
-│   ├── page1.png
-│   └── page2.png
-│
-├── index.html
-├── main.js
-├── package.json
-├── .gitignore
-│
-└── README.md
-
+├─ apps/
+│  ├─ desktop/            # runtime Electron, adapters, IPC e serviços
+│  └─ mobile/             # contratos compartilhados; app ainda não distribuível
+├─ packages/
+│  ├─ core/               # domínio de abas, sessões, workspaces, estado e eventos
+│  ├─ storage/            # SQLite, migrations, repositories e backup
+│  ├─ security/           # AdBlock, isolamento, permissões e privacidade
+│  ├─ navigation/         # navegação, busca e rotas internas
+│  ├─ intelligence/       # contratos de IA; feature desativada na demo
+│  ├─ context/            # fundação de contexto, Smart Spaces e Timeline
+│  ├─ extensions/         # contratos de compatibilidade; instalação desativada
+│  ├─ plugins/            # fundação do SDK e runtime; produto desativado
+│  └─ theme-contract/     # contrato seguro de pacotes .moontheme
+├─ ui/                    # shell, componentes, personalização e estilos
+├─ database/              # schema, tabelas e seeds
+├─ config/                # defaults, segurança e feature flags
+├─ tests/                 # unitários, integração, Electron e E2E
+├─ docs/                  # ADRs, arquitetura, segurança, auditorias e roadmap
+├─ assets/                # marca, wallpapers e capturas
+└─ scripts/               # build, desenvolvimento, banco e validação
 ```
 
----
+Documentação de referência:
 
-## ⚙️ DESENVOLVIMENTO
+- [visão arquitetural](docs/architecture/overview.md);
+- [arquitetura de segurança](docs/architecture/security.md);
+- [modelo de ameaças](docs/security/threat-model.md);
+- [decisões arquiteturais](docs/adr);
+- [status da reconstrução](docs/roadmap/status.md);
+- [configuração do ambiente](docs/development/setup.md).
+
+## Privacidade e segurança
+
+O conteúdo da web é sempre tratado como não confiável. Uma página remota não recebe Node.js, preload do Moon, acesso ao banco ou APIs internas.
+
+Princípios obrigatórios:
+
+- contexto somente quando necessário e permitido;
+- nenhuma página, aba, nota ou histórico enviado a IA sem consentimento granular;
+- sessões privadas não persistem no perfil restaurável;
+- ações destrutivas, externas ou sensíveis exigem confirmação;
+- extensões e plugins permanecem desligados até terem sandbox, permissões e revogação verificáveis;
+- atualizações automáticas permanecem desligadas até existir assinatura e distribuição confiável;
+- recursos de segurança não são anunciados antes de estarem conectados e testados.
+
+Falhas de segurança não devem ser publicadas com dados sensíveis em issues abertas. Entre em contato por [`nexusinkmoon@gmail.com`](mailto:nexusinkmoon@gmail.com) com uma descrição mínima e reproduzível.
+
+## Roadmap
+
+O roadmap é orientativo e pode mudar conforme testes, segurança, desempenho e feedback da comunidade.
+
+| Marco | Objetivo | Entregas principais |
+| --- | --- | --- |
+| **0.5 Demo — agora** | Fundação pública verificável | Navegação, abas, workspaces, Settings V3, SQLite, sessões, AdBlock, downloads, temas, Moon Themes, CI e builds Linux |
+| **0.6 — Ergonomia e produtividade** | Tornar o uso diário mais fluido | Home Fase B, presets realmente distintos, biblioteca de wallpapers, sidebar evoluída, pesquisa de configurações e início da Universal Search |
+| **0.7 — Moon Intelligence** | IA útil com controle humano | Providers opcionais, permissões de contexto, resumo, explicação, tradução, tarefas, flashcards e comparação entre páginas |
+| **0.8 — Contextual Browser** | Organizar atividades, não apenas URLs | Smart Sessions, Smart Spaces sugeridos, Navigation Timeline e Command Center |
+| **0.9 — Moon Platform** | Abrir o ecossistema com segurança | Compatibilidade progressiva com extensões, Plugin API, widgets, automações, marketplace e sync preparado para múltiplos dispositivos |
+| **1.0 — Stable** | Navegador auditado e distribuível | Releases assinadas, auto-update seguro, acessibilidade validada, budgets de desempenho e suporte desktop consolidado |
+
+### Critérios antes da 1.0
+
+- permissões persistentes e revogáveis por origem;
+- todos os canais IPC com schemas compartilhados, limites e testes de origem;
+- pipeline único para AdBlock e futuras políticas de rede;
+- migração completa do estado duplicado do renderer para Application/repositories;
+- builds reproduzíveis, assinados e testados em Linux, Windows e macOS;
+- revisão independente de segurança e privacidade;
+- documentação de recuperação, backup e compatibilidade.
+
+## Backlog estratégico
+
+As ideias abaixo foram consolidadas a partir do arquivo de planejamento do projeto. Elas representam direção de produto, não promessa de disponibilidade imediata.
+
+### Prioridades de maior impacto
+
+| Ideia | Prioridade | Resultado esperado |
+| --- | ---: | --- |
+| Moon AI na sidebar | **10/10** | Perguntas e ações sobre a página com consentimento |
+| Smart Sessions | **9/10** | Retomar abas, contexto, grupos e notas de uma atividade |
+| Universal Search | **9/10** | Buscar web, abas, histórico, favoritos, notas, downloads, temas, configurações e comandos |
+| Smart Spaces | **8/10** | Sugerir agrupamentos como Estudos, Desenvolvimento e Trabalho |
+| Navigation Timeline | **8/10** | Retomar visualmente o que estava sendo feito em determinado horário |
+| Extension e Plugin API | **8/10** | Permitir módulos comunitários com capabilities explícitas |
+| Smart Home | **7/10** | Widgets de tarefas, agenda, foco, páginas frequentes e leitura em andamento |
+| Adaptive UI | **7/10** | Extrair uma paleta segura do wallpaper e adaptar acentos e contraste |
+
+### Moon AI e contexto
+
+- resumir páginas e documentações;
+- explicar textos difíceis ou erros de programação;
+- traduzir mantendo o contexto;
+- extrair tarefas e gerar planos de ação;
+- criar flashcards e planos de estudo;
+- comparar páginas, produtos ou preços entre abas;
+- responder perguntas com base apenas nas fontes autorizadas;
+- memória de sessão opcional, transparente e apagável.
+
+### Sidebar e Home
+
+- tarefas, calendário e leitura posterior;
+- histórico de clipboard com controles de privacidade;
+- snippets de código e notas vinculadas à página;
+- últimas abas, páginas frequentes, metas do dia e tempo de foco;
+- widgets reordenáveis por drag-and-drop e teclado;
+- presets de Home para estudo, trabalho, desenvolvimento e modo minimalista.
+
+### Moon Study
+
+- bloqueio de distrações e Pomodoro;
+- captura de trechos com referência à fonte;
+- notas e resumos ligados à página;
+- flashcards e exportação para Markdown;
+- integração opcional com ferramentas como Obsidian.
+
+### Moon Dev
+
+- visualizador de JSON e inspetor de APIs;
+- editor Markdown e biblioteca de snippets;
+- DevTools melhor integradas ao workspace;
+- terminal local com permissões claras;
+- suporte a SSH somente em uma fase futura e após revisão de segurança.
+
+### Plataforma comunitária
+
+Uma futura Plugin API poderá permitir painéis, widgets e automações isolados:
+
+```ts
+moon.registerPanel({
+  id: "pomodoro",
+  title: "Pomodoro",
+  capabilities: ["storage"],
+  render(container) {
+    // Módulo executado apenas após validação e consentimento.
+  }
+});
+```
+
+Esse contrato é apenas uma ilustração de direção; a API pública ainda não está liberada.
+
+## Desenvolvimento
 
 ### Requisitos
 
-* Node.js
-* npm
-* Electron
-* Chromium
+- Node.js 22 ou superior;
+- npm 10 ou superior;
+- Git e Python;
+- toolchain C/C++ exigida pelo `better-sqlite3`;
+- Linux, Windows ou macOS para desenvolvimento desktop.
 
-### Instalação e Execução
+### Instalação
 
 ```bash
-git clone <REPOSITORY_URL>
+git clone https://github.com/heitgh/Moon-browser.git
 cd Moon-browser
-npm install
+npm ci
+npm run dev:desktop
+```
+
+Para iniciar a aplicação após compilar:
+
+```bash
 npm start
-
 ```
 
----
+Copie `.env.example` para `.env` somente quando necessário e nunca versione chaves ou tokens.
 
-## 🧪 DESENVOLVIMENTO SEGURO
+### Build desktop
 
-```text
-1. Entender a arquitetura
-        ↓
-2. Identificar dependências
-        ↓
-3. Verificar funcionalidades existentes
-        ↓
-4. Implementar de forma modular
-        ↓
-5. Testar
-        ↓
-6. Verificar regressões
-        ↓
-7. Documentar
-
+```bash
+npm run build:desktop
 ```
 
----
+Os artefatos são gravados em `release/`. Na validação atual, o build Linux gera:
 
-## 🧰 STACK TECNOLÓGICA
+- `Moon-Browser-0.5.0-demo.1-linux-x86_64.AppImage`;
+- `Moon-Browser-0.5.0-demo.1-linux-amd64.deb`.
 
-* **Electron:** Runtime desktop
-* **Chromium:** Engine de navegação
-* **WebView:** Conteúdo web
-* **HTML5 / CSS3 / JS ES6+:** Interface e lógica
-* **LocalStorage / JSON:** Persistência de dados
+Windows e macOS possuem alvos declarados, mas só devem receber releases públicos depois de validação e assinatura próprias.
 
----
+## Testes e qualidade
 
-## 🧠 ARQUITETURA DE IA & PRIVACIDADE
-
-```text
-                 ┌───────────────┐
-                 │   Moon UI     │
-                 └───────┬───────┘
-                         │
-                         ▼
-                 ┌───────────────┐
-                 │ Context Layer │
-                 └───────┬───────┘
-                         │
-              ┌──────────┼──────────┐
-              ▼          ▼          ▼
-           Page       Tabs       Session
-              │          │          │
-              └──────────┼──────────┘
-                         ▼
-                 ┌───────────────┐
-                 │   Moon AI     │
-                 └───────┬───────┘
-                         │
-              ┌──────────┼──────────┐
-              ▼          ▼          ▼
-          Analysis    Search    Actions
-
+```bash
+npm run typecheck
+npm run lint
+npm run test:unit
+npm run test:integration
+npm run native:electron
+npm run test:electron-storage
+npm run test:e2e
+npm audit --audit-level=high
+npm run build:desktop
 ```
 
-> **Princípio:** *Contexto somente quando necessário e permitido.*
+| Camada | Cobertura atual |
+| --- | ---: |
+| Testes unitários | 52 testes |
+| Integração do shell | 17 testes |
+| SQLite e serviços no Electron | 6 testes |
+| E2E Electron | 5 fluxos |
 
-O usuário possui controle granular do que participa do contexto (Página atual, Abas abertas, Histórico, Notas, Sessões, Downloads).
+Em Linux sem sessão gráfica, execute o E2E com:
+
+```bash
+xvfb-run -a npm run test:e2e
+```
+
+O workflow [`quality.yml`](.github/workflows/quality.yml) repete os gates em cada push para `main` e em pull requests. O repositório também utiliza CodeQL e Dependabot; o dependency review poderá ser ativado quando o Dependency graph estiver habilitado nas configurações do repositório.
+
+## Contribuindo
+
+1. Consulte o [status atual](docs/roadmap/status.md) para não duplicar trabalho ou ativar contratos incompletos.
+2. Abra uma issue descrevendo problema, motivação e resultado esperado.
+3. Crie uma branch pequena e focada.
+4. Preserve os invariantes de segurança e a compatibilidade do perfil.
+5. Adicione ou atualize testes.
+6. Execute os quality gates relevantes.
+7. Documente mudanças de comportamento e limitações.
+
+Leia também [`docs/development/contributing.md`](docs/development/contributing.md).
+
+## Comunidade e equipe
+
+O Moon Browser faz parte do ecossistema brasileiro **Nexus Inc.**, voltado a tecnologia, educação e inovação acessíveis, com produtos construídos a partir das necessidades reais dos usuários.
+
+Equipe principal e colaboradores do ecossistema:
+
+- Ariel Apolinario;
+- João Pedro Melo;
+- Jonathan Santos;
+- Julio Prates;
+- Luan Gonçalves;
+- Thiago Barbosa.
+
+### Contato
+
+- **Discord:** [discord.gg/skB4s8KWW](https://discord.gg/skB4s8KWW)
+- **E-mail:** [nexusinkmoon@gmail.com](mailto:nexusinkmoon@gmail.com)
+- **Issues:** [github.com/heitgh/Moon-browser/issues](https://github.com/heitgh/Moon-browser/issues)
+
+## Licença
+
+Distribuído sob a [Licença MIT](LICENSE). Você pode estudar, usar, modificar e redistribuir o projeto conforme os termos da licença.
 
 ---
 
-## 🤝 COMUNIDADE & APOIO
+<div align="center">
 
-* **Discord:** [Acesse a comunidade no Discord](https://discord.gg/skb4s8KWW)
-* **Catarse:** [Apoie a campanha no Catarse](https://www.catarse.com.br/posts/moon-browser?from=profile_list)
-* **Empresa:** **Nexu.inc** — Criando tecnologia orientada pelas necessidades dos usuários.
+**Moon Browser**
 
----
+*Made for users. Built with users.*
 
-## 📜 LICENÇA
+**Nexus Inc. · 2026**
 
-Distribuído sob a licença **Mozilla Public License 2.0 (MPL-2.0)**. Consulte os arquivos de licença no repositório para os termos completos.
-
----
-
-## 🌌 MANIFESTO
-
-A Web cresceu. A quantidade de informação cresceu. As ferramentas cresceram. Mas a forma de navegar ainda é praticamente a mesma.
-
-Abrimos abas. Pesquisamos. Copiamos. Colamos. Alternamos entre aplicativos. Perdemos contexto. Recomeçamos.
-
-O Moon nasceu para questionar esse modelo. Não queremos apenas construir um navegador mais bonito ou adicionar Inteligência Artificial. Queremos construir uma nova experiência de navegação onde a Web, as ferramentas e a inteligência trabalham juntas.
-
-**MOON BROWSER**
-
-*Intelligent · Ergonomic · Personalizable · Contextual*
-
-Made for users. Built with users.
+</div>

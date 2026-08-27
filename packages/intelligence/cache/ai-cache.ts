@@ -1,0 +1,3 @@
+import type { AiResponse } from "../ai/ai-response.js";
+interface AiCacheEntry{readonly response:AiResponse;readonly expiresAt:number;}
+export class AiCache{readonly #items=new Map<string,AiCacheEntry>();constructor(readonly ttlMs=300_000,readonly maxEntries=500){}get(key:string){const item=this.#items.get(key);if(!item)return undefined;if(item.expiresAt<=Date.now()){this.#items.delete(key);return undefined;}return item.response;}set(key:string,response:AiResponse){if(this.#items.size>=this.maxEntries)this.#items.delete(this.#items.keys().next().value as string);this.#items.set(key,{response,expiresAt:Date.now()+this.ttlMs});}clear(){this.#items.clear();}static key(value:unknown){return JSON.stringify(value);}}

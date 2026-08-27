@@ -1,0 +1,1 @@
+import type { MoonAi } from "../ai/moon-ai.js";export class StudyAssistantAction{constructor(readonly ai:MoonAi){}run(material:string,goal:string,signal?:AbortSignal){return this.ai.ask(`Act as a study coach. Based only on the material, create a plan for this goal: ${goal}. Include concepts, exercises, checkpoints, and review schedule.\n\n${material}`,{signal});}}

@@ -1,0 +1,3 @@
+import { requireExtensionPermission,type ExtensionApiContext } from "./moon-extension-api.js";
+export interface ContextMenuItem{readonly id:string;readonly title:string;readonly contexts:readonly("page"|"link"|"image"|"selection"|"tab")[];readonly enabled?:boolean;readonly onClick:(info:{pageUrl?:string;linkUrl?:string;selectionText?:string;tabId?:string})=>void;}
+export class ContextMenusApi{readonly #items=new Map<string,ContextMenuItem>();constructor(readonly context:ExtensionApiContext){}create(item:ContextMenuItem):void{requireExtensionPermission(this.context,"contextMenus");this.#items.set(item.id,item);}remove(id:string){return this.#items.delete(id);}list(){return[...this.#items.values()];}clear(){this.#items.clear();}}

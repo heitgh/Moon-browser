@@ -1,0 +1,2 @@
+export interface AiConfiguration{readonly enabled:boolean;readonly defaultProvider:string;readonly defaultModel?:string;readonly remoteProviders:boolean;readonly contextTokens:number;readonly outputTokens:number;readonly temperature:number;readonly memory:boolean;readonly redactPersonalData:boolean;}
+export const DEFAULT_AI_CONFIG:AiConfiguration={enabled:false,defaultProvider:"local",remoteProviders:false,contextTokens:16_000,outputTokens:2_000,temperature:.2,memory:false,redactPersonalData:true};

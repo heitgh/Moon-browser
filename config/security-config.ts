@@ -1,0 +1,3 @@
+import type { SecurityPolicy } from "@moon/platform";
+export interface SecurityConfiguration{readonly platform:SecurityPolicy;readonly extensionSandbox:boolean;readonly pluginSandbox:boolean;readonly requireSignedUpdates:boolean;readonly allowDeveloperMode:boolean;}
+export const DEFAULT_SECURITY_CONFIG:SecurityConfiguration={platform:{isolationLevel:"strict",blockInsecureContent:true,blockMixedContent:true,blockPopups:true,preventFingerprinting:true,preventTracking:true,clearDataOnExit:false,allowThirdPartyCookies:false},extensionSandbox:true,pluginSandbox:true,requireSignedUpdates:true,allowDeveloperMode:false};

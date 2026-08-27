@@ -1,0 +1,1 @@
+import type { MoonAi } from "../ai/moon-ai.js";export class DeveloperAssistantAction{constructor(readonly ai:MoonAi){}run(code:string,request:string,signal?:AbortSignal){return this.ai.ask(`Help with this development request: ${request}. Analyze correctness, security, performance, and maintainability. Do not claim to have executed code.\n\nCode:\n${code}`,{signal});}}
