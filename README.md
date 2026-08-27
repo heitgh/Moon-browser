@@ -420,7 +420,7 @@ Em Linux sem sessão gráfica, execute o E2E com:
 xvfb-run -a npm run test:e2e
 ```
 
-O workflow [`quality.yml`](.github/workflows/quality.yml) repete os gates em cada push para `main` e em pull requests. O repositório também utiliza CodeQL, Dependabot e dependency review.
+O workflow [`quality.yml`](.github/workflows/quality.yml) repete os gates em cada push para `main` e em pull requests. O repositório também utiliza CodeQL e Dependabot; o dependency review poderá ser ativado quando o Dependency graph estiver habilitado nas configurações do repositório.
 
 ## Contribuindo
 
