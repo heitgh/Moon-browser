@@ -1,0 +1,2 @@
+export type PluginCapability="tabs"|"navigation"|"storage"|"network"|"notifications"|"ai"|"panels"|"widgets"|"automation";
+export interface PluginManifest{readonly manifestVersion:1;readonly id:string;readonly name:string;readonly version:string;readonly description?:string;readonly author?:string;readonly entrypoint:string;readonly capabilities:readonly PluginCapability[];readonly minimumMoonVersion?:string;}

@@ -1,0 +1,1 @@
+export interface NavigationTools{open(target:string):Promise<void>;search(query:string):Promise<void>;back():Promise<void>;forward():Promise<void>;reload():Promise<void>;closeTab():Promise<void>;switchTab(query:string):Promise<void>;}

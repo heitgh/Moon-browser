@@ -1,0 +1,3 @@
+export interface SearchSuggestion { readonly id: string; readonly title: string; readonly description?: string; readonly url: string; readonly score: number; }
+export interface SearchProvider { readonly id: string; readonly name: string; readonly searchUrl: string; buildUrl(query: string): string; suggest?(query: string, signal?: AbortSignal): Promise<readonly SearchSuggestion[]>; }
+export class TemplateSearchProvider implements SearchProvider { constructor(readonly id: string, readonly name: string, readonly searchUrl: string) { if (!searchUrl.includes("{query}")) throw new Error("Search URL must contain {query}"); } buildUrl(query: string): string { return this.searchUrl.replace("{query}", encodeURIComponent(query.trim())); } }

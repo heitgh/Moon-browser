@@ -1,0 +1,1 @@
+import type { MoonAi } from "../ai/moon-ai.js";export class SummarizePageAction{constructor(readonly ai:MoonAi){}async run(page:string,signal?:AbortSignal){return this.ai.ask(`Summarize the following page faithfully. Separate key points, evidence, and uncertainties.\n\n${page}`,{signal});}}

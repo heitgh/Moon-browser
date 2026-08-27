@@ -1,16 +1,86 @@
 {
   "name": "moon-browser",
-  "version": "1.0.0",
-  "description": "Navegador Produtivo Estilo Zen e Vivaldi",
-  "main": "main.js",
-  "scripts": {
-    "start": "electron ."
+  "version": "0.1.0",
+  "description": "Moon Browser — intelligent, contextual and productivity-focused web browser.",
+  "desktopName": "moon-browser.desktop",
+  "private": true,
+  "author": {
+    "name": "Heitgh",
+    "email": "207310826+heitgh@users.noreply.github.com"
   },
-  "devDependencies": {
-    "electron": "^43.2.0"
+  "license": "MIT",
+  "homepage": "https://github.com/heitgh/Moon-tests-1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/heitgh/Moon-tests-1.git"
+  },
+  "bugs": {
+    "url": "https://github.com/heitgh/Moon-tests-1/issues"
+  },
+  "type": "module",
+  "main": "main.js",
+  "workspaces": [
+    "apps/desktop",
+    "apps/mobile"
+  ],
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "npm run dev:desktop",
+    "dev:desktop": "tsx scripts/development/dev.ts",
+    "dev:mobile": "tsx scripts/build/build-mobile.ts",
+    "compile": "tsc --project tsconfig.build.json",
+    "build": "npm run build:desktop",
+    "build:desktop": "tsx scripts/build/build-desktop.ts",
+    "build:mobile": "tsx scripts/build/build-mobile.ts",
+    "start": "npm run compile && electron .",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/browser-shell.integration.test.ts",
+    "test:electron-storage": "ELECTRON_RUN_AS_NODE=1 electron node_modules/vitest/vitest.mjs run --config vitest.electron.config.ts",
+    "test:e2e": "npm run compile && playwright test",
+    "quality": "npm run typecheck && npm run lint && npm run test:unit && npm run test:integration && npm run test:electron-storage",
+    "native:electron": "electron-builder install-app-deps",
+    "screenshots:desktop": "npm run compile && tsx scripts/development/capture-screenshots.ts",
+    "measure:ui": "npm run compile && tsx scripts/development/measure-ui-performance.ts",
+    "db:migrate": "tsx scripts/database/migrate.ts",
+    "db:seed": "tsx scripts/database/seed.ts",
+    "db:backup": "tsx scripts/database/backup.ts",
+    "extensions:validate": "tsx scripts/extensions/validate-extension.ts",
+    "extensions:package": "tsx scripts/extensions/package-extension.ts",
+    "clean": "tsx scripts/development/clean.ts",
+    "reset": "tsx scripts/development/reset.ts",
+    "prepare": "npm run typecheck"
   },
   "dependencies": {
-    "@ghostery/adblocker-electron": "^2.18.1",
-    "cross-fetch": "^4.1.0"
+    "@ghostery/adblocker-electron": "^2.11.3",
+    "better-sqlite3": "^12.4.1",
+    "cross-fetch": "^4.1.0",
+    "electron-store": "^10.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.40.0",
+    "@typescript-eslint/parser": "^8.40.0",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.0.0",
+    "eslint": "^9.0.0",
+    "happy-dom": "^20.11.6",
+    "prettier": "^3.6.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true,
+    "esbuild@0.28.2": true
   }
 }

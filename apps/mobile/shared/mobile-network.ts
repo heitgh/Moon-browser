@@ -1,0 +1,2 @@
+import type { DnsConfiguration, NetworkPlatform, ProxyConfiguration } from "@moon/platform";
+export class MobileNetworkService { constructor(readonly platform: NetworkPlatform) {} setProxy(configuration: ProxyConfiguration) { return this.platform.setProxy(configuration); } setDns(configuration: DnsConfiguration) { return this.platform.setDns(configuration); } clearPrivateData() { return this.platform.clearBrowsingData(); } shutdown() { return this.platform.shutdown(); } }

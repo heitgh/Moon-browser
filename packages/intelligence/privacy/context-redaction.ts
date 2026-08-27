@@ -1,0 +1,3 @@
+const PATTERNS = [{type:"email",pattern:/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi},{type:"phone",pattern:/\b(?:\+?\d[\s().-]?){8,15}\b/g},{type:"card",pattern:/\b(?:\d[ -]*?){13,19}\b/g},{type:"token",pattern:/\b(?:bearer\s+)?[a-z0-9_-]{24,}\b/gi}];
+export interface RedactionResult{readonly content:string;readonly redactions:Readonly<Record<string,number>>;}
+export function redactContext(content:string):RedactionResult{const counts:Record<string,number>={};let result=content;for(const{type,pattern}of PATTERNS)result=result.replace(pattern,()=>{counts[type]=(counts[type]??0)+1;return`[REDACTED_${type.toLocaleUpperCase()}]`;});return{content:result,redactions:counts};}

@@ -1,0 +1,3 @@
+import type { IntelligenceContext } from "../context/context-engine.js";
+interface ContextCacheEntry{readonly context:IntelligenceContext;readonly expiresAt:number;}
+export class ContextCache{readonly #items=new Map<string,ContextCacheEntry>();constructor(readonly ttlMs=60_000){}get(key:string){const item=this.#items.get(key);if(!item||item.expiresAt<=Date.now()){this.#items.delete(key);return undefined;}return item.context;}set(key:string,context:IntelligenceContext){this.#items.set(key,{context,expiresAt:Date.now()+this.ttlMs});}invalidate(prefix?:string){for(const key of this.#items.keys())if(!prefix||key.startsWith(prefix))this.#items.delete(key);}}

@@ -1,0 +1,2 @@
+import type { ZenMode } from "./zen-mode.js";
+export function installZenGestures(mode: ZenMode): () => void { const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape" && mode.active && mode.settings.escapeToExit) void mode.exit(); if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLocaleLowerCase() === "z") { event.preventDefault(); void mode.toggle(); } }; window.addEventListener("keydown", onKeyDown); return () => window.removeEventListener("keydown", onKeyDown); }

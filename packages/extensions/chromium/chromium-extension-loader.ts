@@ -1,0 +1,4 @@
+import type { ExtensionManifest } from "@moon/platform";import { ManifestParser } from "./manifest-parser.js";
+export interface ChromiumExtensionPackage{readonly path:string;readonly manifest:ExtensionManifest;readonly files:readonly string[];}
+export interface ExtensionPackageReader{readText(root:string,path:string):Promise<string>;list(root:string):Promise<readonly string[]>;}
+export class ChromiumExtensionLoader{constructor(readonly reader:ExtensionPackageReader,readonly parser=new ManifestParser()){}async load(path:string):Promise<ChromiumExtensionPackage>{const files=await this.reader.list(path);if(!files.includes("manifest.json"))throw new Error("Extension package has no manifest.json");for(const file of files)if(file.startsWith("../")||file.includes("/../"))throw new Error(`Unsafe extension path: ${file}`);const manifest=this.parser.parse(await this.reader.readText(path,"manifest.json"));return{path,manifest,files};}}

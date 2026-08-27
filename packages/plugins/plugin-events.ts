@@ -1,0 +1,2 @@
+import type { MoonEvent } from "@moon/core";import type { PluginManifest } from "./plugin-manifest.js";
+export type PluginLoadedEvent=MoonEvent<"plugin:loaded",{readonly manifest:PluginManifest}>;export type PluginActivatedEvent=MoonEvent<"plugin:activated",{readonly pluginId:string}>;export type PluginDeactivatedEvent=MoonEvent<"plugin:deactivated",{readonly pluginId:string}>;export type PluginFailedEvent=MoonEvent<"plugin:failed",{readonly pluginId:string;readonly error:unknown}>;

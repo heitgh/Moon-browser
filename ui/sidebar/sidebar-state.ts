@@ -1,0 +1,2 @@
+export interface SidebarState { readonly open: boolean; readonly activePanel?: string; readonly width: number; }
+export class SidebarStateStore { #state: SidebarState; constructor(state: SidebarState = { open: true, width: 320 }) { this.#state = state; } get state() { return this.#state; } update(update: Partial<SidebarState>): SidebarState { this.#state = { ...this.#state, ...update, width: Math.min(600, Math.max(240, update.width ?? this.#state.width)) }; return this.#state; } }

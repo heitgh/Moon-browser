@@ -1,0 +1,2 @@
+import Database from "better-sqlite3";import { readFile } from "node:fs/promises";import { resolve } from "node:path";
+const databasePath=resolve(process.env.MOON_DATABASE_PATH??"database/moon.db");const seedPath=resolve(process.argv[2]??"database/seeds/default-data.sql");const db=new Database(databasePath);try{db.exec(await readFile(seedPath,"utf8"));console.log(`Seeded ${databasePath}`);}finally{db.close();}

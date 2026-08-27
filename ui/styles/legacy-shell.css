@@ -1,0 +1,9 @@
+.moon-shell { display: grid; grid-template-rows: auto auto minmax(0, 1fr); height: 100vh; }
+.moon-shell__body { display: grid; grid-template-columns: auto minmax(0, 1fr); min-height: 0; }
+.moon-titlebar, .moon-toolbar { align-items: center; display: flex; min-height: 40px; padding-inline: var(--moon-space-3); }
+.moon-content { min-width: 0; overflow: auto; }
+.home-widget { background: var(--moon-surface); border: 1px solid var(--moon-border); border-radius: var(--moon-radius-md); padding: var(--moon-space-4); }
+.moon-home-layout { display: grid; gap: var(--moon-space-4); grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.moon-home-layout > * { grid-column: span var(--widget-span, 1); }
+
+

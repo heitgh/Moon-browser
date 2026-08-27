@@ -1,0 +1,6 @@
+import type { StorageEntry, StoragePlatform, StorageQuery, StorageScope, StorageTransaction } from "@moon/platform";
+export interface ElectronStorageBackend { get<T>(query: StorageQuery): Promise<StorageEntry<T> | null>; set<T>(query: StorageQuery, value: T): Promise<void>; delete(query: StorageQuery): Promise<void>; clear(scope: StorageScope, namespace: string): Promise<void>; keys(scope: StorageScope, namespace: string): Promise<readonly string[]>; transaction<T>(callback: (transaction: StorageTransaction) => Promise<T>): Promise<T>; close(): Promise<void>; }
+export class ElectronStoragePlatform implements StoragePlatform {
+  constructor(readonly backend: ElectronStorageBackend) {}
+  get<T = unknown>(query: StorageQuery) { return this.backend.get<T>(query); } set<T = unknown>(query: StorageQuery, value: T) { return this.backend.set(query, value); } delete(query: StorageQuery) { return this.backend.delete(query); } async has(query: StorageQuery) { return (await this.get(query)) !== null; } clear(scope: StorageScope, namespace: string) { return this.backend.clear(scope, namespace); } keys(scope: StorageScope, namespace: string) { return this.backend.keys(scope, namespace); } transaction<T>(callback: (transaction: StorageTransaction) => Promise<T>) { return this.backend.transaction(callback); } close() { return this.backend.close(); }
+}

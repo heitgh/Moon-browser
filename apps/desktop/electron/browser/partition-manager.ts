@@ -1,0 +1,2 @@
+export type PartitionScope = "profile" | "workspace" | "session" | "private";
+export class PartitionManager { create(scope: PartitionScope, id: string, persistent = scope !== "private"): string { if (!id.trim()) throw new Error("Partition id is required"); const key = `${scope}:${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`; return persistent ? `persist:${key}` : key; } profile(id: string): string { return this.create("profile", id); } private(id: string): string { return this.create("private", id, false); } }

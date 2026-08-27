@@ -1,0 +1,6 @@
+@keyframes moon-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.moon-content > * { animation: moon-fade-in var(--moon-motion-normal) var(--moon-ease-standard); }
+button, input, select, textarea { transition: border-color var(--moon-motion-fast) var(--moon-ease-standard), background-color var(--moon-motion-fast) var(--moon-ease-standard), color var(--moon-motion-fast) var(--moon-ease-standard), transform var(--moon-motion-fast) var(--moon-ease-standard); }
+button:active { transform: scale(.98); }
+@keyframes moon-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } }

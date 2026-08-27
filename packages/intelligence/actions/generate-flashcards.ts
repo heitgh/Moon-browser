@@ -1,0 +1,1 @@
+import type { MoonAi } from "../ai/moon-ai.js";export class GenerateFlashcardsAction{constructor(readonly ai:MoonAi){}run(content:string,count=10,signal?:AbortSignal){return this.ai.ask(`Create up to ${Math.max(1,Math.min(count,50))} study flashcards grounded only in the content. Return JSON only with question, answer, difficulty, and source fields.\n\n${content}`,{signal});}}

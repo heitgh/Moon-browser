@@ -1,0 +1,3 @@
+:root[data-theme="light"] { color-scheme: light; --moon-bg: #f5f6fa; --moon-surface: #fff; --moon-surface-raised: #eef0f6; --moon-text: #171923; --moon-text-muted: #626a78; --moon-border: color-mix(in srgb, var(--moon-text) 14%, transparent); }
+:root[data-theme="dark"] { color-scheme: dark; }
+@media (prefers-color-scheme: light) { :root:not([data-theme]) { color-scheme: light; --moon-bg: #f5f6fa; --moon-surface: #fff; --moon-surface-raised: #eef0f6; --moon-text: #171923; --moon-text-muted: #626a78; } }

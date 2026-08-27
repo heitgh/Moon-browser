@@ -1,0 +1,3 @@
+import type { ContextRequest,ContextSource } from "../engine/context-engine.js";
+export interface PageContextReader{read(tabId:string):Promise<{title:string;url:string;text:string}>;}
+export class PageContextSource implements ContextSource{readonly id="page";readonly types=["page"] as const;constructor(readonly reader:PageContextReader){}async collect(request:ContextRequest){if(!request.tabId)return[];const page=await this.reader.read(request.tabId);return[{id:`page:${request.tabId}`,type:"page" as const,title:page.title,url:page.url,content:page.text.slice(0,50_000),timestamp:Date.now(),relevance:100}];}}

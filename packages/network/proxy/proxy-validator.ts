@@ -1,0 +1,3 @@
+import type { ProxyProfile } from "./proxy-profile.js";
+export interface ProxyValidationResult{readonly valid:boolean;readonly errors:readonly string[];}
+export function validateProxyProfile(profile:ProxyProfile):ProxyValidationResult{const errors:string[]=[];if(!profile.id.trim())errors.push("Profile id is required");if(!/^[a-z0-9.-]+$/i.test(profile.host))errors.push("Proxy host is invalid");if(!Number.isInteger(profile.port)||profile.port<1||profile.port>65535)errors.push("Proxy port must be between 1 and 65535");for(const value of profile.bypass){try{new URL(value.includes("://")?value:`https://${value}`);}catch{errors.push(`Invalid bypass entry: ${value}`);}}return{valid:errors.length===0,errors};}

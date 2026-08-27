@@ -1,0 +1,2 @@
+import { readFile } from "node:fs/promises";import { resolve } from "node:path";import { ManifestParser } from "../../packages/extensions/chromium/manifest-parser.js";
+const root=resolve(process.argv[2]??"");if(!process.argv[2])throw new Error("Usage: validate-extension <extension-directory>");const manifest=new ManifestParser().parse(await readFile(resolve(root,"manifest.json"),"utf8"));console.log(JSON.stringify({valid:true,id:manifest.id,name:manifest.name,version:manifest.version,permissions:manifest.permissions},null,2));

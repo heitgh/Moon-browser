@@ -1,0 +1,146 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+
+    "allowJs": false,
+    "checkJs": false,
+
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "useUnknownInCatchVariables": true,
+
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+
+    "skipLibCheck": true,
+
+    "baseUrl": ".",
+
+    "paths": {
+      "@moon/core": [
+        "packages/core/index.ts"
+      ],
+      "@moon/core/*": [
+        "packages/core/*"
+      ],
+
+      "@moon/platform": [
+        "packages/platform/index.ts"
+      ],
+      "@moon/platform/*": [
+        "packages/platform/*"
+      ],
+
+      "@moon/storage": [
+        "packages/storage/index.ts"
+      ],
+      "@moon/storage/*": [
+        "packages/storage/*"
+      ],
+
+      "@moon/navigation": [
+        "packages/navigation/index.ts"
+      ],
+      "@moon/navigation/*": [
+        "packages/navigation/*"
+      ],
+
+      "@moon/context": [
+        "packages/context/index.ts"
+      ],
+      "@moon/context/*": [
+        "packages/context/*"
+      ],
+
+      "@moon/intelligence": [
+        "packages/intelligence/index.ts"
+      ],
+      "@moon/intelligence/*": [
+        "packages/intelligence/*"
+      ],
+
+      "@moon/security": [
+        "packages/security/index.ts"
+      ],
+      "@moon/security/*": [
+        "packages/security/*"
+      ],
+
+      "@moon/network": [
+        "packages/network/index.ts"
+      ],
+      "@moon/network/*": [
+        "packages/network/*"
+      ],
+
+      "@moon/extensions": [
+        "packages/extensions/index.ts"
+      ],
+      "@moon/extensions/*": [
+        "packages/extensions/*"
+      ],
+
+      "@moon/plugins": [
+        "packages/plugins/index.ts"
+      ],
+      "@moon/plugins/*": [
+        "packages/plugins/*"
+      ],
+
+      "@moon/ui-core": [
+        "packages/ui-core/index.ts"
+      ],
+      "@moon/ui-core/*": [
+        "packages/ui-core/*"
+      ]
+    },
+
+    "types": [
+      "node"
+    ],
+
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+
+    "outDir": "dist/types",
+    "rootDir": "."
+  },
+
+  "include": [
+    "apps/**/*.ts",
+    "packages/**/*.ts",
+    "scripts/**/*.ts",
+    "ui/**/*.ts",
+    "tests/**/*.ts",
+    "config/**/*.ts",
+    "vitest.config.ts",
+    "vitest.electron.config.ts",
+    "playwright.config.ts"
+  ],
+
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "release",
+    "coverage"
+  ]
+}

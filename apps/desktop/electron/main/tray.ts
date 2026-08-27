@@ -1,0 +1,2 @@
+import { Menu, Tray, nativeImage } from "electron";
+export function createApplicationTray(iconPath: string, onShow: () => void): Tray { const tray = new Tray(nativeImage.createFromPath(iconPath)); tray.setToolTip("Moon Browser"); tray.setContextMenu(Menu.buildFromTemplate([{ label: "Mostrar Moon", click: onShow }, { type: "separator" }, { role: "quit", label: "Sair" }])); tray.on("double-click", onShow); return tray; }

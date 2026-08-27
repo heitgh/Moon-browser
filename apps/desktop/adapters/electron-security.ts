@@ -1,0 +1,7 @@
+import type { PermissionDecision, PermissionRequest, PermissionResult, SecurityPermission, SecurityPlatform, SecurityPolicy } from "@moon/platform";
+export interface ElectronSecurityBackend extends Omit<SecurityPlatform, "requestPermission"> {}
+export class ElectronSecurityPlatform implements SecurityPlatform {
+  constructor(readonly backend: ElectronSecurityBackend) {}
+  async requestPermission(request: PermissionRequest): Promise<PermissionResult> { const decision = await this.backend.getPermission(request.origin, request.permission); return { permission: request.permission, decision, origin: request.origin }; }
+  setPermission(origin: string, permission: SecurityPermission, decision: PermissionDecision) { return this.backend.setPermission(origin, permission, decision); } getPermission(origin: string, permission: SecurityPermission) { return this.backend.getPermission(origin, permission); } clearPermissions(origin?: string) { return this.backend.clearPermissions(origin); } setPolicy(policy: SecurityPolicy) { return this.backend.setPolicy(policy); } getPolicy() { return this.backend.getPolicy(); } validateNavigation(url: string, origin?: string) { return this.backend.validateNavigation(url, origin); } validateExternalProtocol(url: string) { return this.backend.validateExternalProtocol(url); } getSecurityAuditLog(limit?: number) { return this.backend.getSecurityAuditLog(limit); } clearSecurityAuditLog() { return this.backend.clearSecurityAuditLog(); } shutdown() { return this.backend.shutdown(); }
+}

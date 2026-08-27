@@ -1,0 +1,10 @@
+{
+  "name": "@moon/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared Moon Browser mobile application package.",
+  "scripts": {
+    "typecheck": "tsc --noEmit --project ../../tsconfig.json"
+  }
+}
