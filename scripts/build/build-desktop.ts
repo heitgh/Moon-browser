@@ -13,4 +13,4 @@ function run(command: string, args: readonly string[]): Promise<void> {
 
 await rm("dist/types", { recursive: true, force: true });
 await run(process.execPath, ["node_modules/typescript/bin/tsc", "--project", "tsconfig.build.json"]);
-await run(process.execPath, ["node_modules/electron-builder/out/cli/cli.js", "--config", "electron-builder.yml"]);
+await run(process.execPath, ["node_modules/electron-builder/out/cli/cli.js", "--config", "electron-builder.yml", "--publish", "never"]);
