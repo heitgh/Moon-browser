@@ -1,6 +1,5 @@
 appId: com.moon.browser
 productName: Moon Browser
-artifactName: Moon-Browser-${version}-${os}-${arch}.${ext}
 directories:
   output: release
 files:
@@ -19,11 +18,33 @@ linux:
   syncDesktopName: true
   maintainer: Heitgh <207310826+heitgh@users.noreply.github.com>
   icon: assets/branding/moon-icon.svg
+  artifactName: Moon-Browser-Linux-x64.${ext}
   target:
-    - AppImage
-    - deb
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
 win:
-  target: nsis
+  icon: assets/branding/Moon.png
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+nsis:
+  artifactName: Moon-Browser-Windows-x64-Setup.${ext}
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Moon Browser
+  uninstallDisplayName: Moon Browser
+portable:
+  artifactName: Moon-Browser-Windows-x64-Portable.${ext}
 mac:
   category: public.app-category.productivity
   target: dmg
