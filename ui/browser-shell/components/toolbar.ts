@@ -34,7 +34,7 @@ export class Toolbar {
   readonly address = element("form", "moon-address");
   readonly spacer = element("span", "moon-toolbar-spacer");
 
-  constructor(readonly actions: ToolbarActions) {
+  constructor(readonly actions: ToolbarActions, readonly features: { readonly ai: boolean; readonly modules: boolean } = { ai: false, modules: false }) {
     this.back.addEventListener("click", actions.onBack);
     this.forward.addEventListener("click", actions.onForward);
     this.reload.addEventListener("click", actions.onReload);
@@ -76,7 +76,7 @@ export class Toolbar {
       profile: this.profile, menu: this.menu, spacer: this.spacer
     } as const;
     const ordered: HTMLElement[] = [];
-    for (const item of layout.toolbar.items) { const node = nodes[item.id]; node.hidden = !item.visible; ordered.push(node); }
+    for (const item of layout.toolbar.items) { const node = nodes[item.id]; const available = item.id === "ai" ? this.features.ai : item.id === "modules" ? this.features.modules : true; node.hidden = !item.visible || !available; ordered.push(node); }
     this.element.replaceChildren(...ordered);
     this.element.classList.toggle("is-auto-hide", layout.toolbar.autoHide);
   }

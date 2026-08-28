@@ -48,9 +48,7 @@ test("starts the packaged desktop shell and opens every primary panel", async ()
       ["Downloads", "Downloads"],
       ["Histórico", "Histórico"],
       ["Traduzir página", "Tradutor"],
-      ["Bloco de notas", "Bloco de notas"],
-      ["Extensões", "Extensões"],
-      ["Moon AI", "Moon AI"]
+      ["Bloco de notas", "Bloco de notas"]
     ] as const;
 
     for (const [label, heading] of modules) {
@@ -203,4 +201,38 @@ test("keeps the Phase A chrome readable, reachable and unclipped across target v
     await application.close();
     await rm(userData, { recursive: true, force: true });
   }
+});
+
+test("opens a real isolated private window and never restores it", async () => {
+  const userData = await mkdtemp(join(tmpdir(), "moon-e2e-private-"));
+  const launch = () => electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData } });
+  try {
+    let application = await launch();
+    try {
+      const normalWindow = await shellWindow(application);
+      await normalWindow.evaluate(async () => {
+        const bridge = (window as unknown as { moonBrowser: { mutateProfileData(value: unknown): Promise<void> } }).moonBrowser;
+        await bridge.mutateProfileData({ type: "history:record", value: { id: "private-test-history", title: "Normal", url: "https://normal.test/", time: Date.now() } });
+        await bridge.mutateProfileData({ type: "notes:save", content: "Nota do perfil normal" });
+      });
+      await normalWindow.keyboard.press("Control+Shift+N");
+      await expect.poll(() => application.windows().filter(page => page.url().endsWith("/index.html")).length).toBe(2);
+      const privateWindow = application.windows().filter(page => page.url().endsWith("/index.html")).find(page => page !== normalWindow)!;
+      await expect(privateWindow.locator(".moon-private-badge")).toBeVisible();
+      await expect.poll(() => privateWindow.evaluate(() => document.documentElement.dataset.moonPrivate)).toBe("on");
+      const privateTabs = await privateWindow.evaluate(() => (window as unknown as { moonBrowser: { getTabs(): Promise<Array<{ private: boolean }>> } }).moonBrowser.getTabs());
+      expect(privateTabs.length).toBeGreaterThan(0); expect(privateTabs.every(tab => tab.private)).toBe(true);
+      const privateProfile = await privateWindow.evaluate(() => (window as unknown as { moonBrowser: { getProfileData(): Promise<{ history: unknown[]; notes: string }> } }).moonBrowser.getProfileData());
+      expect(privateProfile.history).toEqual([]); expect(privateProfile.notes).toBe("");
+      await privateWindow.getByLabel("Bloco de notas", { exact: true }).click();
+      await expect(privateWindow.locator(".moon-notes-input")).toBeDisabled();
+    } finally { await application.close(); }
+
+    application = await launch();
+    try {
+      const restored = await shellWindow(application);
+      const restoredTabs = await restored.evaluate(() => (window as unknown as { moonBrowser: { getTabs(): Promise<Array<{ private: boolean }>> } }).moonBrowser.getTabs());
+      expect(restoredTabs.every(tab => !tab.private)).toBe(true);
+    } finally { await application.close(); }
+  } finally { await rm(userData, { recursive: true, force: true }); }
 });

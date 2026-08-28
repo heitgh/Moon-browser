@@ -12,18 +12,24 @@ import { ElectronDownloadManager } from "../services/download-manager.js";
 import { ProfileStorage } from "../services/profile-storage.js";
 import { BrowserApplicationService } from "../../application/browser-application-service.js";
 import { MoonThemeService } from "../services/moon-theme-service.js";
+import { SessionRequestPipeline } from "../security/session-request-pipeline.js";
+import { SitePermissionService } from "../security/site-permission-service.js";
 
 const windows = new WindowManager();
 const downloads = new ElectronDownloadManager(windows);
-const adblock = new ElectronAdblockService(windows);
-const browser = new ElectronBrowserManager(windows, downloads, adblock);
+const requestPipeline = new SessionRequestPipeline();
+const permissions = new SitePermissionService();
+const adblock = new ElectronAdblockService(windows, requestPipeline);
+const browser = new ElectronBrowserManager(windows, downloads, adblock, requestPipeline, permissions);
 const ipc = new IpcRouter();
 let profile: ProfileStorage | undefined;
 let application: BrowserApplicationService | undefined;
 
-async function createMainWindow(): Promise<void> {
+async function createMainWindow(privateMode = false): Promise<void> {
   const appRoot = app.getAppPath();
   const id = windows.create({
+    title: privateMode ? "Moon Browser — Janela anônima" : "Moon Browser",
+    backgroundColor: privateMode ? "#11101a" : "#090a10",
     webPreferences: {
       preload: join(appRoot, "preload.cjs"),
       contextIsolation: true,
@@ -31,7 +37,7 @@ async function createMainWindow(): Promise<void> {
       sandbox: true,
       webviewTag: false
     }
-  });
+  }, { private: privateMode });
   const window = windows.require(id);
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -42,7 +48,7 @@ async function createMainWindow(): Promise<void> {
     if (application?.shuttingDown) return;
     void application?.flushWindow(id).finally(() => { void browser.closeTabsForWindow(id); });
   });
-  await application?.restoreWindow(id);
+  if (!privateMode) await application?.restoreWindow(id);
   await window.loadFile(join(appRoot, "index.html"));
 }
 
@@ -50,11 +56,12 @@ app.whenReady().then(async () => {
   const testProfileDirectory = process.env.NODE_ENV === "test" ? process.env.MOON_TEST_PROFILE_DIR : undefined;
   profile = new ProfileStorage(testProfileDirectory ?? join(app.getPath("userData"), "profile"));
   await profile.open();
+  await permissions.hydrate(profile);
   const themes = new MoonThemeService(profile, app.getVersion());
   application = new BrowserApplicationService(browser, profile);
-  installApplicationMenu();
-  registerBrowserIpc(ipc, application, windows);
-  registerProductIpc(ipc, downloads, adblock, profile, themes);
+  installApplicationMenu(() => { void createMainWindow(true); });
+  registerBrowserIpc(ipc, application, windows, () => createMainWindow(true));
+  registerProductIpc(ipc, downloads, adblock, profile, themes, windows);
   registerApplicationLifecycle(windows, createMainWindow);
   await createMainWindow();
   void adblock.initialize();

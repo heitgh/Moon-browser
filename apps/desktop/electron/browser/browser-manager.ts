@@ -14,6 +14,9 @@ import type { ElectronDownloadManager } from "../services/download-manager.js";
 import type { Session } from "electron";
 import { openElectronContextMenu } from "./context-menu.js";
 import { isMoonSettingsUrl, MoonInternalHistory, normalizeMoonInternalUrl } from "../../../../packages/navigation/internal-routes.js";
+import type { SessionRequestPipeline } from "../security/session-request-pipeline.js";
+import type { SitePermissionService } from "../security/site-permission-service.js";
+import type { SitePermissionRecord } from "../../../../packages/ipc/site-permission-contract.js";
 
 export interface BrowserNavigationState {
   readonly canGoBack: boolean;
@@ -45,15 +48,22 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
   readonly #permissionSessions = new WeakSet<Session>();
   readonly #permissionRequests = new Map<string, {
     readonly windowId: string;
+    readonly origin: string;
+    readonly permission: string;
+    readonly session: Session;
+    readonly private: boolean;
     readonly callback: (granted: boolean) => void;
     readonly timeout: NodeJS.Timeout;
   }>();
+  readonly #privatePermissions = new WeakMap<Session, Map<string, "allow" | "deny">>();
   readonly #tabUpdateListeners = new Set<(windowId: string, update: BrowserTabUpdate) => void | Promise<void>>();
 
   constructor(
     readonly windows: WindowManager,
     readonly downloads?: ElectronDownloadManager,
-    readonly adblock?: ElectronAdblockService
+    readonly adblock?: ElectronAdblockService,
+    readonly requestPipeline?: SessionRequestPipeline,
+    readonly permissions?: SitePermissionService
   ) {}
 
   onTabUpdated(listener: (windowId: string, update: BrowserTabUpdate) => void | Promise<void>): () => void {
@@ -91,7 +101,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       }
     });
     this.downloads?.attach(surface.view.webContents.session);
-    this.adblock?.attach(surface.view.webContents.session);
+    this.requestPipeline?.attach(surface.view.webContents.session);
     this.#installPermissionHandler(surface.view.webContents.session);
 
     const requestedUrl = options.url ?? "moon://newtab";
@@ -269,18 +279,33 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     return this.#tabWindows.get(tabId) === windowId;
   }
 
-  respondToPermission(windowId: string, requestId: string, granted: boolean): void {
+  async respondToPermission(windowId: string, requestId: string, granted: boolean): Promise<void> {
     const request = this.#permissionRequests.get(requestId);
     if (!request || request.windowId !== windowId) throw new Error("Permission request not found");
     clearTimeout(request.timeout);
     this.#permissionRequests.delete(requestId);
+    const decision = granted ? "allow" : "deny";
+    try {
+      if (request.private) {
+        const records = this.#privatePermissions.get(request.session) ?? new Map<string, "allow" | "deny">();
+        records.set(this.#permissionKey(request.origin, request.permission), decision); this.#privatePermissions.set(request.session, records);
+      } else if (this.permissions) await this.permissions.set(request.origin, request.permission, decision);
+    } catch (error) {
+      request.callback(false);
+      throw error;
+    }
     request.callback(granted);
   }
 
+  listPermissions(): readonly SitePermissionRecord[] { return this.permissions?.list() ?? []; }
+  clearPermission(origin: string, permission: string): Promise<void> { return this.permissions?.clear(origin, permission) ?? Promise.resolve(); }
+
   async closeTabsForWindow(windowId: string): Promise<void> {
     const ids = [...this.#tabs.keys()].filter(id => this.#tabWindows.get(id) === windowId);
+    const privateSessions = new Set<Session>();
     for (const id of ids) {
       const surface = this.#surfaces.get(id);
+      if (surface && this.#tabs.get(id)?.private) privateSessions.add(surface.view.webContents.session);
       surface?.destroy();
       this.#surfaces.delete(id);
       this.#tabs.delete(id);
@@ -298,6 +323,10 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       request.callback(false);
       this.#permissionRequests.delete(requestId);
     }
+    await Promise.all([...privateSessions].map(async session => {
+      await Promise.all([session.clearCache(), session.clearStorageData()]);
+      this.#privatePermissions.delete(session);
+    }));
   }
 
   async executeScript(id: string, script: string): Promise<unknown> {
@@ -383,19 +412,25 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
   #installPermissionHandler(session: Session): void {
     if (this.#permissionSessions.has(session)) return;
     this.#permissionSessions.add(session);
+    session.setPermissionCheckHandler((contents, permission, requestingOrigin) => {
+      if (["clipboard-sanitized-write", "fullscreen"].includes(permission)) return true;
+      const origin = this.#permissionOrigin(requestingOrigin || contents?.getURL()); if (!origin) return false;
+      const tab = contents ? this.#tabForContents(contents.id) : undefined;
+      const decision = tab?.private ? this.#privatePermissions.get(session)?.get(this.#permissionKey(origin, permission)) : this.permissions?.get(origin, permission);
+      return decision === "allow";
+    });
     session.setPermissionRequestHandler((contents, permission, callback) => {
-      const surfaceEntry = [...this.#surfaces.entries()].find(([, surface]) =>
-        surface.view.webContents.id === contents.id
-      );
+      const surfaceEntry = [...this.#surfaces.entries()].find(([, surface]) => surface.view.webContents.id === contents.id);
       const windowId = surfaceEntry ? this.#tabWindows.get(surfaceEntry[0]) : undefined;
+      const tab = surfaceEntry ? this.#tabs.get(surfaceEntry[0]) : undefined;
       const host = windowId ? this.windows.get(windowId) : undefined;
       if (!windowId || !host || host.webContents.isDestroyed()) {
         callback(false);
         return;
       }
-      let origin: string;
-      try { origin = new URL(contents.getURL()).origin; }
-      catch { callback(false); return; }
+      const origin = this.#permissionOrigin(contents.getURL()); if (!origin) { callback(false); return; }
+      const cached = tab?.private ? this.#privatePermissions.get(session)?.get(this.#permissionKey(origin, permission)) : this.permissions?.get(origin, permission);
+      if (cached) { callback(cached === "allow"); return; }
       const id = randomUUID();
       const timeout = setTimeout(() => {
         const pending = this.#permissionRequests.get(id);
@@ -403,11 +438,15 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
         this.#permissionRequests.delete(id);
         pending.callback(false);
       }, 30_000);
-      this.#permissionRequests.set(id, { windowId, callback, timeout });
+      this.#permissionRequests.set(id, { windowId, origin, permission, session, private: tab?.private === true, callback, timeout });
       const request: BrowserPermissionRequest = { id, origin, permission };
       host.webContents.send("browser:permission-requested", request);
     });
   }
+
+  #tabForContents(contentsId: number): BrowserTab | undefined { const entry = [...this.#surfaces.entries()].find(([, surface]) => surface.view.webContents.id === contentsId); return entry ? this.#tabs.get(entry[0]) : undefined; }
+  #permissionOrigin(value: string | undefined): string | undefined { try { const url = new URL(value ?? ""); return ["http:", "https:"].includes(url.protocol) ? url.origin : undefined; } catch { return undefined; } }
+  #permissionKey(origin: string, permission: string): string { return `${origin}\0${permission}`; }
 
   #syncFromContents(id: string): void {
     const contents = this.#requireSurface(id).view.webContents;

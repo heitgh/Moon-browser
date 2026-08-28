@@ -2,9 +2,10 @@ import { BrowserWindow, type BrowserWindowConstructorOptions, type WebContents }
 
 export class WindowManager {
   readonly #windows = new Map<string, BrowserWindow>();
+  readonly #privateWindows = new Set<string>();
   #nextId = 0;
 
-  create(options: BrowserWindowConstructorOptions = {}): string {
+  create(options: BrowserWindowConstructorOptions = {}, context: { readonly private?: boolean } = {}): string {
     const id = `window-${++this.#nextId}`;
     const window = new BrowserWindow({
       width: 1280,
@@ -19,10 +20,11 @@ export class WindowManager {
     });
 
     this.#windows.set(id, window);
+    if (context.private) this.#privateWindows.add(id);
     window.once("ready-to-show", () => {
       if (!window.isDestroyed()) window.show();
     });
-    window.once("closed", () => this.#windows.delete(id));
+    window.once("closed", () => { this.#windows.delete(id); this.#privateWindows.delete(id); });
     return id;
   }
 
@@ -43,6 +45,8 @@ export class WindowManager {
     }
     return undefined;
   }
+
+  isPrivate(id: string): boolean { return this.#privateWindows.has(id); }
 
   close(id: string): void { this.require(id).close(); }
   focus(id: string): void { this.require(id).focus(); }

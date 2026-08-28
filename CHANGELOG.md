@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased — Final Update, checkpoint P0 (2026-08-28)
+
+### Adicionado
+
+- perfil canônico em SQLite para workspaces, favoritos, histórico e notas, com contrato IPC compartilhado e validado;
+- janela anônima real por `Ctrl/Cmd+Shift+N`, identidade visual, partição efêmera, limpeza no fechamento e E2E de não restauração;
+- decisões de permissão persistentes e revogáveis por origem, com armazenamento efêmero separado no privado;
+- pipeline único de `webRequest` para composição do AdBlock e futuras políticas;
+- preflight, mapa de impacto e threat model do update massivo.
+
+### Corrigido
+
+- disputa grid/flex no container raiz;
+- marker do renderer deixando de ser autoridade da migração SQLite;
+- janela privada podendo sobrescrever a sessão normal com uma lista vazia;
+- falha ao persistir uma permissão deixando cache e callback do Chromium em estado inconsistente;
+- rodapé da Personalização sobrepondo os últimos controles roláveis;
+- métricas de Home, abas e drawer misturando inicialização/feedback do produto com espera da automação.
+
+### Desempenho
+
+- atualizações de abas web deixam de reconstruir a árvore da Home enquanto ela está oculta;
+- a sonda separa cold boot, Home quente, feedback da aba, confirmação da superfície e transição do drawer.
+
+### Segurança
+
+- histórico/notas não são expostos ou gravados pela janela privada;
+- payloads de perfil e permissões são limitados por tipo, tamanho, protocolo e origem no main;
+- AdBlock não remove mais handlers de outras políticas ao ser desativado.
+
 ## 0.5.0-demo.1 — Demo pública (2026-08-27)
 
 ### Consolidado

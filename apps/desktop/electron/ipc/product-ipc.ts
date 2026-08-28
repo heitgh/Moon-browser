@@ -9,6 +9,8 @@ import { parseMoonProfileBackup } from "../../../../packages/storage/backup/prof
 import { createDefaultCustomization, parseCustomizationImport } from "../../../../ui/customization/customization-schema.js";
 import type { ProfileStorage } from "../services/profile-storage.js";
 import type { MoonThemeService } from "../services/moon-theme-service.js";
+import { parseProfileDataMutation } from "../../../../packages/ipc/profile-data-contract.js";
+import type { WindowManager } from "../main/window-manager.js";
 
 interface IdPayload { readonly id: string; }
 
@@ -17,7 +19,8 @@ export function registerProductIpc(
   downloads: ElectronDownloadManager,
   adblock: ElectronAdblockService,
   profile: ProfileStorage,
-  themes: MoonThemeService
+  themes: MoonThemeService,
+  windows: WindowManager
 ): void {
   const idFrom = (payload: IdPayload): string => {
     if (!payload || typeof payload.id !== "string" || payload.id.length > 100) {
@@ -100,6 +103,19 @@ export function registerProductIpc(
       throw new TypeError("Invalid legacy profile content");
     }
     return profile.migrateLegacyProfile(payload.content);
+  });
+  router.register("profile:get-data", async event => {
+    const snapshot = await profile.loadProfileData();
+    const windowId = windows.idForWebContents(event.sender);
+    if (!windowId) throw new Error("Browser window is not registered");
+    return windows.isPrivate(windowId) ? { ...snapshot, history: [], notes: "" } : snapshot;
+  });
+  router.register("profile:mutate", (event, payload: unknown) => {
+    const windowId = windows.idForWebContents(event.sender);
+    if (!windowId) throw new Error("Browser window is not registered");
+    const mutation = parseProfileDataMutation(payload);
+    if (windows.isPrivate(windowId) && (mutation.type === "history:record" || mutation.type === "notes:save")) throw new Error("Private windows cannot persist history or notes");
+    return profile.applyProfileMutation(mutation);
   });
   router.register("theme:import", () => themes.importFromDialog());
   router.register("theme:confirm", (_event, payload: { readonly intentId: string }) => themes.confirm(idFrom({ id: payload?.intentId })));

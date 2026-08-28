@@ -33,9 +33,15 @@ export interface MoonThemeSummary { readonly id: string; readonly packageId: str
 export interface MoonThemePayload { readonly summary: MoonThemeSummary; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; }
 export interface MoonThemePreview extends MoonThemeSummary { readonly intentId: string; readonly description?: string; readonly changes: readonly string[]; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; }
 export type Drawer = "workspaces" | "bookmarks" | "downloads" | "history" | "translate" | "notes" | "extensions" | "ai" | "security";
+export type { ProfileDataMutation, ProfileDataSnapshot } from "../../packages/ipc/profile-data-contract.js";
+import type { ProfileDataMutation, ProfileDataSnapshot } from "../../packages/ipc/profile-data-contract.js";
+import type { SitePermissionRecord } from "../../packages/ipc/site-permission-contract.js";
+export type { SitePermissionRecord } from "../../packages/ipc/site-permission-contract.js";
 
 export interface MoonBrowserBridge {
   createTab(url?: string, workspaceId?: string): Promise<Tab>;
+  getWindowContext(): Promise<{ readonly private: boolean }>;
+  createPrivateWindow(): Promise<void>;
   getTabs(): Promise<readonly Tab[]>;
   closeTab(tabId: string): Promise<void>;
   activateTab(tabId: string): Promise<void>;
@@ -50,6 +56,8 @@ export interface MoonBrowserBridge {
   setContentVisible(visible: boolean): Promise<void>;
   setSearchTemplate(template: string): Promise<void>;
   respondToPermission(requestId: string, granted: boolean): Promise<void>;
+  listSitePermissions(): Promise<readonly SitePermissionRecord[]>;
+  clearSitePermission(origin: string, permission: string): Promise<void>;
   getDownloads(): Promise<readonly ManagedDownload[]>;
   pauseDownload(id: string): Promise<void>;
   resumeDownload(id: string): Promise<void>;
@@ -67,6 +75,8 @@ export interface MoonBrowserBridge {
   fetchWallpaper(url: string): Promise<string>;
   fetchFavicon(url: string): Promise<string>;
   migrateLegacyProfile(content: string): Promise<{ readonly migrated: boolean; readonly version: number }>;
+  getProfileData(): Promise<ProfileDataSnapshot>;
+  mutateProfileData(mutation: ProfileDataMutation): Promise<void>;
   importMoonTheme(): Promise<MoonThemePreview | null>;
   confirmMoonTheme(intentId: string): Promise<MoonThemeSummary>;
   cancelMoonTheme(intentId: string): Promise<void>;

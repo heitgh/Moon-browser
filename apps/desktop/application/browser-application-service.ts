@@ -8,6 +8,7 @@ import type { BrowserTab, BrowserTabOptions } from "../../../packages/platform/i
 import { ElectronBrowserPlatform } from "../adapters/electron-browser.js";
 import type { BrowserTabUpdate, ElectronBrowserManager } from "../electron/browser/browser-manager.js";
 import type { ProfileStorage } from "../electron/services/profile-storage.js";
+import type { SitePermissionRecord } from "../../../packages/ipc/site-permission-contract.js";
 
 export class BrowserApplicationService {
   readonly eventBus = new MoonEventBus();
@@ -64,7 +65,7 @@ export class BrowserApplicationService {
   }
 
   async getTabs(windowId: string): Promise<readonly BrowserTab[]> { return this.browser.getTabs(windowId); }
-  async closeTab(tabId: string): Promise<void> { const windowId = this.tabs.require(tabId).model.windowId; await this.tabs.close(tabId); this.#schedulePersistence(windowId); }
+  async closeTab(tabId: string): Promise<void> { const model = this.tabs.require(tabId).model; await this.tabs.close(tabId); if (!model.private) this.#schedulePersistence(model.windowId); }
   async activateTab(tabId: string): Promise<void> { await this.tabs.activate(tabId); }
   showHome(tabId: string): Promise<void> { return this.browser.showHome(tabId); }
   showInternalPage(tabId: string, url: string): Promise<void> { return this.browser.showInternalPage(tabId, url); }
@@ -77,13 +78,17 @@ export class BrowserApplicationService {
   setContentVisible(windowId: string, visible: boolean): void { this.browser.setContentVisible(windowId, visible); }
   setSearchTemplate(windowId: string, template: string): void { this.browser.setSearchTemplate(windowId, template); }
   ownsTab(tabId: string, windowId: string): boolean { return this.browser.ownsTab(tabId, windowId); }
-  respondToPermission(windowId: string, requestId: string, granted: boolean): void { this.browser.respondToPermission(windowId, requestId, granted); }
+  respondToPermission(windowId: string, requestId: string, granted: boolean): Promise<void> { return this.browser.respondToPermission(windowId, requestId, granted); }
+  listPermissions(): readonly SitePermissionRecord[] { return this.browser.listPermissions(); }
+  clearPermission(origin: string, permission: string): Promise<void> { return this.browser.clearPermission(origin, permission); }
 
   async flushWindow(windowId: string): Promise<void> {
     const timer = this.#persistenceTimers.get(windowId);
     if (timer) clearTimeout(timer);
     this.#persistenceTimers.delete(windowId);
-    await this.profile.saveBrowserSession(await this.browser.getTabs(windowId));
+    const tabs = await this.browser.getTabs(windowId);
+    if (tabs.length > 0 && tabs.every(tab => tab.private)) return;
+    await this.profile.saveBrowserSession(tabs);
   }
 
   async shutdown(): Promise<void> {
@@ -99,7 +104,7 @@ export class BrowserApplicationService {
 
   async #handleTabUpdate(windowId: string, update: BrowserTabUpdate): Promise<void> {
     await this.tabs.reconcile(windowId, update.tab, update.navigation);
-    if (!this.#restoringWindows.has(windowId)) this.#schedulePersistence(windowId);
+    if (!update.tab.private && !this.#restoringWindows.has(windowId)) this.#schedulePersistence(windowId);
   }
 
   #schedulePersistence(windowId: string): void {
@@ -128,5 +133,7 @@ export interface BrowserApplicationApi {
   setContentVisible(windowId: string, visible: boolean): void;
   setSearchTemplate(windowId: string, template: string): void;
   ownsTab(tabId: string, windowId: string): boolean;
-  respondToPermission(windowId: string, requestId: string, granted: boolean): void;
+  respondToPermission(windowId: string, requestId: string, granted: boolean): Promise<void>;
+  listPermissions(): readonly SitePermissionRecord[];
+  clearPermission(origin: string, permission: string): Promise<void>;
 }

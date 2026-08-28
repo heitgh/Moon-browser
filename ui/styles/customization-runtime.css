@@ -23,7 +23,6 @@ body { background: var(--moon-bg); color: var(--moon-text); font-family: var(--m
 .moon-drawer-resize { bottom: 0; cursor: col-resize; position: absolute; right: -3px; top: 0; width: 7px; z-index: 8; }
 .moon-drawer-resize:focus-visible, .moon-drawer-resize:hover { background: color-mix(in srgb, var(--moon-user-accent) 45%, transparent); outline: 0; }
 [data-moon-sidebar="right"] .moon-drawer-resize { left: -3px; right: auto; }
-.moon-browser-main { background: var(--moon-bg); display: flex; flex-direction: column; transform-origin: top left; }
 .moon-tabs-bar { background: var(--moon-surface); border-color: var(--moon-border); flex: 0 0 var(--moon-tabs-height); order: 1; }
 .moon-tab { border-radius: var(--moon-radius) var(--moon-radius) 0 0; font-size: max(var(--moon-font-ui), var(--moon-tab-font-size)); }
 .moon-toolbar-v2 { background: color-mix(in srgb, var(--moon-bg) calc(var(--moon-toolbar-opacity) * 100%), transparent); border-color: var(--moon-border); flex: 0 0 var(--moon-toolbar-height); min-height: var(--moon-toolbar-height); order: 2; transition: opacity calc(var(--moon-motion-normal) / var(--moon-motion-speed)) var(--moon-ease-standard), transform calc(var(--moon-motion-normal) / var(--moon-motion-speed)) var(--moon-ease-standard); }
@@ -103,11 +102,11 @@ body { background: var(--moon-bg); color: var(--moon-text); font-family: var(--m
 .moon-settings-nav-copy { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
 .moon-settings-nav-copy strong { font-size: var(--moon-font-ui); }
 .moon-settings-nav-copy small { color: var(--moon-text-muted); font-size: var(--moon-font-micro); font-weight: 400; line-height: 1.35; }
-.moon-settings-body { display: flex; flex-direction: column; min-width: 0; padding: 0; }
+.moon-settings-body { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; padding: 0; }
 .moon-settings-topbar { align-items: center; border-bottom: var(--moon-border-width) solid var(--moon-border); display: flex; justify-content: space-between; min-height: 60px; padding: 10px 58px 10px 28px; }
 .moon-settings-breadcrumbs { align-items: center; color: var(--moon-text-muted); display: flex; font-size: var(--moon-font-caption); gap: var(--moon-space-2); }
 .moon-settings-crumb { color: var(--moon-text); }
-.moon-customization-content { flex: 1; overflow-y: auto; padding: 28px 34px 110px; }
+.moon-customization-content { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 34px; }
 .moon-settings-page-intro { margin-bottom: 28px; position: relative; }
 .moon-customization-content[data-searching="true"] .moon-settings-page-intro { display: none; }
 .moon-settings-page-intro h1 { font-size: var(--moon-font-title-lg); margin: 0; }
@@ -181,7 +180,7 @@ body { background: var(--moon-bg); color: var(--moon-text); font-family: var(--m
 .moon-settings-overlay[data-presentation="page"] .moon-settings-open-page { display: none; }
 .moon-custom-provider-form { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
 .moon-portability-grid { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.moon-settings-footer { align-items: center; background: color-mix(in srgb, var(--moon-surface) 95%, transparent); border-top: var(--moon-border-width) solid var(--moon-border); bottom: 0; display: flex; justify-content: space-between; left: 0; padding: 12px 24px; position: absolute; right: 0; z-index: 4; }
+.moon-settings-footer { align-items: center; background: color-mix(in srgb, var(--moon-surface) 95%, transparent); border-top: var(--moon-border-width) solid var(--moon-border); display: flex; flex: 0 0 auto; justify-content: space-between; padding: 12px 24px; z-index: 4; }
 .moon-settings-footer-copy { display: flex; flex-direction: column; }
 .moon-settings-footer-copy strong { font-size: var(--moon-font-caption); }
 .moon-settings-footer-copy small { color: var(--moon-text-muted); font-size: var(--moon-font-micro); }
@@ -213,6 +212,6 @@ body { background: var(--moon-bg); color: var(--moon-text); font-family: var(--m
   .moon-settings-brand, .moon-settings-sidebar > h2, .moon-settings-search, .moon-settings-nav-copy small { display: none; }
   .moon-settings-nav { flex: 0 0 auto; }
   .moon-settings-topbar { min-height: 72px; }
-  .moon-customization-content { padding: var(--moon-space-5) var(--moon-space-4) 112px; }
+  .moon-customization-content { padding: var(--moon-space-5) var(--moon-space-4); }
   .moon-settings-overlay { padding: 0; }
 }

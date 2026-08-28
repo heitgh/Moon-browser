@@ -23,4 +23,11 @@ describe("Moon semantic design system", () => {
   it("does not use broad transition-all rules in the active system", () => {
     expect(styles.join("\n")).not.toMatch(/transition:\s*all\b/);
   });
+
+  it("keeps the root browser region under one layout authority", () => {
+    const shell = styles[1]!;
+    const customizationRuntime = styles[5]!;
+    expect(shell).toMatch(/\.moon-browser-main\s*\{[^}]*display:\s*flex/);
+    expect(customizationRuntime).not.toMatch(/\.moon-browser-main\s*\{[^}]*display\s*:/);
+  });
 });

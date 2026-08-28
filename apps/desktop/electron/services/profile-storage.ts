@@ -14,6 +14,8 @@ import { ThemeRepository, type ThemeRecord } from "../../../../packages/storage/
 import { WallpaperRepository } from "../../../../packages/storage/repositories/wallpaper-repository.js";
 import { WorkspaceRepository } from "../../../../packages/storage/repositories/workspace-repository.js";
 import { normalizeMoonInternalUrl } from "../../../../packages/navigation/internal-routes.js";
+import type { ProfileDataMutation, ProfileDataSnapshot } from "../../../../packages/ipc/profile-data-contract.js";
+import { parseSitePermissionRecords, type SitePermissionRecord } from "../../../../packages/ipc/site-permission-contract.js";
 
 export interface RestorableBrowserTab {
   readonly id: string;
@@ -128,6 +130,58 @@ export class ProfileStorage {
       tabs.push({ ...candidate, url: normalizedUrl });
     }
     return tabs;
+  }
+
+  async loadProfileData(): Promise<ProfileDataSnapshot> {
+    const [bookmarks, history, notes, workspaces] = await Promise.all([
+      this.#bookmarks.list(),
+      this.#history.recent(500),
+      this.#notes.list(undefined, true),
+      this.#workspaces.list()
+    ]);
+    const scratchpad = notes.find(note => note.id === "moon-scratchpad") ?? notes.find(note => note.id === "legacy-notes") ?? notes[0];
+    return {
+      bookmarks: bookmarks.map(item => ({ id: item.id, title: item.title, url: item.url, time: item.createdAt })),
+      history: history.map(item => ({ id: item.id, title: item.title, url: item.url, time: item.lastVisitedAt })),
+      notes: scratchpad?.content ?? "",
+      workspaces: workspaces.map(item => ({ id: item.id, name: item.name, position: item.position }))
+    };
+  }
+
+  async applyProfileMutation(mutation: ProfileDataMutation): Promise<void> {
+    const now = Date.now();
+    switch (mutation.type) {
+      case "bookmark:save": {
+        const existing = await this.#bookmarks.get(mutation.value.id);
+        await this.#bookmarks.save({ id: mutation.value.id, title: mutation.value.title, url: mutation.value.url, tags: existing?.tags ?? [], createdAt: existing?.createdAt ?? mutation.value.time, updatedAt: now });
+        return;
+      }
+      case "bookmark:delete": await this.#bookmarks.delete(mutation.id); return;
+      case "history:record":
+        await this.#history.save({ id: mutation.value.id, title: mutation.value.title, url: mutation.value.url, transition: "link", visitCount: 1, typedCount: 0, firstVisitedAt: mutation.value.time, lastVisitedAt: mutation.value.time });
+        return;
+      case "history:clear": await this.#history.clear(); return;
+      case "notes:save": {
+        const existing = await this.#notes.get("moon-scratchpad");
+        await this.#notes.save({ id: "moon-scratchpad", title: "Bloco de notas", content: mutation.content, format: "plain-text", pinned: false, archived: false, tags: [], createdAt: existing?.createdAt ?? now, updatedAt: now });
+        return;
+      }
+      case "workspace:save": {
+        const existing = await this.#workspaces.get(mutation.value.id);
+        const current = existing ?? (await this.#workspaces.list())[0];
+        await this.#workspaces.save({ id: mutation.value.id, name: mutation.value.name, position: mutation.value.position, layout: existing?.layout ?? "standard", appearance: existing?.appearance ?? {}, default: existing?.default ?? !current, archived: false, createdAt: existing?.createdAt ?? now, updatedAt: now, lastAccessedAt: now });
+        return;
+      }
+      case "workspace:delete": await this.#workspaces.delete(mutation.id); return;
+    }
+  }
+
+  async loadSitePermissions(): Promise<readonly SitePermissionRecord[]> {
+    return parseSitePermissionRecords(await this.#settings.getValue<unknown>("site-permissions"));
+  }
+
+  async saveSitePermissions(records: readonly SitePermissionRecord[]): Promise<void> {
+    await this.#settings.setValue("site-permissions", parseSitePermissionRecords(records));
   }
 
   listThemes(): Promise<readonly ThemeRecord[]> { return this.#themes.list(); }

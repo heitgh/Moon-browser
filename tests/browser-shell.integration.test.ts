@@ -10,16 +10,27 @@ const downloadListeners: Array<(downloads: readonly unknown[]) => void> = [];
 const adblockListeners: Array<(status: unknown) => void> = [];
 const tabUpdateListeners: Array<(update: unknown) => void> = [];
 const permissionListeners: Array<(request: { readonly id: string; readonly origin: string; readonly permission: string }) => void> = [];
+const profileData = { bookmarks: [] as Array<{ id: string; title: string; url: string; time: number }>, history: [] as Array<{ id: string; title: string; url: string; time: number }>, notes: "", workspaces: [{ id: "research", name: "Pesquisa", position: 0 }, { id: "study", name: "Estudos", position: 1 }, { id: "projects", name: "Projetos", position: 2 }] };
+let sitePermissions: Array<{ origin: string; permission: string; decision: "allow" | "deny"; updatedAt: number }> = [];
+const mutateProfileData = vi.fn(async (mutation: { type: string; id?: string; content?: string; value?: { id: string; title?: string; url?: string; time?: number; name?: string; position?: number } }) => {
+  if (mutation.type === "bookmark:save" && mutation.value) profileData.bookmarks.unshift(mutation.value as typeof profileData.bookmarks[number]);
+  if (mutation.type === "bookmark:delete") profileData.bookmarks = profileData.bookmarks.filter(item => item.id !== mutation.id);
+  if (mutation.type === "history:record" && mutation.value) profileData.history.unshift(mutation.value as typeof profileData.history[number]);
+  if (mutation.type === "history:clear") profileData.history = [];
+  if (mutation.type === "notes:save") profileData.notes = mutation.content ?? "";
+  if (mutation.type === "workspace:save" && mutation.value) profileData.workspaces.push(mutation.value as typeof profileData.workspaces[number]);
+  if (mutation.type === "workspace:delete") profileData.workspaces = profileData.workspaces.filter(item => item.id !== mutation.id);
+});
 const bridge = {
-  createTab, getTabs: vi.fn(async () => []), closeTab: vi.fn(async () => undefined), activateTab: vi.fn(async () => undefined), showHome: vi.fn(async () => undefined), showInternalPage, navigate,
-  back: vi.fn(async () => undefined), forward: vi.fn(async () => undefined), reload: vi.fn(async () => undefined), stop: vi.fn(async () => undefined), setBounds: vi.fn(async () => undefined), setContentVisible, respondToPermission: vi.fn(async () => undefined),
+  createTab, getWindowContext: vi.fn(async () => ({ private: false })), createPrivateWindow: vi.fn(async () => undefined), getTabs: vi.fn(async () => []), closeTab: vi.fn(async () => undefined), activateTab: vi.fn(async () => undefined), showHome: vi.fn(async () => undefined), showInternalPage, navigate,
+  back: vi.fn(async () => undefined), forward: vi.fn(async () => undefined), reload: vi.fn(async () => undefined), stop: vi.fn(async () => undefined), setBounds: vi.fn(async () => undefined), setContentVisible, respondToPermission: vi.fn(async () => undefined), listSitePermissions: vi.fn(async () => sitePermissions), clearSitePermission: vi.fn(async (origin: string, permission: string) => { sitePermissions = sitePermissions.filter(item => item.origin !== origin || item.permission !== permission); }),
   getDownloads: vi.fn(async () => []), pauseDownload: vi.fn(async () => undefined), resumeDownload: vi.fn(async () => undefined), cancelDownload: vi.fn(async () => undefined), openDownload: vi.fn(async () => undefined), showDownloadInFolder: vi.fn(async () => undefined), clearFinishedDownloads: vi.fn(async () => undefined),
   getAdblockStatus: vi.fn(async () => ({ phase: "active", enabled: true, blockedCount: 12 })), setAdblockEnabled: vi.fn(async (enabled: boolean) => ({ phase: enabled ? "active" : "disabled", enabled, blockedCount: 12 })),
   exportProductData: vi.fn(async (_content: string) => true), importProductData: vi.fn(async () => null),
   exportCustomization: vi.fn(async (_content: string) => true), importCustomization: vi.fn(async () => null), fetchWallpaper: vi.fn(async () => "data:image/png;base64,YQ=="),
   exportSettingsDiagnostic: vi.fn(async (_content: string) => true),
   fetchFavicon: vi.fn(async () => "data:image/png;base64,YQ=="),
-  migrateLegacyProfile: vi.fn(async () => ({ migrated: true, version: 1 })), onTabUpdated: vi.fn((listener: (update: unknown) => void) => { tabUpdateListeners.push(listener); return () => undefined; }), onTabClosed: vi.fn(() => () => undefined),
+  migrateLegacyProfile: vi.fn(async () => ({ migrated: true, version: 1 })), getProfileData: vi.fn(async () => profileData), mutateProfileData, onTabUpdated: vi.fn((listener: (update: unknown) => void) => { tabUpdateListeners.push(listener); return () => undefined; }), onTabClosed: vi.fn(() => () => undefined),
   onDownloadsUpdated: vi.fn((listener: (downloads: readonly unknown[]) => void) => { downloadListeners.push(listener); return () => undefined; }),
   onAdblockStatus: vi.fn((listener: (status: unknown) => void) => { adblockListeners.push(listener); return () => undefined; }),
   onPermissionRequested: vi.fn((listener: (request: { readonly id: string; readonly origin: string; readonly permission: string }) => void) => { permissionListeners.push(listener); return () => undefined; })
@@ -36,15 +47,18 @@ beforeEach(() => { navigate.mockClear(); setContentVisible.mockClear(); });
 
 describe("Moon browser shell", () => {
   it("renders every primary product control", () => {
-    for (const label of ["Página inicial", "Workspaces", "Favoritos", "Downloads", "Histórico", "Traduzir página", "Bloco de notas", "Extensões", "Moon AI", "Configurações"]) {
+    for (const label of ["Página inicial", "Workspaces", "Favoritos", "Downloads", "Histórico", "Traduzir página", "Bloco de notas", "Configurações"]) {
       expect(document.querySelector(`[aria-label="${label}"]`)).not.toBeNull();
     }
+    expect(document.querySelector('[aria-label="Moon AI"]')).toBeNull(); expect(document.querySelector('[aria-label="Extensões"]')).toBeNull();
+    expect((document.querySelector('[aria-label="Abrir Moon AI"]') as HTMLButtonElement).hidden).toBe(true);
+    expect((document.querySelector('[aria-label="Abrir módulos pela toolbar"]') as HTMLButtonElement).hidden).toBe(true);
   });
   it("opens every sidebar module with its real content", () => {
     const modules = [
       ["Workspaces", "Workspaces"], ["Favoritos", "Favoritos"], ["Downloads", "Downloads"],
       ["Histórico", "Histórico"], ["Traduzir página", "Tradutor"], ["Bloco de notas", "Bloco de notas"],
-      ["Extensões", "Extensões"], ["Moon AI", "Moon AI"], ["Proteção e AdBlock", "Proteção"]
+      ["Proteção e AdBlock", "Proteção"]
     ] as const;
     for (const [control, heading] of modules) {
       (document.querySelector(`[aria-label="${control}"]`) as HTMLButtonElement).click();
@@ -52,11 +66,13 @@ describe("Moon browser shell", () => {
       expect(document.querySelector(".moon-drawer.is-open .moon-drawer-body")?.childElementCount).toBeGreaterThan(0);
     }
   });
-  it("persists notes entered through the real drawer", () => {
+  it("persists notes entered through the SQLite profile bridge", async () => {
+    mutateProfileData.mockClear();
     (document.querySelector('[aria-label="Bloco de notas"]') as HTMLButtonElement).click();
     const notes = document.querySelector(".moon-notes-input") as HTMLTextAreaElement;
     notes.value = "Decisão importante da startup"; notes.dispatchEvent(new Event("input", { bubbles: true }));
-    expect(JSON.parse(localStorage.getItem("moon:notes:v1") ?? '""')).toBe("Decisão importante da startup");
+    await new Promise(resolve => setTimeout(resolve, 300)); await flush();
+    expect(mutateProfileData).toHaveBeenCalledWith({ type: "notes:save", content: "Decisão importante da startup" });
   });
   it("opens and closes settings while hiding native web content", async () => {
     (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
@@ -92,12 +108,13 @@ describe("Moon browser shell", () => {
     expect(createTab.mock.calls.at(-1)?.[1]).toMatch(/^workspace-/);
     expect(document.querySelector(".moon-drawer")?.textContent).toContain("Produto");
   });
-  it("favorites the active page and persists it", async () => {
+  it("favorites the active page through the SQLite profile bridge", async () => {
+    mutateProfileData.mockClear();
     tabUpdateListeners[0]?.({ tab: { ...tab, id: createTab.mock.results[0]?.value ? "tab-2" : "tab-1", url: "https://moon.test/", title: "Moon Test", active: true, loading: false }, navigation: { canGoBack: false, canGoForward: false } });
     await flush();
     (document.querySelector('[aria-label="Adicionar aos favoritos"]') as HTMLButtonElement).click();
-    const saved = JSON.parse(localStorage.getItem("moon:bookmarks:v1") ?? "[]") as Array<{ url: string }>;
-    expect(saved.some(item => item.url === "https://moon.test/")).toBe(true);
+    await flush();
+    expect(mutateProfileData).toHaveBeenCalledWith(expect.objectContaining({ type: "bookmark:save", value: expect.objectContaining({ url: "https://moon.test/" }) }));
   });
   it("loads a validated favicon through the native bridge and renders it in the tab", async () => {
     bridge.fetchFavicon.mockClear();
@@ -106,6 +123,13 @@ describe("Moon browser shell", () => {
     expect((document.querySelector(".moon-tab-favicon img") as HTMLImageElement | null)?.src).toContain("data:image/png;base64");
     (document.querySelector('[aria-label="Favoritos"]') as HTMLButtonElement).click(); await flush();
     expect((document.querySelector(".moon-drawer .moon-site-mark img") as HTMLImageElement | null)?.src).toContain("data:image/png;base64");
+  });
+  it("does not rebuild the hidden Home for ordinary web-tab updates", async () => {
+    const search = document.querySelector(".moon-home-search-input");
+    tabUpdateListeners[0]?.({ tab: { ...tab, url: "https://moon.test/", title: "Moon Test", active: true, loading: false }, navigation: { canGoBack: false, canGoForward: false } }); await flush();
+    tabUpdateListeners[0]?.({ tab: { ...tab, url: "https://moon.test/", title: "Moon Test atualizado", active: true, loading: false }, navigation: { canGoBack: false, canGoForward: false } }); await flush();
+    expect(document.querySelector(".moon-home-search-input")).toBe(search);
+    tabUpdateListeners[0]?.({ tab, navigation: { canGoBack: false, canGoForward: false } }); await flush();
   });
   it("toggles the real adblock service from the protection panel", async () => {
     bridge.setAdblockEnabled.mockClear();
@@ -177,6 +201,8 @@ describe("Moon browser shell", () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: ",", ctrlKey: true })); await flush();
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     (document.querySelector('[aria-label="Fechar e cancelar alterações"]') as HTMLButtonElement).click(); await flush();
+    bridge.createPrivateWindow.mockClear(); window.dispatchEvent(new KeyboardEvent("keydown", { key: "n", ctrlKey: true, shiftKey: true })); await flush();
+    expect(bridge.createPrivateWindow).toHaveBeenCalledOnce();
   });
   it("queues site permissions and sends an explicit user decision", async () => {
     bridge.respondToPermission.mockClear(); setContentVisible.mockClear();
@@ -187,9 +213,14 @@ describe("Moon browser shell", () => {
     (document.querySelector('[aria-label="Negar permissão"]') as HTMLButtonElement).click(); await flush();
     expect(bridge.respondToPermission).toHaveBeenCalledWith("permission-1", false);
     expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("maps.example");
+    sitePermissions = [{ origin: "https://maps.example", permission: "geolocation", decision: "allow", updatedAt: Date.now() }];
     (document.querySelector('[aria-label="Permitir acesso"]') as HTMLButtonElement).click(); await flush();
     expect(bridge.respondToPermission).toHaveBeenCalledWith("permission-2", true);
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     expect(setContentVisible).toHaveBeenLastCalledWith(true);
+    (document.querySelector('[aria-label="Proteção e AdBlock"]') as HTMLButtonElement).click(); await flush();
+    expect(document.querySelector(".moon-drawer")?.textContent).toContain("maps.example");
+    (document.querySelector('[aria-label^="Esquecer geolocation"]') as HTMLButtonElement).click(); await flush();
+    expect(bridge.clearSitePermission).toHaveBeenCalledWith("https://maps.example", "geolocation");
   });
 });

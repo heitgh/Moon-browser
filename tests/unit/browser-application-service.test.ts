@@ -59,4 +59,17 @@ describe("BrowserApplicationService", () => {
     expect(persisted.at(-1)?.map(tab => tab.id)).toEqual(["restored-1", "restored-2"]);
     await application.shutdown();
   });
+
+  it("never lets a private-only window overwrite the restorable session", async () => {
+    const browser = new FakeBrowser();
+    const persisted: BrowserTab[][] = [];
+    const profile = { loadBrowserSession: async () => [], saveBrowserSession: async (tabs: readonly BrowserTab[]) => { persisted.push([...tabs]); }, close: async () => undefined };
+    const application = new BrowserApplicationService(browser as never, profile as never);
+    const tab = await application.createTab("private-window", { private: true, sessionId: "private-window" });
+    expect(tab.private).toBe(true);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    await application.flushWindow("private-window");
+    expect(persisted).toEqual([]);
+    await application.shutdown();
+  });
 });

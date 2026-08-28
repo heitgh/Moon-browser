@@ -62,4 +62,27 @@ describe("ProfileStorage", () => {
     ]);
     await storage.close();
   });
+
+  it("uses repositories as the canonical profile data source", async () => {
+    const { storage } = await profile();
+    await storage.migrateLegacyProfile(JSON.stringify(backup));
+    await storage.applyProfileMutation({ type: "bookmark:save", value: { id: "bookmark-2", title: "Nexus", url: "https://nexus.test/", time: 20 } });
+    await storage.applyProfileMutation({ type: "notes:save", content: "Estado canônico no SQLite" });
+    await storage.applyProfileMutation({ type: "workspace:save", value: { id: "workspace-product", name: "Produto", position: 1 } });
+    const snapshot = await storage.loadProfileData();
+    expect(snapshot.bookmarks.map(item => item.id)).toContain("bookmark-2");
+    expect(snapshot.notes).toBe("Estado canônico no SQLite");
+    expect(snapshot.workspaces).toContainEqual({ id: "workspace-product", name: "Produto", position: 1 });
+    await storage.applyProfileMutation({ type: "bookmark:delete", id: "bookmark-2" });
+    expect((await storage.loadProfileData()).bookmarks.map(item => item.id)).not.toContain("bookmark-2");
+    await storage.close();
+  });
+
+  it("persists validated site permission decisions in profile settings", async () => {
+    const { storage } = await profile();
+    const records = [{ origin: "https://meet.example", permission: "media", decision: "allow" as const, updatedAt: 10 }];
+    await storage.saveSitePermissions(records);
+    expect(await storage.loadSitePermissions()).toEqual(records);
+    await storage.close();
+  });
 });
