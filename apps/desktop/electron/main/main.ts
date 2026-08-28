@@ -14,6 +14,7 @@ import { BrowserApplicationService } from "../../application/browser-application
 import { MoonThemeService } from "../services/moon-theme-service.js";
 import { SessionRequestPipeline } from "../security/session-request-pipeline.js";
 import { SitePermissionService } from "../security/site-permission-service.js";
+import { BrowserProfileImportService } from "../services/browser-profile-import-service.js";
 
 const windows = new WindowManager();
 const downloads = new ElectronDownloadManager(windows);
@@ -57,11 +58,12 @@ app.whenReady().then(async () => {
   profile = new ProfileStorage(testProfileDirectory ?? join(app.getPath("userData"), "profile"));
   await profile.open();
   await permissions.hydrate(profile);
+  const profileImporter = new BrowserProfileImportService(app.getPath("home"), profile);
   const themes = new MoonThemeService(profile, app.getVersion());
   application = new BrowserApplicationService(browser, profile);
   installApplicationMenu(() => { void createMainWindow(true); });
   registerBrowserIpc(ipc, application, windows, () => createMainWindow(true));
-  registerProductIpc(ipc, downloads, adblock, profile, themes, windows);
+  registerProductIpc(ipc, downloads, adblock, profile, themes, windows, profileImporter);
   registerApplicationLifecycle(windows, createMainWindow);
   await createMainWindow();
   void adblock.initialize();

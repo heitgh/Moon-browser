@@ -59,6 +59,12 @@ describe("CustomizationSchemaV3", () => {
     expect(() => validateCustomization(insecure)).toThrow(/HTTPS/i);
   });
 
+  it("migrates the legacy all-settings experience to the progressive Personalizar level", () => {
+    const legacy = structuredClone(createDefaultCustomization());
+    (legacy.experience as { mode: string }).mode = "all";
+    expect(validateCustomization(legacy).experience.mode).toBe("customize");
+  });
+
   it("round-trips all, appearance and workspace exports", () => {
     const current = createDefaultCustomization(100);
     for (const scope of ["all", "appearance", "workspace"] as const) {

@@ -11,6 +11,8 @@ import type { ProfileStorage } from "../services/profile-storage.js";
 import type { MoonThemeService } from "../services/moon-theme-service.js";
 import { parseProfileDataMutation } from "../../../../packages/ipc/profile-data-contract.js";
 import type { WindowManager } from "../main/window-manager.js";
+import type { BrowserProfileImportService } from "../services/browser-profile-import-service.js";
+import { parseImportSelection } from "../../../../packages/ipc/browser-import-contract.js";
 
 interface IdPayload { readonly id: string; }
 
@@ -20,7 +22,8 @@ export function registerProductIpc(
   adblock: ElectronAdblockService,
   profile: ProfileStorage,
   themes: MoonThemeService,
-  windows: WindowManager
+  windows: WindowManager,
+  profileImporter: BrowserProfileImportService
 ): void {
   const idFrom = (payload: IdPayload): string => {
     if (!payload || typeof payload.id !== "string" || payload.id.length > 100) {
@@ -117,6 +120,13 @@ export function registerProductIpc(
     if (windows.isPrivate(windowId) && (mutation.type === "history:record" || mutation.type === "notes:save")) throw new Error("Private windows cannot persist history or notes");
     return profile.applyProfileMutation(mutation);
   });
+  const assertNormalWindow = (event: Electron.IpcMainInvokeEvent): void => {
+    const windowId = windows.idForWebContents(event.sender);
+    if (!windowId || windows.isPrivate(windowId)) throw new Error("Profile import is unavailable in private windows");
+  };
+  router.register("import:discover", event => { assertNormalWindow(event); return profileImporter.discover(); });
+  router.register("import:run", (event, payload: unknown) => { assertNormalWindow(event); return profileImporter.import(parseImportSelection(payload)); });
+  router.register("import:bookmarks-html", event => { assertNormalWindow(event); return profileImporter.importBookmarksHtml(); });
   router.register("theme:import", () => themes.importFromDialog());
   router.register("theme:confirm", (_event, payload: { readonly intentId: string }) => themes.confirm(idFrom({ id: payload?.intentId })));
   router.register("theme:cancel", (_event, payload: { readonly intentId: string }) => themes.cancel(idFrom({ id: payload?.intentId })));

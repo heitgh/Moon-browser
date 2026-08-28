@@ -16,6 +16,7 @@ import { WorkspaceRepository } from "../../../../packages/storage/repositories/w
 import { normalizeMoonInternalUrl } from "../../../../packages/navigation/internal-routes.js";
 import type { ProfileDataMutation, ProfileDataSnapshot } from "../../../../packages/ipc/profile-data-contract.js";
 import { parseSitePermissionRecords, type SitePermissionRecord } from "../../../../packages/ipc/site-permission-contract.js";
+import type { ImportedProfileData, ImportResult } from "../../../../packages/ipc/browser-import-contract.js";
 
 export interface RestorableBrowserTab {
   readonly id: string;
@@ -174,6 +175,19 @@ export class ProfileStorage {
       }
       case "workspace:delete": await this.#workspaces.delete(mutation.id); return;
     }
+  }
+
+  async importExternalProfile(sourceId: string, data: ImportedProfileData): Promise<ImportResult> {
+    const existingBookmarks = new Set((await this.#bookmarks.list()).map(item => item.url));
+    const existingHistory = new Set((await this.#history.recent(50_000)).map(item => item.url));
+    const bookmarks = data.bookmarks.filter(item => !existingBookmarks.has(item.url));
+    const history = data.history.filter(item => !existingHistory.has(item.url));
+    await this.#database.transaction(async () => {
+      for (const item of bookmarks) await this.#bookmarks.save({ id: item.id, title: item.title, url: item.url, tags: ["imported"], createdAt: item.time, updatedAt: Date.now() });
+      for (const item of history) await this.#history.save({ id: item.id, title: item.title, url: item.url, transition: "link", visitCount: 1, typedCount: 0, firstVisitedAt: item.time, lastVisitedAt: item.time });
+      await this.#settings.setValue(`import-report:${sourceId}`, { importedAt: Date.now(), imported: { bookmarks: bookmarks.length, history: history.length }, skipped: { bookmarks: data.bookmarks.length - bookmarks.length, history: data.history.length - history.length } });
+    });
+    return { sourceId, imported: { bookmarks: bookmarks.length, history: history.length }, skipped: { bookmarks: data.bookmarks.length - bookmarks.length, history: data.history.length - history.length } };
   }
 
   async loadSitePermissions(): Promise<readonly SitePermissionRecord[]> {

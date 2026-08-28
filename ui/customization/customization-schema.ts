@@ -11,7 +11,7 @@ export type ToolbarPosition = "top" | "bottom";
 export type OmniboxPosition = "toolbar" | "bottom" | "sidebar";
 export type WallpaperType = "local" | "https" | "color" | "gradient";
 export type SettingsScope = "global" | "workspace";
-export type SettingsMode = "essential" | "all" | "advanced";
+export type SettingsMode = "essential" | "customize" | "advanced";
 export type WorkspaceVisibility = "always" | "collapsed" | "hover" | "auto-hide" | "home-only" | "hidden";
 export type HomePreset = "minimal" | "focus" | "study" | "work" | "dev" | "custom";
 export type HomeWidgetId = "clock" | "date" | "greeting" | "search" | "shortcuts" | "favorites" | "recentTabs" | "sessions" | "tasks" | "notes" | "downloads" | "focus" | "calendar" | "reading" | "performance";
@@ -159,7 +159,8 @@ export function validateCustomization(value: unknown): CustomizationSchemaV3 {
   if (new Set(themes.map(theme => theme.id)).size !== themes.length) throw new Error("IDs de temas duplicados não são permitidos.");
   const scope = oneOf(root.scope, ["global", "workspace"] as const, "escopo");
   const experienceValue = root.version === 3 ? object(root.experience, "experiência") : { mode: "essential", lastSection: "appearance" };
-  const experience = { mode: oneOf(experienceValue.mode, ["essential", "all", "advanced"] as const, "modo das configurações"), lastSection: slug(experienceValue.lastSection, "última seção") };
+  const experienceMode = experienceValue.mode === "all" ? "customize" : oneOf(experienceValue.mode, ["essential", "customize", "advanced"] as const, "modo das configurações");
+  const experience = { mode: experienceMode, lastSection: slug(experienceValue.lastSection, "última seção") };
   return { version: 3, revision: integer(root.revision, "revisão", 0, Number.MAX_SAFE_INTEGER), scope, global, workspaces, themes, experience, updatedAt: integer(root.updatedAt, "data de atualização", 0, Number.MAX_SAFE_INTEGER) };
 }
 

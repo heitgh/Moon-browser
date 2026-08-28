@@ -392,7 +392,7 @@ class BrowserShell {
     await this.#openSettings("page", state.section);
   }
 
-  async #navigateSettingsSection(section: SettingsSection, mode: "essential" | "all" | "advanced"): Promise<void> {
+  async #navigateSettingsSection(section: SettingsSection, mode: "essential" | "customize" | "advanced"): Promise<void> {
     if (!this.#bridge || !this.#activeTabId) return;
     await this.#bridge.showInternalPage(this.#activeTabId, this.#settingsUrl(section, mode));
   }
@@ -403,16 +403,16 @@ class BrowserShell {
     await center.cancel(); if (this.#settingsCenter === center) this.#settingsClosing = false;
   }
 
-  #settingsState(url: string): { readonly section: SettingsSection; readonly mode: "essential" | "all" | "advanced" } {
+  #settingsState(url: string): { readonly section: SettingsSection; readonly mode: "essential" | "customize" | "advanced" } {
     const route = normalizeMoonInternalUrl(url)?.split("/").at(-1);
     if (route === "settings") return { section: "appearance", mode: "essential" };
-    if (route === "all") return { section: "appearance", mode: "all" };
+    if (route === "all" || route === "personalize") return { section: "appearance", mode: "customize" };
     const sections: Readonly<Record<string, SettingsSection>> = { appearance: "appearance", themes: "appearance", home: "home", sidebar: "layout", workspaces: "data", search: "search", privacy: "data", advanced: this.#customization.document.experience.lastSection as SettingsSection };
     return { section: sections[route ?? ""] ?? "appearance", mode: "advanced" };
   }
 
-  #settingsUrl(section: SettingsSection, mode: "essential" | "all" | "advanced"): string {
-    if (mode === "essential") return "moon://settings/settings"; if (mode === "all") return "moon://settings/all";
+  #settingsUrl(section: SettingsSection, mode: "essential" | "customize" | "advanced"): string {
+    if (mode === "essential") return "moon://settings/settings"; if (mode === "customize") return "moon://settings/personalize";
     const route: Readonly<Record<SettingsSection, string>> = { appearance: "appearance", layout: "sidebar", home: "home", typography: "advanced", search: "search", data: "privacy" };
     return `moon://settings/${route[section]}`;
   }

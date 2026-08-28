@@ -5,6 +5,7 @@ describe("Moon internal settings routes", () => {
   it("normalizes only known, local and credential-free routes", () => {
     expect(normalizeMoonInternalUrl("moon://settings")).toBe("moon://settings/settings");
     expect(normalizeMoonInternalUrl("moon://settings/themes/")).toBe("moon://settings/themes");
+    expect(normalizeMoonInternalUrl("moon://settings/personalize")).toBe("moon://settings/personalize");
     expect(normalizeMoonInternalUrl("about:blank")).toBe("moon://newtab");
     expect(normalizeMoonInternalUrl("moon://settings/unknown")).toBeNull();
     expect(normalizeMoonInternalUrl("moon://user:secret@settings/privacy")).toBeNull();

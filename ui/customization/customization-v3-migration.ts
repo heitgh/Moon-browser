@@ -4,7 +4,7 @@ export const CUSTOMIZATION_V3_VERSION = 3 as const;
 export const CUSTOMIZATION_V3_STORAGE_KEY = "moon:customization:v3";
 export const CUSTOMIZATION_V3_LAST_VALID_KEY = "moon:customization:last-valid:v3";
 
-export type SettingsMode = "essential" | "all" | "advanced";
+export type SettingsMode = "essential" | "customize" | "advanced";
 export type WorkspaceVisibility = "always" | "collapsed" | "hover" | "auto-hide" | "home-only" | "hidden";
 
 export type V3SidebarSettings = LayoutSettings["sidebar"] & { readonly autoHide: boolean; readonly hideDelay: number };

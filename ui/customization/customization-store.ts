@@ -87,6 +87,7 @@ export class CustomizationStore {
   get canRedo(): boolean { return this.#redo.length > 0; }
   get lastError(): string | undefined { return this.#lastError; }
   get previewing(): boolean { return this.#previewSnapshot !== undefined; }
+  get dirty(): boolean { return Boolean(this.#previewSnapshot && JSON.stringify(this.#previewSnapshot) !== JSON.stringify(this.#document)); }
 
   subscribe(listener: Listener): () => void {
     this.#listeners.add(listener);

@@ -1,7 +1,7 @@
 import type { SettingsMode } from "./customization-schema.js";
 
 export type SettingsSection = "appearance" | "layout" | "home" | "typography" | "search" | "data";
-export interface SettingDefinition { readonly id: string; readonly section: SettingsSection; readonly category: string; readonly title: string; readonly description: string; readonly keywords: readonly string[]; readonly level: Exclude<SettingsMode, "all">; readonly scope: "global" | "workspace" | "both"; }
+export interface SettingDefinition { readonly id: string; readonly section: SettingsSection; readonly category: string; readonly title: string; readonly description: string; readonly keywords: readonly string[]; readonly level: Exclude<SettingsMode, "customize">; readonly scope: "global" | "workspace" | "both"; }
 
 export const SETTINGS_CATALOG: readonly SettingDefinition[] = [
   { id: "theme-mode", section: "appearance", category: "Aparência", title: "Modo claro, escuro ou automático", description: "Escolha como o Moon acompanha a luz do ambiente.", keywords: ["tema", "claro", "escuro", "automático", "light", "dark"], level: "essential", scope: "both" },

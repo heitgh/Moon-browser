@@ -59,7 +59,7 @@ test("starts the packaged desktop shell and opens every primary panel", async ()
     await window.getByLabel("Configurações", { exact: true }).click();
     await expect(window.getByRole("dialog")).toBeVisible();
     await expect(window.getByRole("heading", { name: "Personalize o essencial" })).toBeVisible();
-    await expect(window.locator(".moon-settings-mode")).toHaveText(["Essencial", "Todas", "Avançado"]);
+    await expect(window.locator(".moon-settings-mode")).toHaveText(["Essencial", "Personalizar", "Avançado"]);
     const search = window.getByLabel("Buscar nas configurações"); await search.fill("grossura da sidebar");
     await window.locator(".moon-settings-result").click(); await expect(window.getByRole("heading", { name: "Layout e densidade" })).toBeVisible();
     await window.getByLabel("Abrir configurações em página completa").evaluate(button => (button as HTMLButtonElement).click());

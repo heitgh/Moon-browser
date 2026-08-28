@@ -155,6 +155,9 @@ describe("Moon browser shell", () => {
     const confirmed = localStorage.getItem("moon:customization:v3");
     (document.querySelector(`[aria-label="${before === "light" ? "Escuro" : "Claro"}"]`) as HTMLButtonElement).click(); await flush();
     expect(document.documentElement.dataset.moonTheme).not.toBe(before);
+    expect(document.querySelector('.moon-settings-footer-copy strong[data-dirty="true"]')?.textContent).toContain("não aplicadas");
+    (document.querySelector('[aria-label="Recolher prévia"]') as HTMLButtonElement).click();
+    expect((document.querySelector(".moon-live-preview") as HTMLElement).hidden).toBe(true);
     expect(localStorage.getItem("moon:customization:v3")).toBe(confirmed);
     (document.querySelector('[aria-label="Cancelar mudanças"]') as HTMLButtonElement).click(); await flush();
     expect(document.documentElement.dataset.moonTheme).toBe(before);

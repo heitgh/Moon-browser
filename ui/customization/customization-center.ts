@@ -15,6 +15,7 @@ import type { MoonThemePayload, MoonThemePreview, MoonThemeSummary, Shortcut } f
 import { LiveBrowserPreview } from "./live-browser-preview.js";
 import { searchSettings, type SettingsSection } from "./settings-catalog.js";
 import type { SettingsMode } from "./customization-schema.js";
+import type { ImportCategory, ImportResult, ImportSourceSummary } from "../../packages/ipc/browser-import-contract.js";
 
 export interface CustomizationCenterOptions {
   readonly store: CustomizationStore;
@@ -40,6 +41,9 @@ export interface CustomizationCenterOptions {
   readonly shortcuts: () => readonly Shortcut[];
   readonly onAddShortcut: (shortcut: Omit<Shortcut, "id">) => void;
   readonly onRemoveShortcut: (id: string) => void;
+  readonly onDiscoverImportSources: () => Promise<readonly ImportSourceSummary[]>;
+  readonly onImportBrowserProfile: (sourceId: string, categories: readonly ImportCategory[]) => Promise<ImportResult>;
+  readonly onImportBookmarksHtml: () => Promise<ImportResult | null>;
 }
 
 type SectionId = "appearance" | "layout" | "home" | "typography" | "search" | "data";
@@ -78,6 +82,8 @@ export class CustomizationCenter {
   readonly #message = element("div", "moon-settings-message");
   readonly #live = element("div", "moon-visually-hidden");
   readonly #preview = new LiveBrowserPreview();
+  readonly #previewToggle = button("moon-secondary-button moon-preview-toggle", "Recolher prévia", "grid");
+  readonly #footerState = element("strong", "", "Sem alterações pendentes");
   readonly #undo = button("moon-secondary-button", "Desfazer", "back");
   readonly #redo = button("moon-secondary-button", "Refazer", "forward");
   readonly #closeControl = button("moon-settings-close", "Fechar e cancelar alterações", "close");
@@ -87,6 +93,8 @@ export class CustomizationCenter {
   #moonThemes: readonly MoonThemeSummary[] = [];
   #pendingMoonTheme: MoonThemePreview | undefined;
   #selectedMoonThemeId: string | undefined;
+  #previewCollapsed = false;
+  #importSources: readonly ImportSourceSummary[] = [];
 
   constructor(readonly options: CustomizationCenterOptions) {
     this.#active = options.initialSection ?? options.store.document.experience.lastSection as SectionId;
@@ -117,7 +125,7 @@ export class CustomizationCenter {
     const brand = element("div", "moon-settings-brand"); brand.append(icon("moon"), element("span", "", "Moon Studio"));
     const title = element("h2", "", "Personalização"); title.id = "moon-customization-title";
     this.#search.type = "search"; this.#search.placeholder = "Buscar configuração"; this.#search.setAttribute("aria-label", "Buscar nas configurações"); this.#search.addEventListener("input", () => this.#render());
-    const modes = element("div", "moon-settings-modes"); (["essential", "all", "advanced"] as const).forEach(mode => { const labels = { essential: "Essencial", all: "Todas", advanced: "Avançado" }; const control = button("moon-settings-mode", labels[mode]); control.append(element("span", "", labels[mode])); control.dataset.mode = mode; control.addEventListener("click", () => { this.#mode = mode; this.options.store.setExperience(mode, this.#active); this.#search.value = ""; this.#render(); void this.options.onNavigateSection?.(this.#active, mode); }); modes.append(control); });
+    const modes = element("div", "moon-settings-modes"); (["essential", "customize", "advanced"] as const).forEach(mode => { const labels = { essential: "Essencial", customize: "Personalizar", advanced: "Avançado" }; const control = button("moon-settings-mode", labels[mode]); control.append(element("span", "", labels[mode])); control.dataset.mode = mode; control.addEventListener("click", () => { this.#mode = mode; this.options.store.setExperience(mode, this.#active); this.#search.value = ""; this.#render(); void this.options.onNavigateSection?.(this.#active, mode); }); modes.append(control); });
     this.#sidebar.append(brand, title, modes, this.#search);
     for (const [id, label, iconName, description] of SECTIONS) {
       const nav = button("moon-settings-nav", label, iconName); nav.dataset.section = id;
@@ -136,7 +144,9 @@ export class CustomizationCenter {
     this.#scope.setAttribute("aria-label", "Escopo das configurações");
     this.#scope.addEventListener("change", () => { this.options.store.setScope(this.#scope.value as "global" | "workspace"); this.#say(`Escopo: ${this.#scope.selectedOptions[0]?.textContent ?? ""}.`); this.#render(); });
     const breadcrumbs = element("div", "moon-settings-breadcrumbs"); breadcrumbs.append(element("span", "", "Configurações"), element("span", "", "/"), this.#crumb);
-    const topbar = element("header", "moon-settings-topbar"); topbar.append(breadcrumbs, this.#scope);
+    this.#previewToggle.append(element("span", "", "Prévia")); this.#previewToggle.addEventListener("click", () => { this.#previewCollapsed = !this.#previewCollapsed; this.#syncPreviewState(); });
+    const topbarActions = element("div", "moon-settings-topbar-actions"); topbarActions.append(this.#previewToggle, this.#scope);
+    const topbar = element("header", "moon-settings-topbar"); topbar.append(breadcrumbs, topbarActions);
     this.#closeControl.addEventListener("click", () => void this.#close(false));
     this.#message.setAttribute("role", "status"); this.#live.setAttribute("aria-live", "polite");
     const footer = element("footer", "moon-settings-footer");
@@ -145,7 +155,7 @@ export class CustomizationCenter {
     this.#redo.addEventListener("click", () => { if (this.options.store.redo()) { this.#say("Alteração refeita."); this.#render(); } });
     const cancel = button("moon-secondary-button", "Cancelar mudanças"); cancel.append(element("span", "", "Cancelar")); cancel.addEventListener("click", () => void this.#close(false));
     const apply = button("moon-primary-button", "Aplicar personalização"); apply.append(element("span", "", "Aplicar mudanças")); apply.addEventListener("click", () => void this.#close(true));
-    const footerCopy = element("div", "moon-settings-footer-copy"); footerCopy.append(element("strong", "", "Preview ao vivo"), element("small", "", "Cancelar restaura exatamente o estado anterior."));
+    const footerCopy = element("div", "moon-settings-footer-copy"); footerCopy.append(this.#footerState, element("small", "", "Aplicação imediata · cancelar restaura o estado anterior."));
     const actions = element("div", "moon-settings-footer-actions"); actions.append(this.#undo, this.#redo, cancel, apply); footer.append(footerCopy, actions);
     this.#body.append(topbar, this.#message, this.#content, footer, this.#live); this.#modal.append(this.#sidebar, this.#body, this.#closeControl); this.element.append(this.#modal); this.setPresentation(this.#presentation);
     this.element.addEventListener("click", event => { if (event.target === this.element) void this.#close(false); });
@@ -154,15 +164,16 @@ export class CustomizationCenter {
 
   #render(): void {
     const section = SECTIONS.find(([id]) => id === this.#active)!;
-    const query = this.#search.value.trim(); this.#crumb.textContent = query ? "Resultados da busca" : this.#mode === "essential" ? "Essencial" : this.#mode === "all" ? "Todas as configurações" : section[1]; this.#scope.value = this.options.store.document.scope;
+    const query = this.#search.value.trim(); this.#crumb.textContent = query ? "Resultados da busca" : this.#mode === "essential" ? "Essencial" : this.#mode === "customize" ? "Personalizar" : section[1]; this.#scope.value = this.options.store.document.scope;
     this.#sidebar.querySelectorAll<HTMLElement>(".moon-settings-nav").forEach(node => node.classList.toggle("is-active", node.dataset.section === this.#active));
     this.#sidebar.querySelectorAll<HTMLElement>(".moon-settings-mode").forEach(node => node.classList.toggle("is-active", node.dataset.mode === this.#mode));
     this.#undo.disabled = !this.options.store.canUndo; this.#redo.disabled = !this.options.store.canRedo;
     this.#content.replaceChildren(); this.#content.dataset.searching = query ? "true" : "false";
     const config = this.options.store.config; this.#preview.apply(config);
+    this.#syncPreviewState(); this.#footerState.textContent = this.options.store.dirty ? "Alterações ainda não aplicadas" : "Sem alterações pendentes"; this.#footerState.dataset.dirty = this.options.store.dirty ? "true" : "false";
     if (query) { this.#searchResults(query); return; }
     if (this.#mode === "essential") this.#essential(config);
-    else if (this.#mode === "all") { this.#content.append(this.#preview.element); for (const id of SECTIONS.map(([sectionId]) => sectionId)) this.#renderSection(id, config); }
+    else if (this.#mode === "customize") { this.#content.append(this.#preview.element); for (const id of SECTIONS.map(([sectionId]) => sectionId)) this.#renderSection(id, config); }
     else { this.#content.append(this.#preview.element); this.#renderSection(this.#active, config); }
     this.#filter();
   }
@@ -189,7 +200,7 @@ export class CustomizationCenter {
     const workspace = this.#group("Workspaces", "Escolha quanto espaço elas ocupam sem perder o acesso pelo teclado ou menu.", "workspaces esconder espaços visibilidade"); workspace.append(this.#select("Exibição", config.workspaceDisplay.visibility, [["always", "Sempre visíveis"], ["collapsed", "Seletor compacto"], ["hover", "Ao passar o mouse"], ["home-only", "Somente na Home"], ["hidden", "Ocultas, acessíveis por Ctrl+Shift+W"]], value => { this.#set("workspaceDisplay.visibility", value); this.#render(); }));
     const home = this.#group("Home", "Escolha um ponto de partida para a nova aba.", "home nova aba widgets"); const homes = element("div", "moon-visual-options"); (["minimal", "focus", "study", "work"] as const).forEach(value => { const labels = { minimal: "Minimalista", focus: "Foco", study: "Estudo", work: "Trabalho" }; const card = button(`moon-visual-choice${config.home.preset === value ? " is-active" : ""}`, labels[value], "home"); card.append(element("strong", "", labels[value])); card.addEventListener("click", () => this.#homePreset(value)); homes.append(card); }); home.append(homes);
     const search = this.#group("Pesquisa e privacidade", "Buscador e símbolos dos sites, com cache local opcional.", "buscador privacidade favicon"); search.append(this.#select("Buscador", config.search.defaultEngine, config.search.providers.map(provider => [provider.id, provider.name] as const), value => this.#set("search.defaultEngine", value)), this.#toggle("Exibir símbolos dos sites", config.favicons.enabled, value => this.#set("favicons.enabled", value)));
-    this.#content.append(appearance, density, sidebar, workspace, home, search);
+    this.#content.append(appearance, density, sidebar, workspace, home, search, this.#importControls());
   }
 
   #appearance(config: CustomizationConfig): void {
@@ -293,7 +304,25 @@ export class CustomizationCenter {
     const diagnostic = button("moon-secondary-button", "Exportar diagnóstico e backup", "download"); diagnostic.append(element("span", "", "Exportar diagnóstico")); diagnostic.addEventListener("click", () => void this.#exportDiagnostic());
     const current = button("moon-secondary-button", "Restaurar escopo atual", "reload"); current.append(element("span", "", "Restaurar este escopo")); current.addEventListener("click", () => { if (confirm("Restaurar o escopo atual? O preview atual será substituído.")) { this.options.store.resetAll("current"); this.#render(); } });
     const all = button("moon-danger-button", "Reset total", "trash"); all.append(element("span", "", "Reset total")); all.addEventListener("click", () => { if (confirm("Reset total remove personalizações e temas salvos. Exporte um backup antes de continuar. Prosseguir?")) { this.options.store.resetAll("everything"); this.#render(); } }); resetActions.append(safe, restore, diagnostic, current, all); reset.append(resetActions, element("p", "moon-recovery-note", this.options.store.loadResult.message ?? "O último estado válido é atualizado apenas quando você confirma as mudanças."));
-    this.#content.append(portability, favicons, reset);
+    this.#content.append(this.#importControls(), portability, favicons, reset);
+  }
+
+  #importControls(): HTMLElement {
+    const group = this.#group("Importação segura", "Detecta perfis compatíveis sem modificá-los. Cookies, sessões, carteiras, extensões e senhas não são copiados.", "importar chrome chromium brave vivaldi edge firefox favoritos histórico bookmarks html staging rollback");
+    const actions = element("div", "moon-settings-actions");
+    const scan = button("moon-primary-button", "Detectar perfis instalados", "search"); scan.append(element("span", "", "Detectar perfis")); scan.addEventListener("click", () => { void this.#discoverImportSources(); });
+    const html = button("moon-secondary-button", "Importar favoritos de arquivo HTML", "download"); html.append(element("span", "", "Bookmarks HTML")); html.addEventListener("click", () => { void this.#importBookmarksHtml(); }); actions.append(scan, html); group.append(actions);
+    if (!this.#importSources.length) { group.append(element("p", "moon-widget-empty", "Nenhum perfil analisado nesta sessão. A detecção é local e somente leitura.")); return group; }
+    const list = element("div", "moon-import-source-list");
+    for (const source of this.#importSources) {
+      const row = element("article", "moon-import-source"); const copy = element("span", "moon-list-copy");
+      copy.append(element("strong", "", source.name), element("small", "", `Atualizado ${new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(source.modifiedAt)}`));
+      const categories = element("div", "moon-import-categories"); const selected = new Map<ImportCategory, HTMLInputElement>();
+      for (const category of ["bookmarks", "history"] as const) { const count = source.categories[category]; const label = element("label", "moon-import-category"); const input = element("input"); input.type = "checkbox"; input.checked = count > 0; input.disabled = count === 0; selected.set(category, input); label.append(input, element("span", "", `${category === "bookmarks" ? "Favoritos" : "Histórico"} (${count})`)); categories.append(label); }
+      const run = button("moon-primary-button", `Importar de ${source.name}`, "download"); run.append(element("span", "", "Importar seleção")); run.addEventListener("click", () => { const values = [...selected].filter(([, input]) => input.checked).map(([category]) => category); if (!values.length) return this.#error("Selecione ao menos uma categoria."); void this.#runBrowserImport(source.id, values); });
+      row.append(copy, categories, run); list.append(row);
+    }
+    group.append(list); return group;
   }
 
   #intro(title: string, description: string): void { const intro = element("header", "moon-settings-page-intro"); intro.append(element("h1", "", title), element("p", "", description), element("span", "moon-scope-badge", this.options.store.document.scope === "global" ? "Global" : this.options.workspaceName)); this.#content.append(intro); }
@@ -312,6 +341,7 @@ export class CustomizationCenter {
   #homeSet(path: string, value: unknown): boolean { const accepted = this.options.store.update(next => { setPath(next, path, value); (next.home as Mutable<typeof next.home>).preset = "custom"; }); this.#result(accepted); return accepted; }
   #setFrom(change: (value: string) => void, value: string): boolean { change(value); const accepted = !this.options.store.lastError; this.#result(accepted); return accepted; }
   #result(accepted: boolean): void { this.#undo.disabled = !this.options.store.canUndo; this.#redo.disabled = !this.options.store.canRedo; if (accepted) { this.#message.textContent = "Alteração aplicada ao preview; confirme para salvar."; this.#message.classList.remove("is-error"); } else this.#error(this.options.store.lastError ?? "Valor inválido."); }
+  #syncPreviewState(): void { this.#preview.element.hidden = this.#previewCollapsed; this.#previewToggle.title = this.#previewCollapsed ? "Expandir prévia" : "Recolher prévia"; this.#previewToggle.setAttribute("aria-expanded", String(!this.#previewCollapsed)); }
   #wallpaperType(value: string): void { const defaults: Readonly<Record<string, string>> = { local: WALLPAPER_PRESETS[0].source, https: "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986", color: "#10131b", gradient: "linear-gradient(135deg, #17102d, #071827)" }; this.options.store.update(next => { const wallpaper = next.appearance.wallpaper as Mutable<typeof next.appearance.wallpaper>; wallpaper.type = value as typeof wallpaper.type; wallpaper.source = defaults[value]!; wallpaper.cachedData = undefined; }); this.#render(); if (value === "https") void this.#wallpaperSource(defaults[value]!); }
   async #wallpaperSource(url: string): Promise<void> { try { this.#say("Baixando e validando wallpaper HTTPS…"); const cachedData = await this.options.onFetchWallpaper(url); const accepted = this.options.store.update(next => { const wallpaper = next.appearance.wallpaper as Mutable<typeof next.appearance.wallpaper>; wallpaper.type = "https"; wallpaper.source = url; wallpaper.cachedData = cachedData; }); this.#result(accepted); if (accepted) { this.#say("Wallpaper HTTPS validado e armazenado localmente."); this.#render(); } } catch (error) { this.#error(error); } }
   #density(value: string): void { const accepted = this.options.store.update(next => { const layout = next.layout as Mutable<typeof next.layout>; layout.density = value as typeof layout.density; if (value === "compact") { layout.uiScale = .9; (layout.toolbar as { height: number }).height = 42; } if (value === "comfortable") { layout.uiScale = 1; (layout.toolbar as { height: number }).height = 50; } if (value === "touch") { layout.uiScale = 1.15; (layout.toolbar as { height: number }).height = 62; } }); this.#result(accepted); this.#render(); }
@@ -322,6 +352,9 @@ export class CustomizationCenter {
   async #export(scope: "appearance" | "workspace" | "all"): Promise<void> { try { const saved = await this.options.onExport(this.options.store.export(scope)); this.#say(saved ? "Personalização exportada." : "Exportação cancelada."); } catch (error) { this.#error(error); } }
   async #exportDiagnostic(): Promise<void> { try { const saved = await this.options.onExportDiagnostic(this.options.store.diagnostic()); this.#say(saved ? "Diagnóstico sanitizado exportado." : "Exportação cancelada."); } catch (error) { this.#error(error); } }
   async #import(): Promise<void> { try { const content = await this.options.onImport(); if (!content) return; if (!confirm("Importar esta personalização? Você ainda pode cancelar o preview.")) return; this.options.store.import(content); this.#say("Importação validada e aplicada ao preview."); this.#render(); } catch (error) { this.#error(error); } }
+  async #discoverImportSources(): Promise<void> { try { this.#say("Analisando perfis locais em modo somente leitura…"); this.#importSources = await this.options.onDiscoverImportSources(); this.#say(this.#importSources.length ? `${this.#importSources.length} perfil(is) compatível(is) encontrado(s).` : "Nenhum perfil compatível com dados importáveis foi encontrado."); this.#render(); } catch (error) { this.#error(error); } }
+  async #runBrowserImport(sourceId: string, categories: readonly ImportCategory[]): Promise<void> { try { this.#say("Importando a partir de staging validado…"); const result = await this.options.onImportBrowserProfile(sourceId, categories); this.#say(`Importação concluída: ${result.imported.bookmarks} favoritos e ${result.imported.history} itens de histórico; ${result.skipped.bookmarks + result.skipped.history} duplicados ignorados.`); } catch (error) { this.#error(error); } }
+  async #importBookmarksHtml(): Promise<void> { try { const result = await this.options.onImportBookmarksHtml(); if (!result) return this.#say("Importação HTML cancelada."); this.#say(`HTML importado: ${result.imported.bookmarks} favoritos; ${result.skipped.bookmarks} duplicados ignorados.`); } catch (error) { this.#error(error); } }
   async #loadMoonThemes(): Promise<void> { try { this.#moonThemes = await this.options.onListMoonThemes(); this.#render(); } catch (error) { this.#error(error); } }
   async #importMoonTheme(): Promise<void> { try { const preview = await this.options.onImportMoonTheme(); if (!preview) return; this.#pendingMoonTheme = preview; this.#say("Pacote validado. Revise autoria, confiança e alterações antes de instalar."); this.#render(); } catch (error) { this.#error(error); } }
   async #cancelMoonTheme(): Promise<void> { const pending = this.#pendingMoonTheme; if (!pending) return; try { await this.options.onCancelMoonTheme(pending.intentId); this.#pendingMoonTheme = undefined; this.#say("Importação cancelada e quarentena removida."); this.#render(); } catch (error) { this.#error(error); } }
