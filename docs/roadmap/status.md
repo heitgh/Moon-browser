@@ -123,6 +123,18 @@ Medição local reproduzível deste corte: cold boot até Home utilizável após
 | Captura/autofill e persistência de credenciais | Bloqueado | backend seguro do SO e auditoria de origem/vazamentos ainda inexistentes; UI declara indisponibilidade |
 | Threat model e recuperação | Concluído para o desenho atual | `docs/architecture/sync-e2ee-threat-model.md` documenta chaves, riscos, recuperação e gates |
 
+## Preparação do Moon Hub
+
+| Entrega | Estado | Evidência |
+|---|---|---|
+| Limite browser/serviço | Documentado | `docs/product/moon-hub-contract.md` separa consentimento/E2EE/preview local de conta, storage e moderação remotos |
+| Conta e Device Authorization | Contrato apenas | `MoonHubAccountProvider`; issuer, client ID, scopes e endpoints continuam deliberadamente indefinidos |
+| Intent de tema | Contrato validado | metadata opaca, curta, com hash/chave/expiração; URL e campos executáveis são rejeitados em unit test |
+| Trust roots/rotação | Documentado | roots somente por release assinado, sobreposição, revogação assinada e rollback local |
+| Moderação, copyright e denúncias | Documentado | responsabilidades, recurso, retirada emergencial e direitos do criador/usuário |
+| Privacidade, exportação e exclusão | Documentado | minimização, retenção, exportação, recibo e logs sem segredos |
+| Portal/API real | Bloqueado externamente | nenhuma URL foi inventada e nenhuma tela simula conta, catálogo ou upload disponível |
+
 ## Dívida explícita antes das fases de produto
 
 1. Extrair renderizadores de bookmarks, history, notes, downloads e security do controlador do shell.

@@ -153,6 +153,7 @@ O Moon diferencia recurso funcional, entrega parcial, preview e plano. Código d
 | Android e iOS | **Fundação arquitetural** | Existem contratos compartilhados, não aplicativos distribuíveis |
 
 Para a matriz técnica completa, consulte [`docs/roadmap/status.md`](docs/roadmap/status.md).
+Os limites do serviço futuro estão documentados em [`docs/product/moon-hub-contract.md`](docs/product/moon-hub-contract.md), sem domínios ou endpoints fictícios.
 
 ## Capturas do projeto
 

@@ -30,6 +30,7 @@
 - contratos de sync offline-first, provider fixture em memória, merge não destrutivo, tombstones, conflitos determinísticos, retry/cancelamento e revogação de dispositivos;
 - E2EE com AES-256-GCM, metadata autenticada, nonce único, chave mestra separada da frase, wrapping por KDF versionada e recovery key exportável;
 - cofre local isolado por contrato, origem HTTPS exata, revelação consciente, auto-lock e backend seguro em memória exclusivo para testes.
+- contrato de fronteira do futuro Moon Hub e intent de preview curto, opaco e sem URLs/payload executável.
 
 ### Corrigido
 
