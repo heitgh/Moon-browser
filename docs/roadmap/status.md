@@ -13,7 +13,7 @@ A atualização atual parte diretamente de `heitgh/Moon-browser@8d5a35b24e7b6827
 | Build e workspaces coerentes | Concluído | `package.json`, `electron-builder.yml`, lockfile |
 | CI install/type/lint/test/E2E/build/audit | Concluído | `.github/workflows/quality.yml` |
 | ADRs obrigatórios | Concluído | `docs/adr/0001` a `0006` |
-| Shell decomposto | Parcial avançado | Home, toolbar, tab strip, workspace bar, permissões e contratos separados; painéis de produto ainda serão extraídos |
+| Shell decomposto | Parcial avançado | Home, toolbar, tab strip, workspace bar, permissões, onboarding, Foco e Command Center estão separados; drawers legados restantes ainda serão extraídos |
 | CSS decomposto | Concluído para o runtime atual | globals é agregador; shell, Home, painéis, settings, responsive e accessibility separados |
 | Application Service inicial | Concluído | `BrowserApplicationService` é a API usada pelo IPC de browser |
 | Core conectado a tabs | Concluído | `TabManager`, `MoonStateStore` e `MoonEventBus` reconciliam eventos do browser real |
@@ -27,7 +27,7 @@ A atualização atual parte diretamente de `heitgh/Moon-browser@8d5a35b24e7b6827
 | Flags e documentação verdadeiras | Concluído | IA, extensões e updater permanecem desativados |
 | Wallpapers locais e screenshots atuais | Concluído | assets locais, CSP sem imagens remotas automáticas e capturas do runtime |
 
-## Moon Settings V3 — recuperação e evolução
+## Moon Settings V4 — recuperação e evolução
 
 | Entrega | Estado | Evidência |
 |---|---|---|
@@ -35,7 +35,7 @@ A atualização atual parte diretamente de `heitgh/Moon-browser@8d5a35b24e7b6827
 | Draft, preview, aplicar, cancelar, undo/redo e falha de persistência | Concluído | Commit ocorre somente em Aplicar; cancelamento não regrava o draft |
 | Recuperação parcial, lastKnownGood, modo seguro e diagnóstico | Concluído | `docs/settings-recovery-audit.md` e testes de corrupção por seção |
 | Modal e página interna `moon://settings/*` | Concluído | Shell compartilhado, deep links e histórico voltar/avançar |
-| Essencial, Todas, Avançado e busca por intenção | Concluído | Mesmo store/componentes; catálogo testado por sinônimos |
+| Essencial, Personalizar, Avançado e busca por intenção | Concluído | Mesmo store/componentes; catálogo testado por sinônimos e navegação ao controle |
 | Aparência, layout, Home, tipografia, pesquisa e escopo | Concluído | `customization-applier.ts`, Home e toolbar ativos |
 | Temas salvos, Moon Themes e import/export V3 | Concluído | schema validado, bridge desktop, quarentena e rollback |
 | Wallpaper remoto opcional e seguro | Concluído | HTTPS restrito, destino público, tipo/tamanho validados e dados servidos pelo main; CSP continua restritiva |
@@ -44,7 +44,7 @@ A atualização atual parte diretamente de `heitgh/Moon-browser@8d5a35b24e7b6827
 | Favicons em Home, histórico e favoritos | Concluído | cache por origem alimenta atalhos e listas; navegação privada não propaga nem persiste dados |
 | Favicons em sugestões da omnibox | Não aplicável ao shell atual | a omnibox ainda não possui uma lista própria de sugestões; nenhuma capacidade inexistente é simulada |
 | Biblioteca persistente de wallpapers com metadados | Parcial | importação e presets funcionam; favoritos/ordenação/deduplicação ainda não existem |
-| Capturas do runtime V2 | Concluído | `assets/screenshots/page.png` a `page2.png` |
+| Capturas do runtime atual | Concluído | `assets/screenshots/page.png`, `page1.png`, `page2.png` e `final-update-*` |
 
 ## Reconstrução ergonômica
 
@@ -55,17 +55,33 @@ A atualização atual parte diretamente de `heitgh/Moon-browser@8d5a35b24e7b6827
 | Capturas responsivas e seis categorias | Concluído | `assets/screenshots/phase-a-*` |
 | Medição reproduzível de interação | Concluído | `npm run measure:ui` |
 | Separação cold boot/Home quente/feedback/superfície | Concluído | a sonda não atribui mais espera do Playwright ao produto |
-| Fase B — Home ergonômica e presets distintos | Próximo corte | ainda não implementada |
+| Fase B — Home ergonômica e presets distintos | Concluído no runtime atual | Minimalista, Foco, Estudo, Trabalho e Desenvolvimento alteram composição, prioridade, spans e visibilidade |
+
+## Corte de produto — onboarding, importação, Foco e navegação
+
+| Entrega | Estado | Evidência |
+|---|---|---|
+| Onboarding curto, pulável e retomável | Concluído | seis etapas, preview cancelável/confirmável e teste unitário/E2E de primeiro uso |
+| Detecção de perfis compatíveis | Concluído para Linux | Chrome/Chromium, Brave, Vivaldi, Edge e Firefox em raízes conhecidas |
+| Importação segura | Concluído para favoritos/histórico | staging read-only, WAL/SHM, seleção explícita, transação, dedupe, relatório e fallback HTML |
+| Categorias ampliadas e senhas | Não implementado | abas, buscadores, configurações e senhas continuam fora do fluxo e são declarados como indisponíveis |
+| Abas verticais/horizontais | Concluído | topo, esquerda ou direita, largura configurável, preview e fallback estreito |
+| Central de comandos | Concluído | `Ctrl/Cmd+Shift+P`, teclado, busca accent-insensitive em seis fontes canônicas |
+| Foco/Zen | Concluído para o escopo deste corte | temporizado, Pomodoro, contínuo, até horário, presets, allowlists, pausa/extensão/recuperação e resumo local |
+| Sons e modo circadiano | Não implementado | permanecem fora da UI; nenhuma adaptação silenciosa é executada |
+| Moon Intelligence | Bloqueada | nenhuma rota/provider; onboarding explica indisponibilidade e `RELEASE_GATED_FEATURE_FLAGS` impede override |
 
 ## Quality gates atuais
 
 - TypeScript estrito e ESLint.
-- 63 testes unitários.
-- 18 testes de integração do shell.
-- 8 testes SQLite/serviços no runtime Electron.
+- 76 testes unitários.
+- 23 testes de integração do shell.
+- 9 testes SQLite/serviços no runtime Electron.
 - 6 E2E Electron: smoke/modal/página/busca/teclado, restore de sessão, persistência V3, import/export, ergonomia e janela privada.
 - Build Linux AppImage e deb aprovado neste checkpoint.
 - `npm audit --omit=dev --audit-level=moderate`: 0 vulnerabilidades de produção neste checkpoint.
+
+Medição local reproduzível deste corte: cold boot até Home utilizável após dispensar o primeiro uso em 738,7 ms; Home quente 26,9 ms; feedback/superfície da aba 0,6/0,5 ms; feedback/fim da transição do drawer 12,5/239,2 ms; Settings 53,9 ms. São amostras desta máquina, não p95.
 
 ## Moon Themes e menu contextual
 
@@ -84,6 +100,7 @@ A atualização atual parte diretamente de `heitgh/Moon-browser@8d5a35b24e7b6827
 1. Extrair renderizadores de bookmarks, history, notes, downloads e security do controlador do shell.
 2. Extrair as projeções de workspaces, favoritos, histórico e notas do controlador do shell; a autoridade já está nos repositories.
 3. Adicionar schemas compartilhados aos canais legados restantes e ampliar testes de sender/origin/limites.
-4. Não ativar IA, extensões, updater ou VPN antes das definições de pronto registradas nos ADRs.
+4. Ampliar o importador somente com parsers e rollback comprovados para cada nova categoria.
+5. Não ativar IA, extensões, updater ou VPN antes das definições de pronto registradas nos ADRs.
 
-A Fase 1 de personalização está conectada e coberta. Personalização profunda de abas/painéis, comandos em cadeia, gestos, configurações por site, Zen/Circadian avançado, ergonomia, segurança avançada, Universal Search e Moon Intelligence permanecem planejados, não implementados.
+Settings V4, onboarding, importação segura no escopo declarado, Foco/Zen, abas verticais, Central de comandos e presets distintos da Home estão conectados e cobertos. Grupos/árvore/hibernação de abas, split view, Glance, comandos encadeados, gestos, configurações por site, circadiano e Moon Intelligence permanecem planejados e não são anunciados como capacidades prontas.

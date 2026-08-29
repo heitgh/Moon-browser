@@ -16,6 +16,14 @@ async function shellWindow(application: ElectronApplication): Promise<Page> {
   return application.windows().find(page => page.url().startsWith("file:") && page.url().endsWith("/index.html"))!;
 }
 
+async function finishFirstRun(page: Page): Promise<void> {
+  const onboarding = page.getByTestId("moon-onboarding");
+  if (await onboarding.waitFor({ state: "visible", timeout: 5_000 }).then(() => true).catch(() => false)) {
+    await page.getByLabel("Pular configuração inicial").click();
+    await expect(onboarding).toBeHidden();
+  }
+}
+
 async function duration(action: () => Promise<void>): Promise<number> {
   const start = performance.now();
   await action();
@@ -76,6 +84,7 @@ const application = await electron.launch({ args: [...platformArguments, `--user
 
 try {
   const page = await shellWindow(application);
+  await finishFirstRun(page);
   await expect(page.getByLabel("Página inicial", { exact: true })).toBeVisible();
   await expect(page.locator(".moon-home-search-input")).toBeVisible();
   await expect.poll(() => page.evaluate(async () => {

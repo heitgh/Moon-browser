@@ -1,5 +1,5 @@
 :root {
-  --moon-sidebar-width: 56px; --moon-sidebar-icon: 18px; --moon-sidebar-gap: 8px; --moon-drawer-width: 292px; --moon-toolbar-height: 48px;
+  --moon-sidebar-width: 56px; --moon-sidebar-icon: 18px; --moon-sidebar-gap: 8px; --moon-drawer-width: 292px; --moon-tabs-width: 240px; --moon-toolbar-height: 48px;
   --moon-ui-scale: 1; --moon-sidebar-opacity: 1; --moon-toolbar-opacity: 1; --moon-card-opacity: .92; --moon-drawer-opacity: 1;
   --moon-menu-opacity: 1; --moon-modal-opacity: 1; --moon-radius: 12px; --moon-border-width: 1px; --moon-shadow-strength: .55;
   --moon-spacing-scale: 1; --moon-elevation: 1; --moon-glass-blur: 22px; --moon-motion-speed: 1; --moon-font-family: Inter, system-ui, sans-serif;
@@ -25,6 +25,18 @@ body { background: var(--moon-bg); color: var(--moon-text); font-family: var(--m
 [data-moon-sidebar="right"] .moon-drawer-resize { left: -3px; right: auto; }
 .moon-tabs-bar { background: var(--moon-surface); border-color: var(--moon-border); flex: 0 0 var(--moon-tabs-height); order: 1; }
 .moon-tab { border-radius: var(--moon-radius) var(--moon-radius) 0 0; font-size: max(var(--moon-font-ui), var(--moon-tab-font-size)); }
+[data-moon-tabs="left"] .moon-tabs-bar, [data-moon-tabs="right"] .moon-tabs-bar { align-items: stretch; bottom: 0; flex-direction: column; gap: 6px; padding: 12px 8px; position: absolute; top: 0; width: var(--moon-tabs-width); z-index: 12; }
+[data-moon-tabs="left"] .moon-tabs-bar { border-bottom: 0; border-right: var(--moon-border-width) solid var(--moon-border); left: 0; }
+[data-moon-tabs="right"] .moon-tabs-bar { border-bottom: 0; border-left: var(--moon-border-width) solid var(--moon-border); right: 0; }
+[data-moon-tabs="left"] .moon-browser-main > :not(.moon-tabs-bar) { margin-left: var(--moon-tabs-width); }
+[data-moon-tabs="right"] .moon-browser-main > :not(.moon-tabs-bar) { margin-right: var(--moon-tabs-width); }
+[data-moon-tabs="left"] .moon-tabs-list, [data-moon-tabs="right"] .moon-tabs-list { align-items: stretch; flex-direction: column; overflow-x: hidden; overflow-y: auto; }
+[data-moon-tabs="left"] .moon-tab, [data-moon-tabs="right"] .moon-tab { border: 1px solid transparent; border-radius: var(--moon-radius); flex: 0 0 var(--moon-control-height); max-width: none; min-width: 0; width: 100%; }
+[data-moon-tabs="left"] .moon-tab.is-active, [data-moon-tabs="right"] .moon-tab.is-active { border-color: var(--moon-border); }
+[data-moon-tabs="left"] .moon-tab.is-active::before, [data-moon-tabs="right"] .moon-tab.is-active::before { bottom: 8px; height: auto; left: -1px; right: auto; top: 8px; width: 2px; }
+[data-moon-tabs="right"] .moon-tab.is-active::before { left: auto; right: -1px; }
+[data-moon-tabs="left"] .moon-window-mark, [data-moon-tabs="right"] .moon-window-mark { align-self: flex-start; margin: 2px 8px 8px; }
+[data-moon-tabs="left"] .moon-add-tab, [data-moon-tabs="right"] .moon-add-tab { align-self: center; flex: 0 0 var(--moon-control-height); }
 .moon-toolbar-v2 { background: color-mix(in srgb, var(--moon-bg) calc(var(--moon-toolbar-opacity) * 100%), transparent); border-color: var(--moon-border); flex: 0 0 var(--moon-toolbar-height); min-height: var(--moon-toolbar-height); order: 2; transition: opacity calc(var(--moon-motion-normal) / var(--moon-motion-speed)) var(--moon-ease-standard), transform calc(var(--moon-motion-normal) / var(--moon-motion-speed)) var(--moon-ease-standard); }
 .moon-toolbar-v2.is-auto-hide:not(:hover):not(:focus-within) { opacity: .15; transform: translateY(calc(-1 * (var(--moon-toolbar-height) - 8px))); }
 .moon-toolbar-spacer { flex: 1; }
@@ -66,10 +78,24 @@ body { background: var(--moon-bg); color: var(--moon-text); font-family: var(--m
 [data-moon-workspaces="hover"] .moon-workspaces:hover, [data-moon-workspaces="hover"] .moon-workspaces:focus-within, [data-moon-workspaces="auto-hide"] .moon-workspaces:hover, [data-moon-workspaces="auto-hide"] .moon-workspaces:focus-within { flex-basis: var(--moon-workspaces-height); opacity: 1; }
 [data-moon-workspace-selector="compact"] .moon-workspace-count { display: none; }
 
+[data-zen="true"] .moon-browser-shell { grid-template-columns: 0 0 minmax(0, 1fr); }
+[data-zen="true"] .moon-rail, [data-zen="true"] .moon-drawer { display: none; }
+[data-zen="true"] .moon-browser-main > :not(.moon-tabs-bar) { margin-left: 0; margin-right: 0; }
+[data-zen="true"] .moon-tabs-bar { align-items: end; border: 0; border-bottom: var(--moon-border-width) solid var(--moon-border); bottom: auto; flex-direction: row; gap: var(--moon-space-2); left: auto; min-height: 6px; opacity: .12; overflow: hidden; padding: 0 var(--moon-space-3); position: static; right: auto; transition: flex-basis var(--moon-motion-normal) var(--moon-ease-standard), opacity var(--moon-motion-normal) var(--moon-ease-standard); width: auto; }
+[data-zen="true"] .moon-tabs-bar:not(:hover):not(:focus-within) { flex-basis: 6px; }
+[data-zen="true"] .moon-tabs-bar:hover, [data-zen="true"] .moon-tabs-bar:focus-within { flex-basis: var(--moon-tabs-height); opacity: 1; }
+[data-zen="true"] .moon-tabs-list { align-items: end; flex-direction: row; overflow: hidden; }
+[data-zen="true"] .moon-tab { border-bottom: 0; border-radius: var(--moon-radius) var(--moon-radius) 0 0; max-width: 240px; min-width: 132px; width: auto; }
+[data-zen="true"] .moon-tab.is-active::before { bottom: auto; height: 2px; left: 8px; right: 8px; top: -1px; width: auto; }
+[data-zen="true"] .moon-toolbar-v2:not(:hover):not(:focus-within) { flex-basis: 7px; min-height: 7px; opacity: .1; overflow: hidden; padding-block: 0; transform: none; }
+[data-zen="true"] .moon-toolbar-v2:hover, [data-zen="true"] .moon-toolbar-v2:focus-within { opacity: 1; }
+[data-zen="true"] .moon-workspaces:not(:hover):not(:focus-within) { flex-basis: 5px; min-height: 5px; opacity: .08; overflow: hidden; }
+
 .moon-home { align-items: stretch; background: var(--moon-bg); font-size: var(--moon-home-font-size); justify-content: stretch; padding: 0; }
 .moon-home-wallpaper { background-position: center; background-size: cover; filter: blur(var(--moon-wallpaper-blur)) brightness(var(--moon-wallpaper-brightness)) contrast(var(--moon-wallpaper-contrast)) saturate(var(--moon-wallpaper-saturation)) hue-rotate(var(--moon-wallpaper-hue)); inset: calc(-1 * var(--moon-wallpaper-blur)); opacity: var(--moon-wallpaper-opacity); position: absolute; z-index: 0; }
 .moon-home::after { background: rgb(0 0 0 / var(--moon-wallpaper-dim)); pointer-events: none; z-index: 1; }
 .moon-home-grid { align-content: center; display: grid; flex: 0 1 var(--moon-home-max-width); gap: var(--moon-home-gap); grid-template-columns: repeat(var(--moon-home-columns), minmax(0, 1fr)); max-width: var(--moon-home-max-width); padding: var(--moon-home-padding); position: relative; width: 100%; z-index: 2; }
+.moon-home[data-preset="minimal"] .moon-home-grid { align-content: center; }.moon-home[data-preset="focus"] .moon-home-grid { align-content: center; }.moon-home[data-preset="focus"] .moon-home-card { backdrop-filter: blur(var(--moon-glass-blur)); }.moon-home[data-preset="study"] .moon-home-grid, .moon-home[data-preset="work"] .moon-home-grid, .moon-home[data-preset="dev"] .moon-home-grid { align-content: start; overflow-y: auto; }.moon-home[data-preset="dev"] .moon-home-card { border-radius: max(4px, calc(var(--moon-radius) * .55)); }
 [data-moon-home-horizontal="start"] .moon-home { justify-content: flex-start; } [data-moon-home-horizontal="center"] .moon-home { justify-content: center; } [data-moon-home-horizontal="end"] .moon-home { justify-content: flex-end; }
 [data-moon-home-vertical="start"] .moon-home { align-items: flex-start; } [data-moon-home-vertical="center"] .moon-home { align-items: center; } [data-moon-home-vertical="end"] .moon-home { align-items: flex-end; }
 .moon-home-widget { grid-column: span var(--moon-widget-columns); min-width: 0; }
@@ -96,7 +122,7 @@ body { background: var(--moon-bg); color: var(--moon-text); font-family: var(--m
 .moon-customization-modal { grid-template-columns: 270px minmax(0, 1fr); height: min(840px, calc(100vh - 32px)); max-width: 1180px; width: min(1180px, calc(100vw - 32px)); }
 .moon-settings-overlay { background: color-mix(in srgb, var(--moon-bg) 82%, transparent); }
 .moon-settings-modal { background: color-mix(in srgb, var(--moon-surface) calc(var(--moon-modal-opacity) * 100%), transparent); border-color: var(--moon-border); border-radius: calc(var(--moon-radius) + 4px); color: var(--moon-text); }
-.moon-customization-modal .moon-settings-sidebar { background: var(--moon-bg); overflow-y: auto; }
+.moon-customization-modal .moon-settings-sidebar { background: var(--moon-bg); min-width: 0; overflow-x: hidden; overflow-y: auto; }
 .moon-settings-search { background: var(--moon-surface); border: var(--moon-border-width) solid var(--moon-border); border-radius: var(--moon-radius); color: var(--moon-text); margin-bottom: 12px; padding: 10px 11px; width: 100%; }
 .moon-settings-nav { align-items: flex-start; }
 .moon-settings-nav-copy { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
@@ -151,7 +177,8 @@ body { background: var(--moon-bg); color: var(--moon-text); font-family: var(--m
 .moon-theme-package.is-active { border-color: color-mix(in srgb, var(--moon-accent) 68%, var(--moon-border)); }
 
 .moon-settings-modes { background: color-mix(in srgb, var(--moon-surface-raised) 72%, transparent); border-radius: 12px; display: grid; gap: 3px; grid-template-columns: repeat(3, 1fr); padding: 3px; }
-.moon-settings-mode, .moon-settings-open-page { appearance: none; background: transparent; border: 0; border-radius: 9px; color: var(--moon-text-muted); cursor: pointer; font: inherit; min-height: 36px; padding: 7px 8px; }
+.moon-settings-mode, .moon-settings-open-page { appearance: none; background: transparent; border: 0; border-radius: 9px; color: var(--moon-text-muted); cursor: pointer; font: inherit; min-height: 36px; min-width: 0; padding: 7px 6px; }
+.moon-settings-mode { font-size: var(--moon-font-caption); padding-inline: 4px; text-align: center; white-space: nowrap; }
 .moon-settings-mode.is-active { background: var(--moon-surface); color: var(--moon-text); box-shadow: 0 4px 14px #0002; }
 .moon-settings-open-page { align-items: center; display: flex; gap: 8px; margin-top: auto; text-align: left; }
 .moon-settings-open-page .moon-icon { height: 16px; width: 16px; }
@@ -175,6 +202,10 @@ body { background: var(--moon-bg); color: var(--moon-text); font-family: var(--m
 .moon-preview-workspaces { align-items: center; display: flex; gap: 5px; grid-area: workspaces; padding: 3px 9px; }.moon-preview-workspaces span { background: var(--moon-surface); border-radius: 4px; color: var(--moon-text-muted); font-size: 11px; padding: 2px 5px; }.moon-preview-workspaces span.is-active { background: color-mix(in srgb, var(--preview-accent) 24%, var(--moon-surface)); color: var(--moon-text); }
 .moon-preview-page { align-items: center; display: flex; flex-direction: column; gap: 5px; grid-area: page; justify-content: center; }.moon-preview-orb { background: var(--preview-accent); border-radius: 50%; height: 14px; width: 14px; }.moon-preview-page strong { font-size: 11px; }.moon-preview-search { background: var(--moon-surface); border-radius: 8px; height: 9px; width: 42%; }
 .moon-live-preview-frame[data-sidebar="right"] { grid-template-areas: "tabs tabs" "toolbar side" "workspaces side" "page side"; grid-template-columns: 1fr var(--preview-sidebar); }.moon-live-preview-frame[data-sidebar="collapsed"] { --preview-sidebar: 10px; }
+.moon-live-preview-frame[data-tabs="left"] { grid-template-areas: "tabs side toolbar" "tabs side workspaces" "tabs side page"; grid-template-columns: 40px var(--preview-sidebar) 1fr; grid-template-rows: 22px 18px 1fr; }
+.moon-live-preview-frame[data-tabs="right"] { grid-template-areas: "side toolbar tabs" "side workspaces tabs" "side page tabs"; grid-template-columns: var(--preview-sidebar) 1fr 40px; grid-template-rows: 22px 18px 1fr; }
+.moon-live-preview-frame[data-tabs="left"] .moon-preview-tabs, .moon-live-preview-frame[data-tabs="right"] .moon-preview-tabs { align-items: stretch; flex-direction: column; padding: 8px 4px; }
+.moon-live-preview-frame[data-tabs="left"] .moon-preview-tabs span, .moon-live-preview-frame[data-tabs="right"] .moon-preview-tabs span { border-radius: 3px; height: 13px; width: 100%; }
 .moon-live-preview-frame[data-workspaces="hidden"] .moon-preview-workspaces, .moon-live-preview-frame[data-workspaces="home-only"] .moon-preview-workspaces { opacity: .2; }
 
 .moon-settings-overlay[data-presentation="page"] { inset: 0; position: absolute; z-index: 20; }
@@ -212,6 +243,13 @@ body { background: var(--moon-bg); color: var(--moon-text); font-family: var(--m
 }
 
 @media (max-width: 700px) {
+  [data-moon-tabs="left"] .moon-tabs-bar, [data-moon-tabs="right"] .moon-tabs-bar { align-items: end; border: 0; border-bottom: var(--moon-border-width) solid var(--moon-border); bottom: auto; flex-direction: row; gap: var(--moon-space-2); left: auto; padding: 0 var(--moon-space-3); position: static; right: auto; width: auto; }
+  [data-moon-tabs="left"] .moon-browser-main > :not(.moon-tabs-bar), [data-moon-tabs="right"] .moon-browser-main > :not(.moon-tabs-bar) { margin-left: 0; margin-right: 0; }
+  [data-moon-tabs="left"] .moon-tabs-list, [data-moon-tabs="right"] .moon-tabs-list { align-items: end; flex-direction: row; overflow: hidden; }
+  [data-moon-tabs="left"] .moon-tab, [data-moon-tabs="right"] .moon-tab { border-bottom: 0; border-radius: var(--moon-radius) var(--moon-radius) 0 0; max-width: 240px; min-width: 132px; width: auto; }
+  [data-moon-tabs="left"] .moon-tab.is-active::before, [data-moon-tabs="right"] .moon-tab.is-active::before { bottom: auto; height: 2px; left: 8px; right: 8px; top: -1px; width: auto; }
+  [data-moon-tabs="left"] .moon-window-mark, [data-moon-tabs="right"] .moon-window-mark { align-self: center; margin: 0 var(--moon-space-1); }
+  [data-moon-tabs="left"] .moon-add-tab, [data-moon-tabs="right"] .moon-add-tab { align-self: auto; }
   .moon-home-grid { grid-template-columns: minmax(0, 1fr); padding: max(var(--moon-space-4), min(var(--moon-home-padding), 5vw)); }
   .moon-home-widget { grid-column: 1; }
   .moon-customization-modal { grid-template-columns: 1fr; height: 100vh; width: 100vw; }

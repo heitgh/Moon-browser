@@ -32,7 +32,7 @@ export interface PermissionRequest { readonly id: string; readonly origin: strin
 export interface MoonThemeSummary { readonly id: string; readonly packageId: string; readonly name: string; readonly version: string; readonly author: string; readonly trust: "official" | "local"; readonly active: boolean; readonly installedAt: number; }
 export interface MoonThemePayload { readonly summary: MoonThemeSummary; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; }
 export interface MoonThemePreview extends MoonThemeSummary { readonly intentId: string; readonly description?: string; readonly changes: readonly string[]; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; }
-export type Drawer = "workspaces" | "bookmarks" | "downloads" | "history" | "translate" | "notes" | "extensions" | "ai" | "security";
+export type Drawer = "workspaces" | "bookmarks" | "downloads" | "history" | "translate" | "notes" | "focus" | "extensions" | "ai" | "security";
 export type { ProfileDataMutation, ProfileDataSnapshot } from "../../packages/ipc/profile-data-contract.js";
 import type { ProfileDataMutation, ProfileDataSnapshot } from "../../packages/ipc/profile-data-contract.js";
 import type { SitePermissionRecord } from "../../packages/ipc/site-permission-contract.js";

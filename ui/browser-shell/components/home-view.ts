@@ -24,20 +24,18 @@ export class HomeView {
   #config: CustomizationConfig | undefined;
   #data: HomeRuntimeData = { shortcuts: [], bookmarks: [], tabs: [], workspaces: [], downloads: [], notes: "", favicons: {} };
   #clockTimer: number | undefined;
-  #focusTimer: number | undefined;
-  #focusEndsAt = 0;
 
-  constructor(readonly onNavigate: (value: string) => void, readonly onOpenNew: (value: string) => void = onNavigate) { this.element.append(this.#wallpaper, this.#grid); }
+  constructor(readonly onNavigate: (value: string) => void, readonly onOpenNew: (value: string) => void = onNavigate, readonly onOpenFocus: () => void = () => undefined) { this.element.append(this.#wallpaper, this.#grid); }
 
   apply(config: CustomizationConfig): void { this.#config = config; this.#applyWallpaper(config.appearance.wallpaper); this.#render(); }
   updateData(data: HomeRuntimeData): void { this.#data = data; this.#render(); }
   focusSearch(): void { this.#grid.querySelector<HTMLInputElement>(".moon-home-search-input")?.focus(); }
   startClock(): void { this.#clockTimer = window.setInterval(() => this.#updateTimes(), 30_000); this.#updateTimes(); }
-  dispose(): void { if (this.#clockTimer !== undefined) window.clearInterval(this.#clockTimer); if (this.#focusTimer !== undefined) window.clearInterval(this.#focusTimer); }
+  dispose(): void { if (this.#clockTimer !== undefined) window.clearInterval(this.#clockTimer); }
 
   #render(): void {
     if (!this.#config) return;
-    const { home } = this.#config; this.element.dataset.cardStyle = home.cardStyle;
+    const { home } = this.#config; this.element.dataset.cardStyle = home.cardStyle; this.element.dataset.preset = home.preset;
     this.#grid.style.justifySelf = home.horizontalAlign; this.#grid.style.alignSelf = home.verticalAlign;
     const widgets = [...home.widgets].filter(widget => widget.visible).sort((a, b) => a.order - b.order);
     const fragment = document.createDocumentFragment();
@@ -68,7 +66,7 @@ export class HomeView {
 
   #search(): HTMLElement {
     const form = element("form", "moon-home-search"); const input = element("input", "moon-home-search-input"); input.type = "search"; input.placeholder = "Pesquisar ou digitar endereço"; input.setAttribute("aria-label", input.placeholder);
-    const submit = button("moon-home-search-button", "Pesquisar", "search"); form.append(icon("search"), input, element("kbd", "moon-shortcut", "Ctrl K"), submit); form.addEventListener("submit", event => { event.preventDefault(); const value = input.value.trim(); if (value) this.onNavigate(value); }); return form;
+    const submit = button("moon-home-search-button", "Pesquisar", "search"); submit.type = "submit"; form.append(icon("search"), input, element("kbd", "moon-shortcut", "Ctrl K"), submit); form.addEventListener("submit", event => { event.preventDefault(); const value = input.value.trim(); if (value) this.onNavigate(value); }); return form;
   }
 
   #shortcuts(): HTMLElement {
@@ -93,7 +91,7 @@ export class HomeView {
   }
 
   #focus(): HTMLElement {
-    const card = this.#card("", "Foco"); const time = element("strong", "moon-focus-time", this.#focusEndsAt ? remaining(this.#focusEndsAt) : "25:00"); const action = button("moon-primary-button", this.#focusEndsAt ? "Encerrar foco" : "Iniciar foco de 25 minutos", this.#focusEndsAt ? "stop" : "play"); action.append(element("span", "", this.#focusEndsAt ? "Encerrar" : "Iniciar 25 min")); action.addEventListener("click", () => { if (this.#focusEndsAt) { this.#focusEndsAt = 0; if (this.#focusTimer !== undefined) window.clearInterval(this.#focusTimer); this.#focusTimer = undefined; } else { this.#focusEndsAt = Date.now() + 25 * 60_000; this.#focusTimer = window.setInterval(() => { if (Date.now() >= this.#focusEndsAt) { this.#focusEndsAt = 0; if (this.#focusTimer !== undefined) window.clearInterval(this.#focusTimer); this.#focusTimer = undefined; } this.#render(); }, 1_000); } this.#render(); }); card.append(time, action); return card;
+    const card = this.#card("", "Foco"); card.append(element("p", "moon-widget-copy", "Sessões temporizadas, Pomodoro ou contínuas com Zen reversível.")); const action = button("moon-primary-button", "Configurar sessão de foco", "play"); action.append(element("span", "", "Abrir Foco")); action.addEventListener("click", this.onOpenFocus); card.append(action); return card;
   }
 
   #performance(): HTMLElement { const card = this.#card("", "Performance"); const list = element("div", "moon-widget-metrics"); const values = [["Abas", String(this.#data.tabs.length)], ["Núcleos lógicos", String(navigator.hardwareConcurrency || "—")], ["Downloads ativos", String(this.#data.downloads.filter(item => item.state === "in-progress").length)]]; values.forEach(([label, value]) => { const row = element("div", "moon-widget-metric"); row.append(element("span", "", label), element("strong", "", value)); list.append(row); }); card.append(list); return card; }
@@ -111,4 +109,3 @@ export class HomeView {
 
 function hostname(url: string): string { try { return new URL(url).hostname; } catch { return url; } }
 function origin(url: string): string { try { return new URL(url).origin; } catch { return url; } }
-function remaining(endsAt: number): string { const seconds = Math.max(0, Math.ceil((endsAt - Date.now()) / 1_000)); return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`; }

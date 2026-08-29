@@ -127,7 +127,11 @@ async function readChromiumBookmarks(path: string): Promise<readonly ImportedLin
 async function readStagedDatabase<T>(source: string, empty: T, read: (database: BetterSqliteConnection) => Promise<T>): Promise<T> {
   if (!await exists(source)) return empty;
   const staging = await mkdtemp(join(tmpdir(), "moon-import-")); const copy = join(staging, "source.sqlite3");
-  try { await copyFile(source, copy); const database = new BetterSqliteConnection(copy, { readonly: true, fileMustExist: true }); await database.connect(); try { return await read(database); } finally { await database.close(); } }
+  try {
+    await copyFile(source, copy);
+    for (const suffix of ["-wal", "-shm"] as const) if (await exists(`${source}${suffix}`)) await copyFile(`${source}${suffix}`, `${copy}${suffix}`);
+    const database = new BetterSqliteConnection(copy, { readonly: true, fileMustExist: true }); await database.connect(); try { return await read(database); } finally { await database.close(); }
+  }
   finally { await rm(staging, { recursive: true, force: true }); }
 }
 

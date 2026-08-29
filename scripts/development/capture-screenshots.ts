@@ -9,11 +9,22 @@ async function shellWindow(application: ElectronApplication): Promise<Page> {
   return application.windows().find(page => page.url().startsWith("file:") && page.url().endsWith("/index.html"))!;
 }
 
+async function finishFirstRun(page: Page): Promise<void> {
+  const onboarding = page.getByTestId("moon-onboarding");
+  if (await onboarding.waitFor({ state: "visible", timeout: 5_000 }).then(() => true).catch(() => false)) {
+    await page.getByLabel("Pular configuração inicial").click();
+    await expect(onboarding).toBeHidden();
+  }
+}
+
 async function resize(application: ElectronApplication, page: Page, width: number, height: number): Promise<void> {
   await application.evaluate(({ BrowserWindow }, size) => {
-    const window = BrowserWindow.getAllWindows()[0];
-    window?.unmaximize();
-    window?.setContentSize(size.width, size.height, false);
+    const windows = BrowserWindow.getAllWindows();
+    const window = BrowserWindow.getFocusedWindow() ?? windows.find(candidate => candidate.isVisible()) ?? windows[0];
+    if (!window) throw new Error("Moon window is unavailable");
+    window.unmaximize();
+    window.setContentSize(size.width, size.height, false);
+    return true;
   }, { width, height });
   await page.setViewportSize({ width, height });
 }
@@ -36,6 +47,11 @@ const application = await electron.launch({
 
 try {
   const window = await shellWindow(application);
+  await resize(application, window, 1280, 800);
+  await expect(window.getByTestId("moon-onboarding")).toHaveCount(1);
+  await expect(window.getByTestId("moon-onboarding")).toBeVisible();
+  await window.screenshot({ path: "assets/screenshots/final-update-onboarding.png" });
+  await finishFirstRun(window);
   await expect(window.getByLabel("Página inicial", { exact: true })).toBeVisible();
 
   for (const [width, height] of [[909, 1026], [1280, 800], [1440, 900], [1920, 1080]] as const) {
@@ -46,6 +62,15 @@ try {
 
   await resize(application, window, 1440, 900);
   await window.screenshot({ path: "assets/screenshots/page.png" });
+  await window.getByLabel("Central de comandos", { exact: true }).click();
+  await expect(window.getByLabel("Buscar na Central de comandos")).toBeVisible();
+  await window.screenshot({ path: "assets/screenshots/final-update-command-center.png" });
+  await window.keyboard.press("Escape");
+  await window.getByLabel("Foco e Zen", { exact: true }).click();
+  await expect(window.locator(".moon-focus-form")).toBeVisible();
+  await window.waitForTimeout(300);
+  await window.screenshot({ path: "assets/screenshots/final-update-focus.png" });
+  await window.getByLabel("Fechar painel").click();
   const omnibox = window.getByPlaceholder("Pesquise ou digite um endereço");
   await omnibox.fill("https://example.com/");
   await window.getByLabel("Abrir endereço").click();

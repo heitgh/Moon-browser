@@ -18,6 +18,12 @@ async function shellWindow(application: ElectronApplication): Promise<Page> {
   return application.windows().find(page => page.url().startsWith("file:") && page.url().endsWith("/index.html"))!;
 }
 
+async function dismissOnboarding(page: Page): Promise<void> {
+  const skip = page.getByLabel("Pular configuração inicial");
+  await skip.waitFor({ state: "visible", timeout: 5_000 });
+  await skip.click();
+}
+
 async function selectValue(page: Page, label: string, value: string): Promise<void> {
   await page.locator("label.moon-field", { hasText: label }).locator("select").first().evaluate((node, next) => {
     const select = node as HTMLSelectElement; select.value = next; select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -25,7 +31,12 @@ async function selectValue(page: Page, label: string, value: string): Promise<vo
 }
 
 async function setViewport(application: ElectronApplication, page: Page, width: number, height: number): Promise<void> {
-  await application.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0]?.setContentSize(size.width, size.height, false), { width, height });
+  await application.evaluate(({ BrowserWindow }, size) => {
+    const browserWindow = BrowserWindow.getAllWindows()[0];
+    if (!browserWindow) throw new Error("Moon window is unavailable");
+    browserWindow.setContentSize(size.width, size.height, false);
+    return true;
+  }, { width, height });
   await page.setViewportSize({ width, height });
 }
 
@@ -39,6 +50,8 @@ test("starts the packaged desktop shell and opens every primary panel", async ()
 
   try {
     const window = await shellWindow(application);
+    await expect(window.getByRole("heading", { name: "Faça o Moon parecer seu" })).toBeVisible();
+    await window.getByLabel("Pular configuração inicial").click();
     await expect(window.getByLabel("Página inicial", { exact: true })).toBeVisible();
     await expect(window.getByPlaceholder("Pesquise ou digite um endereço")).toBeVisible();
 
@@ -86,6 +99,7 @@ test("restores the real tab session after an application restart", async () => {
     let application = await launch();
     try {
       const window = await shellWindow(application);
+      await dismissOnboarding(window);
       await expect(window.locator(".moon-tab")).toHaveCount(1);
       await window.getByLabel("Nova aba (Ctrl+T)").click();
       await expect(window.locator(".moon-tab")).toHaveCount(2);
@@ -119,11 +133,12 @@ test("persists theme, sidebar and Home customization after restart", async () =>
     let application = await launch();
     try {
       const window = await shellWindow(application);
+      await dismissOnboarding(window);
       await window.getByLabel("Configurações", { exact: true }).click();
       await window.getByLabel("Aparência", { exact: true }).click();
       await selectValue(window, "Modo", "light");
       await window.getByLabel("Layout e densidade", { exact: true }).click();
-      await selectValue(window, "Posição", "right");
+      await selectValue(window, "Posição da sidebar", "right");
       await window.getByLabel("Home e widgets", { exact: true }).click();
       await window.locator('.moon-widget-setting[aria-label^="Relógio"] input[type="checkbox"]').evaluate(node => { const input = node as HTMLInputElement; input.checked = false; input.dispatchEvent(new Event("change", { bubbles: true })); });
       await window.getByLabel("Aplicar personalização").click();
@@ -149,7 +164,14 @@ test("exports and imports customization through the real desktop bridge", async 
   const application = await electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData } });
   try {
     const window = await shellWindow(application);
-    await application.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, exportPath);
+    await dismissOnboarding(window);
+    await application.evaluate(({ dialog }, path) => {
+      Object.defineProperty(dialog, "showSaveDialog", {
+        configurable: true,
+        value: () => Promise.resolve({ canceled: false, filePath: path })
+      });
+      return true;
+    }, exportPath);
     await window.getByLabel("Configurações", { exact: true }).click();
     await window.getByLabel("Aparência", { exact: true }).click();
     await selectValue(window, "Modo", "light");
@@ -160,7 +182,13 @@ test("exports and imports customization through the real desktop bridge", async 
     await window.getByLabel("Aparência", { exact: true }).click();
     await selectValue(window, "Modo", "dark");
     await expect.poll(() => window.evaluate(() => document.documentElement.dataset.moonTheme)).toBe("dark");
-    await application.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, exportPath);
+    await application.evaluate(({ dialog }, path) => {
+      Object.defineProperty(dialog, "showOpenDialog", {
+        configurable: true,
+        value: () => Promise.resolve({ canceled: false, filePaths: [path] })
+      });
+      return true;
+    }, exportPath);
     await window.getByLabel("Workspaces e dados", { exact: true }).click();
     window.once("dialog", dialog => void dialog.accept());
     await window.getByLabel("Importar personalização").click();
@@ -177,6 +205,7 @@ test("keeps the Phase A chrome readable, reachable and unclipped across target v
   const application = await electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData } });
   try {
     const window = await shellWindow(application);
+    await dismissOnboarding(window);
     for (const [width, height] of [[909, 1026], [1280, 720], [1366, 768], [1920, 1080]] as const) {
       await setViewport(application, window, width, height);
       await expect.poll(() => window.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }))).toEqual({ width, scroll: width });
@@ -210,6 +239,7 @@ test("opens a real isolated private window and never restores it", async () => {
     let application = await launch();
     try {
       const normalWindow = await shellWindow(application);
+      await dismissOnboarding(normalWindow);
       await normalWindow.evaluate(async () => {
         const bridge = (window as unknown as { moonBrowser: { mutateProfileData(value: unknown): Promise<void> } }).moonBrowser;
         await bridge.mutateProfileData({ type: "history:record", value: { id: "private-test-history", title: "Normal", url: "https://normal.test/", time: Date.now() } });

@@ -22,6 +22,7 @@ export class CustomizationApplier {
     this.root.dataset.moonSidebar = layout.sidebar.position;
     this.root.dataset.moonDrawer = layout.drawer.mode;
     this.root.dataset.moonToolbar = layout.toolbar.position;
+    this.root.dataset.moonTabs = layout.tabs.position;
     this.root.dataset.moonOmnibox = layout.omnibox.position;
     this.root.dataset.moonMotion = appearance.motion.enabled ? "on" : "off";
     this.root.dataset.moonGlass = appearance.glass.enabled ? "on" : "off";
@@ -41,7 +42,7 @@ export class CustomizationApplier {
       "--moon-success": colors.success, "--moon-warning": colors.warning, "--moon-danger": colors.danger,
       "--moon-sidebar-width": `${layout.sidebar.width}px`, "--moon-sidebar-icon": `${layout.sidebar.iconSize}px`, "--moon-sidebar-gap": `${layout.sidebar.spacing}px`,
       "--moon-sidebar-hide-delay": `${layout.sidebar.hideDelay}ms`,
-      "--moon-drawer-width": `${layout.drawer.width}px`, "--moon-toolbar-height": `${layout.toolbar.height}px`, "--moon-ui-scale": String(layout.uiScale),
+      "--moon-drawer-width": `${layout.drawer.width}px`, "--moon-tabs-width": `${layout.tabs.width}px`, "--moon-toolbar-height": `${layout.toolbar.height}px`, "--moon-ui-scale": String(layout.uiScale),
       "--moon-sidebar-opacity": String(appearance.opacity.sidebar), "--moon-toolbar-opacity": String(appearance.opacity.toolbar), "--moon-card-opacity": String(appearance.opacity.cards),
       "--moon-drawer-opacity": String(appearance.opacity.drawers), "--moon-menu-opacity": String(appearance.opacity.menus), "--moon-modal-opacity": String(appearance.opacity.modals),
       "--moon-radius": `${appearance.shape.radius}px`, "--moon-border-width": `${appearance.shape.borderWidth}px`, "--moon-shadow-strength": String(appearance.shape.shadow),

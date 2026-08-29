@@ -53,10 +53,27 @@ Controles atuais:
 
 Risco residual: falta política por site para exceções do bloqueador e diagnóstico de quebra.
 
-## Importador e Moon Intelligence
+## Importador
 
-Essas superfícies permanecem desativadas. Antes de ativar:
+O importador está ativo somente em janelas normais e somente para favoritos e histórico escolhidos pelo usuário.
 
-- importador exige staging, transação, deduplicação, rollback, proteção contra symlink/path traversal e nenhuma cópia de cookies/tokens;
+Controles atuais:
+
+- descoberta limitada a raízes conhecidas de Chrome/Chromium, Brave, Vivaldi, Edge e Firefox; o renderer recebe um ID opaco, nunca um caminho;
+- leitura não destrutiva: JSON é somente lido e bancos são copiados para staging temporário, incluindo `-wal`/`-shm`, e abertos em modo read-only;
+- staging é removido em `finally`; URLs aceitas são HTTP(S), sem credenciais, e quantidade/tamanho possuem limites;
+- persistência de todas as categorias selecionadas ocorre em uma única transação SQLite; falha reverte o lote;
+- deduplicação considera o perfil existente e repetições dentro do próprio payload; um relatório local registra importados e ignorados;
+- bookmarks HTML é fallback explícito, com seletor nativo, limite de 20 MB e parser sem execução de markup;
+- cookies, tokens, sessões autenticadas, senhas, carteiras, chaves, extensões e arquivos internos nunca entram nesse fluxo;
+- IPC impede importação no privado e não aceita caminhos controlados pelo renderer.
+
+Risco residual: abas abertas, buscadores, configurações compatíveis e senhas por exportação suportada ainda não são oferecidos; a UI declara o escopo reduzido em vez de simular suporte.
+
+## Moon Intelligence
+
+Moon Intelligence permanece desativada, ausente da navegação e bloqueada pelo gate de release mesmo diante de override. Antes de remover o gate:
+
 - IA exige BYOK seguro no main/keychain, consentimento por site, policy firewall, proveniência, budgets, exclusão/exportação e zero memória privada;
-- conteúdo de página deve permanecer rotulado como dado não confiável e nunca virar instrução de sistema.
+- conteúdo de página deve permanecer rotulado como dado não confiável e nunca virar instrução de sistema;
+- providers, memória, citações, esquecimento e confirmação de ações externas precisam funcionar e possuir testes negativos de ponta a ponta.

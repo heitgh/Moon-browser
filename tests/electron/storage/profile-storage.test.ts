@@ -85,4 +85,23 @@ describe("ProfileStorage", () => {
     expect(await storage.loadSitePermissions()).toEqual(records);
     await storage.close();
   });
+
+  it("imports profile data atomically and deduplicates existing and repeated URLs", async () => {
+    const { storage } = await profile();
+    await storage.applyProfileMutation({ type: "bookmark:save", value: { id: "existing", title: "Existing", url: "https://existing.test/", time: 1 } });
+    const result = await storage.importExternalProfile("source-12345678", {
+      bookmarks: [
+        { id: "duplicate-existing", title: "Existing twice", url: "https://existing.test/", time: 2 },
+        { id: "new-one", title: "New", url: "https://new.test/", time: 3 },
+        { id: "new-two", title: "New twice", url: "https://new.test/", time: 4 }
+      ],
+      history: [
+        { id: "history-one", title: "History", url: "https://history.test/", time: 5 },
+        { id: "history-two", title: "History twice", url: "https://history.test/", time: 6 }
+      ]
+    });
+    expect(result).toEqual({ sourceId: "source-12345678", imported: { bookmarks: 1, history: 1 }, skipped: { bookmarks: 2, history: 1 } });
+    const snapshot = await storage.loadProfileData(); expect(snapshot.bookmarks.filter(item => item.url === "https://new.test/")).toHaveLength(1); expect(snapshot.history.filter(item => item.url === "https://history.test/")).toHaveLength(1);
+    await storage.close();
+  });
 });

@@ -179,9 +179,9 @@ export class ProfileStorage {
 
   async importExternalProfile(sourceId: string, data: ImportedProfileData): Promise<ImportResult> {
     const existingBookmarks = new Set((await this.#bookmarks.list()).map(item => item.url));
-    const existingHistory = new Set((await this.#history.recent(50_000)).map(item => item.url));
-    const bookmarks = data.bookmarks.filter(item => !existingBookmarks.has(item.url));
-    const history = data.history.filter(item => !existingHistory.has(item.url));
+    const existingHistory = new Set((await this.#history.all()).map(item => item.url));
+    const bookmarks = data.bookmarks.filter(item => { if (existingBookmarks.has(item.url)) return false; existingBookmarks.add(item.url); return true; });
+    const history = data.history.filter(item => { if (existingHistory.has(item.url)) return false; existingHistory.add(item.url); return true; });
     await this.#database.transaction(async () => {
       for (const item of bookmarks) await this.#bookmarks.save({ id: item.id, title: item.title, url: item.url, tags: ["imported"], createdAt: item.time, updatedAt: Date.now() });
       for (const item of history) await this.#history.save({ id: item.id, title: item.title, url: item.url, transition: "link", visitCount: 1, typedCount: 0, firstVisitedAt: item.time, lastVisitedAt: item.time });

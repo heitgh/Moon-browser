@@ -37,11 +37,18 @@ import { CustomizationStore } from "./customization/customization-store.js";
 import { CustomizationApplier } from "./customization/customization-applier.js";
 import { CustomizationCenter } from "./customization/customization-center.js";
 import type { CustomizationConfig } from "./customization/customization-schema.js";
-import type { SettingsSection } from "./customization/settings-catalog.js";
+import { SETTINGS_CATALOG, type SettingsSection } from "./customization/settings-catalog.js";
 import { isMoonSettingsUrl, normalizeMoonInternalUrl } from "../packages/navigation/internal-routes.js";
 import { FaviconCache } from "./browser-shell/favicon-cache.js";
 import { PermissionPromptController } from "./browser-shell/controllers/permission-prompt-controller.js";
-import { DEFAULT_FEATURE_FLAGS } from "../config/feature-flags.js";
+import { DEFAULT_FEATURE_FLAGS, featureEnabled } from "../config/feature-flags.js";
+import { OnboardingFlow, shouldShowOnboarding } from "./onboarding/onboarding-flow.js";
+import { FocusSessionController } from "./focus/focus-session-controller.js";
+import { FocusPanel } from "./focus/focus-panel.js";
+import { CommandCenter, type CommandCenterItem } from "./command-center/command-center.js";
+
+const AI_ENABLED = featureEnabled(DEFAULT_FEATURE_FLAGS, "ai");
+const MODULES_ENABLED = featureEnabled(DEFAULT_FEATURE_FLAGS, "extensions") || featureEnabled(DEFAULT_FEATURE_FLAGS, "plugins");
 
 class BrowserShell {
   readonly #bridge = moonBrowserBridge();
@@ -70,9 +77,10 @@ class BrowserShell {
     onOpenModules: () => this.#toggleDrawer("extensions"),
     onOpenProfile: () => this.#toggleDrawer("workspaces"),
     onOpenMenu: () => { void this.#openSettings(); }
-  }, { ai: DEFAULT_FEATURE_FLAGS.ai, modules: DEFAULT_FEATURE_FLAGS.extensions || DEFAULT_FEATURE_FLAGS.plugins });
+  }, { ai: AI_ENABLED, modules: MODULES_ENABLED });
   readonly #omnibox = this.#toolbar.omnibox;
-  readonly #homeView = new HomeView(value => { void this.#navigate(value); }, value => { void this.#createTab(value); });
+  readonly #homeView = new HomeView(value => { void this.#navigate(value); }, value => { void this.#createTab(value); }, () => this.#toggleDrawer("focus"));
+  readonly #focusPanel = new FocusPanel({ controller: () => this.#focus, workspaces: () => this.#workspaces, privateWindow: () => this.#windowPrivate, pendingNavigation: () => this.#pendingFocusNavigation, onProceedNavigation: url => { void this.#navigate(url, true); }, onDismissNavigation: () => { this.#pendingFocusNavigation = undefined; }, onEnd: () => this.#closeDrawer() });
   readonly #home = this.#homeView.element;
   readonly #viewport = el("div", "moon-browser-viewport");
   readonly #stage = el("div", "moon-stage");
@@ -91,6 +99,7 @@ class BrowserShell {
   readonly #securityText = this.#toolbar.securityText;
   readonly #status = el("div", "moon-status");
   readonly #privateBadge = el("div", "moon-private-badge", "ANÔNIMO");
+  readonly #zenExit = btn("moon-zen-exit", "Sair do modo Foco (Ctrl+Shift+Z)", "close");
   readonly #rail = new Map<string, HTMLButtonElement>();
   #workspaces = load<Workspace[]>(KEYS.workspaces, [...WORKSPACES]);
   #bookmarks = load<SavedLink[]>(KEYS.bookmarks, []);
@@ -110,6 +119,11 @@ class BrowserShell {
   #settingsReturnHome = true;
   #settingsClosing = false;
   #settingsOpening = false;
+  #onboarding: OnboardingFlow | undefined;
+  #focus: FocusSessionController | undefined;
+  #pendingFocusNavigation: string | undefined;
+  #commandCenter: CommandCenter | undefined;
+  #commandReturnFocus: HTMLElement | undefined;
   readonly #permissionController: PermissionPromptController | undefined;
   #notesSaveTimer: number | undefined;
   #resizeObserver: ResizeObserver | undefined;
@@ -129,6 +143,8 @@ class BrowserShell {
     this.#bridge.onPermissionRequested(request => this.#permissionController?.enqueue(request));
     try {
       const context = await this.#bridge.getWindowContext(); this.#windowPrivate = context.private; this.#renderPrivateIdentity(); this.#sitePermissions = await this.#bridge.listSitePermissions();
+      this.#focus = new FocusSessionController(document.documentElement, context.private ? undefined : localStorage, message => this.#flash(message));
+      this.#focus.subscribe(() => this.#renderFocusIndicator());
       await this.#migrateLegacyProfile();
       await this.#reloadProfileData();
       this.#downloads = await this.#bridge.getDownloads();
@@ -142,6 +158,7 @@ class BrowserShell {
       const active = tabs.find(tab => tab.active);
       this.#activeTabId = active?.id; this.#workspaceId = active?.workspaceId ?? this.#workspaceId;
       if (tabs.length === 0) await this.#createTab(); else this.#render();
+      if (!this.#windowPrivate && shouldShowOnboarding()) await this.#openOnboarding();
     } catch (error) { this.#showError(error); }
   }
 
@@ -150,13 +167,13 @@ class BrowserShell {
     const rail = el("aside", "moon-rail");
     const brand = btn("moon-brand", "Moon Browser", "moon"); brand.addEventListener("click", () => void this.#showHome()); rail.append(brand);
     const controls: readonly [string, string, IconName, () => void][] = [
-      ["home", "Página inicial", "home", () => void this.#showHome()], ["workspaces", "Workspaces", "grid", () => this.#toggleDrawer("workspaces")],
+      ["home", "Página inicial", "home", () => void this.#showHome()], ["commands", "Central de comandos", "search", () => { void this.#openCommandCenter(); }], ["workspaces", "Workspaces", "grid", () => this.#toggleDrawer("workspaces")],
       ["bookmarks", "Favoritos", "star", () => this.#toggleDrawer("bookmarks")], ["downloads", "Downloads", "download", () => this.#toggleDrawer("downloads")],
       ["history", "Histórico", "history", () => this.#toggleDrawer("history")], ["translate", "Traduzir página", "translate", () => this.#toggleDrawer("translate")],
-      ["notes", "Bloco de notas", "note", () => this.#toggleDrawer("notes")], ["extensions", "Extensões", "plugin", () => this.#toggleDrawer("extensions")],
+      ["notes", "Bloco de notas", "note", () => this.#toggleDrawer("notes")], ["focus", "Foco e Zen", "play", () => this.#toggleDrawer("focus")], ["extensions", "Extensões", "plugin", () => this.#toggleDrawer("extensions")],
       ["ai", "Moon AI", "sparkles", () => this.#toggleDrawer("ai")]
     ];
-    controls.filter(([id]) => (id !== "ai" || DEFAULT_FEATURE_FLAGS.ai) && (id !== "extensions" || DEFAULT_FEATURE_FLAGS.extensions || DEFAULT_FEATURE_FLAGS.plugins)).forEach(([id, label, name, action]) => { const control = btn("moon-rail-button", label, name); control.append(el("span", "moon-rail-label", label)); control.addEventListener("click", action); this.#rail.set(id, control); rail.append(control); });
+    controls.filter(([id]) => (id !== "ai" || AI_ENABLED) && (id !== "extensions" || MODULES_ENABLED)).forEach(([id, label, name, action]) => { const control = btn("moon-rail-button", label, name); control.append(el("span", "moon-rail-label", label)); control.addEventListener("click", action); this.#rail.set(id, control); rail.append(control); });
     rail.append(el("div", "moon-rail-spacer"));
     const settings = btn("moon-rail-button", "Configurações", "settings"); settings.append(el("span", "moon-rail-label", "Configurações")); settings.addEventListener("click", () => void this.#openSettings()); this.#rail.set("settings", settings); rail.append(settings);
 
@@ -168,7 +185,8 @@ class BrowserShell {
     const addTab = btn("moon-add-tab", "Nova aba (Ctrl+T)", "plus"); addTab.addEventListener("click", () => void this.#createTab()); this.#privateBadge.hidden = true; this.#privateBadge.title = "O modo anônimo não oculta o tráfego do seu provedor, empresa, escola ou dos sites acessados."; tabsBar.append(mark, this.#tabStrip.element, this.#privateBadge, addTab);
 
     const content = el("div", "moon-content"); this.#renderHomeShortcuts(); this.#stage.append(this.#home, this.#viewport, this.#status); content.append(this.#stage);
-    main.append(tabsBar, this.#toolbar.element, this.#workspaceBar.element, content); shell.append(rail, this.#drawer, main); this.container.replaceChildren(shell);
+    this.#zenExit.append(el("span", "", "Sair do Foco")); this.#zenExit.hidden = true; this.#zenExit.addEventListener("click", () => this.#focus?.end());
+    main.append(tabsBar, this.#toolbar.element, this.#workspaceBar.element, content); shell.append(rail, this.#drawer, main); this.container.replaceChildren(shell, this.#zenExit);
     this.#renderAdblock();
   }
 
@@ -177,7 +195,7 @@ class BrowserShell {
   async #close(tabId: string): Promise<void> { if (!this.#bridge) return; try { await this.#bridge.closeTab(tabId); } catch (error) { this.#showError(error); } }
   async #handleClosed(tabId: string): Promise<void> { this.#tabs.delete(tabId); this.#navigation.delete(tabId); this.#favicons.delete(tabId); this.#pendingFavicons.delete(tabId); const tabs = this.#workspaceTabs(); const active = tabs.find(tab => tab.active) ?? tabs.at(-1); this.#activeTabId = active?.id; if (!active) await this.#createTab(); else await this.#activate(active.id); this.#renderDrawer(); }
   async #showHome(): Promise<void> { this.#closeDrawer(); if (!this.#bridge) return; if (this.#settingsCenter?.presentation === "page") await this.#dismissSettings(false); if (!this.#activeTabId) return this.#createTab(); try { await this.#bridge.showHome(this.#activeTabId); } catch (error) { this.#showError(error); } }
-  async #navigate(value: string): Promise<void> { if (!this.#bridge || !value.trim()) return; const url = this.#resolveInput(value); if (url === "moon://newtab") return this.#showHome(); this.#closeDrawer(); if (this.#settingsCenter?.presentation === "page") await this.#dismissSettings(false); if (!this.#activeTabId) return this.#createTab(url); this.#status.textContent = ""; try { const internal = normalizeMoonInternalUrl(url); if (internal) await this.#bridge.showInternalPage(this.#activeTabId, internal); else await this.#bridge.navigate(this.#activeTabId, url); } catch (error) { this.#showError(error); } }
+  async #navigate(value: string, bypassFocus = false): Promise<void> { if (!this.#bridge || !value.trim()) return; const url = this.#resolveInput(value); if (url === "moon://newtab") return this.#showHome(); if (!bypassFocus && this.#focus && !this.#focus.isAllowed(url, this.#workspaceId)) { this.#focus.interrupt(); this.#pendingFocusNavigation = url; this.#toggleDrawer("focus"); return; } this.#pendingFocusNavigation = undefined; this.#closeDrawer(); if (this.#settingsCenter?.presentation === "page") await this.#dismissSettings(false); if (!this.#activeTabId) return this.#createTab(url); this.#status.textContent = ""; try { const internal = normalizeMoonInternalUrl(url); if (internal) await this.#bridge.showInternalPage(this.#activeTabId, internal); else await this.#bridge.navigate(this.#activeTabId, url); } catch (error) { this.#showError(error); } }
   #resolveInput(value: string): string {
     const trimmed = value.trim(); const internal = normalizeMoonInternalUrl(trimmed); if (internal) return internal; const generic = resolveNavigationInput(trimmed); if (!generic.includes("duckduckgo.com/?q=")) return generic;
     const search = this.#customization.config.search; const keywordMatch = /^(?<keyword>[a-z0-9-]+):\s*(?<query>.+)$/i.exec(trimmed);
@@ -231,14 +249,14 @@ class BrowserShell {
   #toggleDrawer(name: Drawer): void { if (this.#openDrawer === name) return this.#closeDrawer(); this.#openDrawer = name; this.#drawer.classList.add("is-open"); this.#renderDrawer(); requestAnimationFrame(() => this.#syncBounds()); }
   #closeDrawer(): void { this.#openDrawer = undefined; this.#drawer.classList.remove("is-open"); this.#rail.forEach(item => item.classList.remove("is-active")); this.#render(); requestAnimationFrame(() => this.#syncBounds()); }
   #renderDrawer(): void {
-    if (!this.#openDrawer) return; const titles: Readonly<Record<Drawer, string>> = { workspaces: "Workspaces", bookmarks: "Favoritos", downloads: "Downloads", history: "Histórico", translate: "Tradutor", notes: "Bloco de notas", extensions: "Extensões", ai: "Moon AI", security: "Proteção" };
+    if (!this.#openDrawer) return; const titles: Readonly<Record<Drawer, string>> = { workspaces: "Workspaces", bookmarks: "Favoritos", downloads: "Downloads", history: "Histórico", translate: "Tradutor", notes: "Bloco de notas", focus: "Foco e Zen", extensions: "Extensões", ai: "Moon AI", security: "Proteção" };
     this.#drawerTitle.textContent = titles[this.#openDrawer]; this.#drawerBody.replaceChildren(); this.#rail.forEach(item => item.classList.remove("is-active")); this.#rail.get(this.#openDrawer)?.classList.add("is-active");
-    if (this.#openDrawer === "workspaces") this.#workspaceDrawer(); if (this.#openDrawer === "bookmarks") this.#bookmarksDrawer(); if (this.#openDrawer === "downloads") this.#downloadsDrawer(); if (this.#openDrawer === "history") this.#historyDrawer(); if (this.#openDrawer === "translate") this.#translateDrawer(); if (this.#openDrawer === "notes") this.#notesDrawer(); if (this.#openDrawer === "extensions") this.#extensionsDrawer(); if (this.#openDrawer === "ai") this.#aiDrawer(); if (this.#openDrawer === "security") this.#securityDrawer();
+    if (this.#openDrawer === "workspaces") this.#workspaceDrawer(); if (this.#openDrawer === "bookmarks") this.#bookmarksDrawer(); if (this.#openDrawer === "downloads") this.#downloadsDrawer(); if (this.#openDrawer === "history") this.#historyDrawer(); if (this.#openDrawer === "translate") this.#translateDrawer(); if (this.#openDrawer === "notes") this.#notesDrawer(); if (this.#openDrawer === "focus") this.#focusPanel.render(this.#drawerBody); if (this.#openDrawer === "extensions") this.#extensionsDrawer(); if (this.#openDrawer === "ai") this.#aiDrawer(); if (this.#openDrawer === "security") this.#securityDrawer();
   }
   #workspaceDrawer(): void {
     this.#drawerBody.append(el("p", "moon-drawer-description", "Separe abas e sessões por contexto.")); const list = el("div", "moon-panel-list");
     this.#workspaces.forEach(workspace => { const count = [...this.#tabs.values()].filter(tab => (tab.workspaceId ?? "research") === workspace.id).length; const wrapper = el("div", "moon-workspace-manage-row"); const row = btn(`moon-workspace-row${workspace.id === this.#workspaceId ? " is-active" : ""}`, `Abrir ${workspace.name}`); const copy = el("span", "moon-list-copy"); copy.append(el("strong", "", workspace.name), el("small", "", `${count} ${count === 1 ? "aba" : "abas"}`)); row.append(el("span", "moon-workspace-mark", workspace.name[0]?.toUpperCase()), copy, svg("chevron")); row.addEventListener("click", () => void this.#switchWorkspace(workspace.id)); wrapper.append(row); if (this.#workspaces.length > 1 && count === 0) { const remove = btn("moon-icon-button", `Excluir ${workspace.name}`, "trash"); remove.addEventListener("click", () => { void this.#removeWorkspace(workspace.id); }); wrapper.append(remove); } list.append(wrapper); });
-    const create = el("form", "moon-custom-form"); const name = el("input", "moon-settings-input"); name.placeholder = "Nome do workspace"; const add = btn("moon-primary-button", "Criar novo workspace", "plus"); add.append(el("span", "", "Criar")); create.append(name, add); create.addEventListener("submit", event => { event.preventDefault(); const value = name.value.trim(); if (value) void this.#createWorkspace(value); }); this.#drawerBody.append(list, create);
+    const create = el("form", "moon-custom-form"); const name = el("input", "moon-settings-input"); name.placeholder = "Nome do workspace"; const add = btn("moon-primary-button", "Criar novo workspace", "plus"); add.type = "submit"; add.append(el("span", "", "Criar")); create.append(name, add); create.addEventListener("submit", event => { event.preventDefault(); const value = name.value.trim(); if (value) void this.#createWorkspace(value); }); this.#drawerBody.append(list, create);
   }
   #bookmarksDrawer(): void {
     const summary = el("div", "moon-panel-summary"); summary.append(el("span", "", `${this.#bookmarks.length} salvos`)); const current = btn("moon-text-button", "Favoritar página atual", "star"); current.append(el("span", "", "Página atual")); current.addEventListener("click", () => { void this.#toggleBookmark(); }); summary.append(current); this.#drawerBody.append(summary);
@@ -295,6 +313,7 @@ class BrowserShell {
     textarea.addEventListener("input", () => { this.#notes = textarea.value; this.#refreshHomeData(); status.textContent = "Salvando…"; if (this.#notesSaveTimer !== undefined) window.clearTimeout(this.#notesSaveTimer); this.#notesSaveTimer = window.setTimeout(() => { void this.#saveNotes(status); }, 250); });
     this.#drawerBody.append(title, textarea, status);
   }
+  #renderFocusIndicator(): void { const state = this.#focus?.state; this.#zenExit.hidden = !state; const countdown = this.#zenExit.querySelector("span"); if (countdown) countdown.textContent = this.#focusPanel.indicatorText(); this.#focusPanel.updateLive(); }
   #extensionsDrawer(): void {
     const title = el("div", "moon-tool-hero"); title.append(svg("plugin"), el("strong", "", "Extensões"));
     const card = el("div", "moon-info-card"); card.append(svg("shield"), el("p", "", "O runtime de extensões existe no Core, mas nenhuma extensão foi instalada neste perfil. O Moon não exibirá extensões fictícias como se estivessem ativas."));
@@ -304,7 +323,7 @@ class BrowserShell {
   #linkRow(item: SavedLink, remove?: () => void, meta?: string): HTMLElement { const row = el("div", "moon-link-row"); const open = btn("moon-link-main", `Abrir ${item.title}`); const copy = el("span", "moon-list-copy"); copy.append(el("strong", "", item.title), el("small", "", meta ?? this.#hostname(item.url))); const mark = el("span", "moon-site-mark", item.title[0]?.toUpperCase()); const favicon = this.#faviconForUrl(item.url); if (favicon) { const image = document.createElement("img"); image.src = favicon; image.alt = ""; image.draggable = false; mark.replaceChildren(image); } open.append(mark, copy); open.addEventListener("click", () => void this.#navigate(item.url)); row.append(open); if (remove) { const removeButton = btn("moon-icon-button", `Remover ${item.title}`, "close"); removeButton.addEventListener("click", remove); row.append(removeButton); } return row; }
   #aiDrawer(): void {
     const hero = el("div", "moon-ai-hero"); hero.append(svg("sparkles"), el("strong", "", "Moon AI"), el("span", "moon-preview-badge", "PREVIEW"));
-    const form = el("form", "moon-ai-form"); const input = el("textarea", "moon-ai-input"); input.placeholder = "O que você quer descobrir?"; input.rows = 5; const search = btn("moon-primary-button", "Pesquisar pergunta", "search"); search.append(el("span", "", "Pesquisar na web")); form.append(input, search); form.addEventListener("submit", event => { event.preventDefault(); void this.#navigate(input.value); });
+    const form = el("form", "moon-ai-form"); const input = el("textarea", "moon-ai-input"); input.placeholder = "O que você quer descobrir?"; input.rows = 5; const search = btn("moon-primary-button", "Pesquisar pergunta", "search"); search.type = "submit"; search.append(el("span", "", "Pesquisar na web")); form.append(input, search); form.addEventListener("submit", event => { event.preventDefault(); void this.#navigate(input.value); });
     const info = el("div", "moon-info-card"); info.append(svg("sparkles"), el("p", "", "A conexão com um provedor de IA será feita no processo seguro, sem expor chaves na interface.")); this.#drawerBody.append(hero, el("p", "moon-drawer-description", "Nesta versão local, o Moon encaminha a pergunta ao motor de busca escolhido — sem fingir que já existe uma IA conectada."), form, info);
   }
   #securityDrawer(): void {
@@ -358,6 +377,9 @@ class BrowserShell {
       shortcuts: () => this.#shortcuts,
       onAddShortcut: shortcut => { this.#shortcuts = [...this.#shortcuts, { ...shortcut, id: crypto.randomUUID() }]; save(KEYS.shortcuts, this.#shortcuts); this.#refreshHomeData(); },
       onRemoveShortcut: id => { this.#shortcuts = this.#shortcuts.filter(shortcut => shortcut.id !== id); save(KEYS.shortcuts, this.#shortcuts); this.#refreshHomeData(); },
+      onDiscoverImportSources: () => this.#bridge?.discoverImportSources() ?? Promise.resolve([]),
+      onImportBrowserProfile: async (sourceId, categories) => { if (!this.#bridge) throw new Error("Importação exige o aplicativo desktop."); const result = await this.#bridge.importBrowserProfile({ sourceId, categories }); await this.#reloadProfileData(); return result; },
+      onImportBookmarksHtml: async () => { if (!this.#bridge) throw new Error("Importação exige o aplicativo desktop."); const result = await this.#bridge.importBookmarksHtml(); if (result) await this.#reloadProfileData(); return result; },
       onOpenPage: section => this.#showSettingsPage(section),
       onNavigateSection: (section, mode) => { if (center.presentation === "page") return this.#navigateSettingsSection(section, mode); },
       onClose: async applied => {
@@ -378,6 +400,44 @@ class BrowserShell {
     (presentation === "page" ? this.#stage : this.container).append(center.element);
     this.#rail.get("settings")?.classList.add("is-active");
     this.#settingsOpening = false;
+  }
+
+  async #openOnboarding(): Promise<void> {
+    if (!this.#bridge || this.#onboarding) return;
+    await this.#bridge.setContentVisible(false);
+    const flow = new OnboardingFlow({
+      store: this.#customization,
+      onDiscoverImportSources: () => this.#bridge!.discoverImportSources(),
+      onImportBrowserProfile: async (sourceId, categories) => { const result = await this.#bridge!.importBrowserProfile({ sourceId, categories }); await this.#reloadProfileData(); return result; },
+      onImportBookmarksHtml: async () => { const result = await this.#bridge!.importBookmarksHtml(); if (result) await this.#reloadProfileData(); return result; },
+      onClose: async completed => { this.#onboarding = undefined; await this.#bridge!.setContentVisible(true); if (completed) { await this.#showHome(); requestAnimationFrame(() => this.#omnibox.focus()); } requestAnimationFrame(() => this.#syncBounds()); }
+    });
+    this.#onboarding = flow;
+    this.container.append(flow.element);
+  }
+
+  async #openCommandCenter(): Promise<void> {
+    if (this.#commandCenter || this.#onboarding) return;
+    this.#closeDrawer(); this.#commandReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+    if (this.#bridge) await this.#bridge.setContentVisible(false);
+    const center = new CommandCenter({ items: () => this.#commandItems(), onClose: () => { this.#commandCenter = undefined; requestAnimationFrame(() => { this.#syncBounds(); if (this.#bridge && !this.#settingsCenter && !this.#permissionController?.active) void this.#bridge.setContentVisible(this.#activeWebSurface()); }); this.#commandReturnFocus?.focus(); this.#commandReturnFocus = undefined; } });
+    this.#commandCenter = center; this.container.append(center.element);
+  }
+
+  #commandItems(): readonly CommandCenterItem[] {
+    const commands: readonly CommandCenterItem[] = [
+      { id: "command:new-tab", kind: "command", title: "Nova aba", subtitle: "Ctrl+T", keywords: ["criar", "guia"], icon: "plus", action: () => this.#createTab() },
+      { id: "command:private", kind: "command", title: "Nova janela anônima", subtitle: "Ctrl+Shift+N", keywords: ["privada", "incognito"], icon: "shield", action: () => this.#bridge?.createPrivateWindow() },
+      { id: "command:home", kind: "command", title: "Abrir página inicial", keywords: ["home", "nova aba"], icon: "home", action: () => this.#showHome() },
+      { id: "command:settings", kind: "command", title: "Abrir configurações", subtitle: "Ctrl+,", keywords: ["preferências", "personalizar"], icon: "settings", action: () => this.#openSettings() },
+      { id: "command:focus", kind: "command", title: this.#focus?.active ? "Encerrar Foco" : "Configurar Foco e Zen", subtitle: "Ctrl+Shift+Z", keywords: ["pomodoro", "concentração"], icon: this.#focus?.active ? "stop" : "play", action: () => { if (this.#focus?.active) this.#focus.end(); else this.#toggleDrawer("focus"); } }
+    ];
+    const tabs = [...this.#tabs.values()].map(tab => ({ id: `tab:${tab.id}`, kind: "tab" as const, title: tab.title || this.#hostname(tab.url), subtitle: tab.url, keywords: ["aba", "guia"], icon: "globe" as const, action: () => this.#activate(tab.id) }));
+    const workspaces = this.#workspaces.map(workspace => ({ id: `workspace:${workspace.id}`, kind: "workspace" as const, title: workspace.name, subtitle: `${[...this.#tabs.values()].filter(tab => (tab.workspaceId ?? "research") === workspace.id).length} abas`, keywords: ["espaço", "contexto"], icon: "grid" as const, action: () => this.#switchWorkspace(workspace.id) }));
+    const bookmarks = this.#bookmarks.map(item => ({ id: `bookmark:${item.id}`, kind: "bookmark" as const, title: item.title || this.#hostname(item.url), subtitle: item.url, icon: "star" as const, action: () => this.#navigate(item.url) }));
+    const history = this.#history.slice(0, 100).map(item => ({ id: `history:${item.id}`, kind: "history" as const, title: item.title || this.#hostname(item.url), subtitle: item.url, icon: "history" as const, action: () => this.#navigate(item.url) }));
+    const settings = SETTINGS_CATALOG.map(item => ({ id: `setting:${item.id}`, kind: "setting" as const, title: item.title, subtitle: item.description, keywords: item.keywords, icon: "settings" as const, action: () => { this.#customization.setExperience("advanced", item.section); return this.#openSettings("modal", item.section); } }));
+    return [...commands, ...tabs, ...workspaces, ...bookmarks, ...history, ...settings];
   }
 
   async #showSettingsPage(section: SettingsSection): Promise<void> {
@@ -533,11 +593,16 @@ class BrowserShell {
   #startClock(): void { this.#homeView.startClock(); }
   #observe(): void { this.#resizeObserver = new ResizeObserver(() => this.#syncBounds()); this.#resizeObserver.observe(this.#viewport); window.addEventListener("resize", () => this.#syncBounds()); }
   #syncBounds(): void { if (!this.#bridge) return; const rect = this.#viewport.getBoundingClientRect(); if (rect.width < 1 || rect.height < 1) return; void this.#bridge.setBounds({ x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) }).catch(error => this.#showError(error)); }
+  #activeWebSurface(): boolean { const active = this.#activeTabId ? this.#tabs.get(this.#activeTabId) : undefined; return Boolean(active && this.#isWeb(active.url)); }
   #bindShortcuts(): void {
     window.addEventListener("keydown", event => {
+      if (event.defaultPrevented || this.#onboarding) return;
       const mod = event.ctrlKey || event.metaKey; const key = event.key.toLowerCase();
-      if (event.key === "Escape") { if (this.#settingsCenter) void this.#settingsCenter.cancel(); else this.#closeDrawer(); }
+      if (event.key === "Escape") { if (this.#settingsCenter) void this.#settingsCenter.cancel(); else if (this.#focus?.active) this.#focus.end(); else this.#closeDrawer(); }
       else if (mod && event.key === ",") { event.preventDefault(); void this.#openSettings(); }
+      else if (mod && event.shiftKey && key === "z") { event.preventDefault(); if (this.#focus?.active) this.#focus.end(); else this.#toggleDrawer("focus"); }
+      else if (mod && event.shiftKey && key === "p") { event.preventDefault(); void this.#openCommandCenter(); }
+      else if (mod && key === "tab") { event.preventDefault(); void this.#cycleTab(event.shiftKey ? -1 : 1); }
       else if (mod && event.shiftKey && key === "w") { event.preventDefault(); this.#toggleDrawer("workspaces"); }
       else if (mod && event.shiftKey && key === "n") { event.preventDefault(); void this.#bridge?.createPrivateWindow(); }
       else if (mod && key === "l") { event.preventDefault(); this.#toolbar.focusOmnibox(); }
@@ -548,6 +613,7 @@ class BrowserShell {
       else if (event.altKey && event.key === "ArrowRight") { event.preventDefault(); void this.#command("forward"); }
     });
   }
+  async #cycleTab(direction: -1 | 1): Promise<void> { const tabs = this.#workspaceTabs(); if (tabs.length < 2) return; const current = tabs.findIndex(tab => tab.id === this.#activeTabId); const target = tabs[(Math.max(0, current) + direction + tabs.length) % tabs.length]; if (target) await this.#activate(target.id); }
   #isWeb(url: string): boolean { return url.startsWith("https://") || url.startsWith("http://"); }
   #hostname(url: string): string { try { return new URL(url).hostname; } catch { return url; } }
   #flash(message: string): void { this.#status.textContent = message; window.setTimeout(() => { if (this.#status.textContent === message) this.#status.textContent = ""; }, 2200); }

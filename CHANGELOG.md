@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — Final Update, checkpoint P0 (2026-08-28)
+## Unreleased — Final Update, produto e ergonomia (2026-08-28)
 
 ### Adicionado
 
@@ -9,6 +9,13 @@
 - decisões de permissão persistentes e revogáveis por origem, com armazenamento efêmero separado no privado;
 - pipeline único de `webRequest` para composição do AdBlock e futuras políticas;
 - preflight, mapa de impacto e threat model do update massivo.
+- onboarding de seis etapas, pulável, retomável e com preview transacional das preferências;
+- detecção local de Chrome/Chromium, Brave, Vivaldi, Edge e Firefox, preview de contagens e importação transacional somente de favoritos/histórico selecionados;
+- Settings V4 em camadas Essencial, Personalizar e Avançado, busca por intenção, deep links, preview recolhível e indicação de draft;
+- abas horizontais ou verticais dos dois lados, com largura configurável e fallback responsivo;
+- Central de comandos por `Ctrl/Cmd+Shift+P`, reunindo comandos, abas, histórico, favoritos, workspaces e configurações;
+- Foco/Zen temporizado, Pomodoro, contínuo ou até horário, com presets, allowlists, pausa, extensão, recuperação e resumo local;
+- composições realmente distintas da Home para Minimalista, Foco, Estudo, Trabalho e Desenvolvimento.
 
 ### Corrigido
 
@@ -18,6 +25,11 @@
 - falha ao persistir uma permissão deixando cache e callback do Chromium em estado inconsistente;
 - rodapé da Personalização sobrepondo os últimos controles roláveis;
 - métricas de Home, abas e drawer misturando inicialização/feedback do produto com espera da automação.
+- botões de formulários visuais que não submetiam por herdarem `type="button"`;
+- importação de SQLite em WAL que ignorava os sidecars `-wal`/`-shm`;
+- deduplicação que não reconhecia URLs repetidas dentro do mesmo payload;
+- resumo de Foco contando pausas como tempo focado;
+- automações de performance/captura bloqueadas pelo onboarding e overflow horizontal no seletor de níveis de Settings.
 
 ### Desempenho
 
@@ -29,6 +41,9 @@
 - histórico/notas não são expostos ou gravados pela janela privada;
 - payloads de perfil e permissões são limitados por tipo, tamanho, protocolo e origem no main;
 - AdBlock não remove mais handlers de outras políticas ao ser desativado.
+- o importador usa IDs opacos, raízes conhecidas, cópia temporária read-only, limites, protocolos HTTP(S), limpeza de staging e transação SQLite;
+- cookies, tokens, sessões autenticadas, senhas, carteiras, extensões e arquivos internos não são importados;
+- Moon Intelligence permanece invisível no shell e bloqueada pelo gate de release mesmo diante de override local.
 
 ## 0.5.0-demo.1 — Demo pública (2026-08-27)
 

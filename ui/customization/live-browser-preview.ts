@@ -9,7 +9,7 @@ export class LiveBrowserPreview {
 
   apply(config: CustomizationConfig): void {
     const { appearance, layout, workspaceDisplay } = config; this.#frame.replaceChildren();
-    this.#frame.dataset.sidebar = layout.sidebar.position; this.#frame.dataset.toolbar = layout.toolbar.position; this.#frame.dataset.workspaces = workspaceDisplay.visibility;
+    this.#frame.dataset.sidebar = layout.sidebar.position; this.#frame.dataset.tabs = layout.tabs.position; this.#frame.dataset.toolbar = layout.toolbar.position; this.#frame.dataset.workspaces = workspaceDisplay.visibility;
     this.#frame.style.setProperty("--preview-accent", appearance.colors.accent); this.#frame.style.setProperty("--preview-sidebar", `${Math.max(12, layout.sidebar.width / 4)}px`); this.#frame.style.setProperty("--preview-radius", `${Math.max(2, appearance.shape.radius / 3)}px`);
     const tabs = element("div", "moon-preview-tabs"); tabs.append(element("span"), element("span", "is-active"), element("span"));
     const toolbar = element("div", "moon-preview-toolbar"); toolbar.append(icon("back"), element("span", "moon-preview-address"), icon("reload"));

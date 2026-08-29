@@ -65,6 +65,13 @@ describe("CustomizationSchemaV3", () => {
     expect(validateCustomization(legacy).experience.mode).toBe("customize");
   });
 
+  it("hydrates the safe top-tab default for documents created before tab positioning", () => {
+    const legacy = structuredClone(createDefaultCustomization());
+    delete (legacy.global.layout as { tabs?: typeof legacy.global.layout.tabs }).tabs;
+    const migrated = validateCustomization(legacy);
+    expect(migrated.global.layout.tabs).toEqual({ position: "top", width: 240 });
+  });
+
   it("round-trips all, appearance and workspace exports", () => {
     const current = createDefaultCustomization(100);
     for (const scope of ["all", "appearance", "workspace"] as const) {

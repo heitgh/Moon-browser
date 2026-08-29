@@ -31,6 +31,9 @@ const bridge = {
   exportSettingsDiagnostic: vi.fn(async (_content: string) => true),
   fetchFavicon: vi.fn(async () => "data:image/png;base64,YQ=="),
   migrateLegacyProfile: vi.fn(async () => ({ migrated: true, version: 1 })), getProfileData: vi.fn(async () => profileData), mutateProfileData, onTabUpdated: vi.fn((listener: (update: unknown) => void) => { tabUpdateListeners.push(listener); return () => undefined; }), onTabClosed: vi.fn(() => () => undefined),
+  discoverImportSources: vi.fn(async () => [{ id: "source-12345678", browser: "chromium", name: "Chromium — Default", modifiedAt: Date.now(), categories: { bookmarks: 3, history: 5 } }]),
+  importBrowserProfile: vi.fn(async (selection: { sourceId: string; categories: readonly string[] }) => ({ sourceId: selection.sourceId, imported: { bookmarks: selection.categories.includes("bookmarks") ? 3 : 0, history: selection.categories.includes("history") ? 5 : 0 }, skipped: { bookmarks: 0, history: 0 } })),
+  importBookmarksHtml: vi.fn(async () => null),
   onDownloadsUpdated: vi.fn((listener: (downloads: readonly unknown[]) => void) => { downloadListeners.push(listener); return () => undefined; }),
   onAdblockStatus: vi.fn((listener: (status: unknown) => void) => { adblockListeners.push(listener); return () => undefined; }),
   onPermissionRequested: vi.fn((listener: (request: { readonly id: string; readonly origin: string; readonly permission: string }) => void) => { permissionListeners.push(listener); return () => undefined; })
@@ -39,6 +42,7 @@ const flush = async (): Promise<void> => { await new Promise(resolve => setTimeo
 
 beforeAll(async () => {
   document.body.innerHTML = '<div id="moon-root"></div>';
+  localStorage.setItem("moon:onboarding:v1", JSON.stringify({ status: "completed", step: 5, choices: {} }));
   Object.defineProperty(window, "moonBrowser", { value: bridge, configurable: true });
   await import("../ui/browser-shell.js");
   await flush();
@@ -47,7 +51,7 @@ beforeEach(() => { navigate.mockClear(); setContentVisible.mockClear(); });
 
 describe("Moon browser shell", () => {
   it("renders every primary product control", () => {
-    for (const label of ["Página inicial", "Workspaces", "Favoritos", "Downloads", "Histórico", "Traduzir página", "Bloco de notas", "Configurações"]) {
+    for (const label of ["Página inicial", "Central de comandos", "Workspaces", "Favoritos", "Downloads", "Histórico", "Traduzir página", "Bloco de notas", "Configurações"]) {
       expect(document.querySelector(`[aria-label="${label}"]`)).not.toBeNull();
     }
     expect(document.querySelector('[aria-label="Moon AI"]')).toBeNull(); expect(document.querySelector('[aria-label="Extensões"]')).toBeNull();
@@ -57,7 +61,7 @@ describe("Moon browser shell", () => {
   it("opens every sidebar module with its real content", () => {
     const modules = [
       ["Workspaces", "Workspaces"], ["Favoritos", "Favoritos"], ["Downloads", "Downloads"],
-      ["Histórico", "Histórico"], ["Traduzir página", "Tradutor"], ["Bloco de notas", "Bloco de notas"],
+      ["Histórico", "Histórico"], ["Traduzir página", "Tradutor"], ["Bloco de notas", "Bloco de notas"], ["Foco e Zen", "Foco e Zen"],
       ["Proteção e AdBlock", "Proteção"]
     ] as const;
     for (const [control, heading] of modules) {
@@ -74,12 +78,35 @@ describe("Moon browser shell", () => {
     await new Promise(resolve => setTimeout(resolve, 300)); await flush();
     expect(mutateProfileData).toHaveBeenCalledWith({ type: "notes:save", content: "Decisão importante da startup" });
   });
+  it("runs a reversible continuous Focus session through the real shell", async () => {
+    (document.querySelector('[aria-label="Foco e Zen"]') as HTMLButtonElement).click();
+    const preset = document.querySelector('[aria-label="Preset de foco"]') as HTMLSelectElement; preset.value = "writing"; preset.dispatchEvent(new Event("change", { bubbles: true }));
+    (document.querySelector('[aria-label="Iniciar sessão de foco"]') as HTMLButtonElement).click(); await flush();
+    expect(document.documentElement.dataset.zen).toBe("true"); expect((document.querySelector('[aria-label="Sair do modo Foco (Ctrl+Shift+Z)"]') as HTMLButtonElement).hidden).toBe(false); expect(document.querySelector(".moon-focus-countdown")?.textContent).toBe("CONTÍNUO");
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, shiftKey: true, bubbles: true })); await flush();
+    expect(document.documentElement.dataset.zen).toBeUndefined(); expect((document.querySelector('[aria-label="Sair do modo Foco (Ctrl+Shift+Z)"]') as HTMLButtonElement).hidden).toBe(true);
+  });
   it("opens and closes settings while hiding native web content", async () => {
     (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
     expect(document.querySelector('[role="dialog"]')).not.toBeNull(); expect(setContentVisible).toHaveBeenCalledWith(false);
     expect(document.querySelector('[data-testid="customization-center"]')).not.toBeNull();
     (document.querySelector('[aria-label="Fechar e cancelar alterações"]') as HTMLButtonElement).click(); await flush();
     expect(document.querySelector('[role="dialog"]')).toBeNull(); expect(setContentVisible).toHaveBeenLastCalledWith(true);
+  });
+  it("searches unified commands and opens the matching Settings section", async () => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "p", ctrlKey: true, shiftKey: true, bubbles: true })); await flush();
+    const input = document.querySelector('[aria-label="Buscar na Central de comandos"]') as HTMLInputElement; expect(input).not.toBeNull(); input.value = "grossura sidebar"; input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(document.querySelector(".moon-command-result")?.textContent).toContain("Largura da sidebar"); (document.querySelector(".moon-command-result") as HTMLButtonElement).click(); await flush();
+    expect(document.querySelector('[data-testid="customization-center"]')).not.toBeNull(); expect(document.querySelector(".moon-customization-content")?.textContent).toContain("Sidebar e drawers");
+    (document.querySelector('[aria-label="Fechar e cancelar alterações"]') as HTMLButtonElement).click(); await flush();
+  });
+  it("does not reveal a native web surface over Home after closing the Command Center", async () => {
+    setContentVisible.mockClear();
+    (document.querySelector('[aria-label="Central de comandos"]') as HTMLButtonElement).click(); await flush();
+    const input = document.querySelector('[aria-label="Buscar na Central de comandos"]') as HTMLInputElement;
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); await flush();
+    expect(document.querySelector('[aria-label="Buscar na Central de comandos"]')).toBeNull();
+    expect(setContentVisible).toHaveBeenLastCalledWith(false);
   });
   it("sends omnibox searches to the browser engine", async () => {
     const input = document.querySelector(".moon-omnibox") as HTMLInputElement; input.value = "arquitetura de navegadores";
@@ -148,6 +175,16 @@ describe("Moon browser shell", () => {
     (document.querySelector('[aria-label="Fechar e cancelar alterações"]') as HTMLButtonElement).click(); await flush();
   });
 
+  it("previews local browser profiles and imports only explicitly selected categories", async () => {
+    bridge.discoverImportSources.mockClear(); bridge.importBrowserProfile.mockClear();
+    (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
+    (document.querySelector('[aria-label="Detectar perfis instalados"]') as HTMLButtonElement).click(); await flush();
+    expect(bridge.discoverImportSources).toHaveBeenCalledOnce(); expect(document.querySelector(".moon-import-source")?.textContent).toContain("Chromium — Default");
+    (document.querySelector('[aria-label="Importar de Chromium — Default"]') as HTMLButtonElement).click(); await flush();
+    expect(bridge.importBrowserProfile).toHaveBeenCalledWith({ sourceId: "source-12345678", categories: ["bookmarks", "history"] });
+    (document.querySelector('[aria-label="Fechar e cancelar alterações"]') as HTMLButtonElement).click(); await flush();
+  });
+
   it("applies customization live without persisting the draft and cancels the preview", async () => {
     const before = document.documentElement.dataset.moonTheme;
     (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
@@ -206,6 +243,17 @@ describe("Moon browser shell", () => {
     (document.querySelector('[aria-label="Fechar e cancelar alterações"]') as HTMLButtonElement).click(); await flush();
     bridge.createPrivateWindow.mockClear(); window.dispatchEvent(new KeyboardEvent("keydown", { key: "n", ctrlKey: true, shiftKey: true })); await flush();
     expect(bridge.createPrivateWindow).toHaveBeenCalledOnce();
+  });
+  it("switches between top and functional vertical tabs through Settings", async () => {
+    (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
+    (document.querySelector('[data-mode="essential"]') as HTMLButtonElement).click(); await flush();
+    const tabsGroup = [...document.querySelectorAll<HTMLElement>(".moon-setting-group")].find(group => group.querySelector("h3")?.textContent === "Abas")!;
+    const position = tabsGroup.querySelector("select") as HTMLSelectElement;
+    position.value = "left"; position.dispatchEvent(new Event("change", { bubbles: true })); await flush();
+    expect(document.documentElement.dataset.moonTabs).toBe("left");
+    expect(document.documentElement.style.getPropertyValue("--moon-tabs-width")).toBe("240px");
+    (document.querySelector('[aria-label="Cancelar mudanças"]') as HTMLButtonElement).click(); await flush();
+    expect(document.documentElement.dataset.moonTabs).toBe("top");
   });
   it("queues site permissions and sends an explicit user decision", async () => {
     bridge.respondToPermission.mockClear(); setContentVisible.mockClear();
