@@ -11,7 +11,9 @@
 - preflight, mapa de impacto e threat model do update massivo.
 - onboarding de seis etapas, pulável, retomável e com preview transacional das preferências;
 - detecção local de Chrome/Chromium, Brave, Vivaldi, Edge e Firefox, preview de contagens e importação transacional somente de favoritos/histórico selecionados;
-- Settings V4 em camadas Essencial, Personalizar e Avançado, busca por intenção, deep links, preview recolhível e indicação de draft;
+- Settings V4 nos modos Simples e Avançado, com “Ver tudo” explícito, busca por intenção, deep links, preview recolhível e indicação de draft;
+- documento de personalização V4 canônico em SQLite, migração idempotente de V2/V3, último estado válido transacional e `localStorage` restrito a espelho/recuperação;
+- canais IPC limitados e validados para hidratação e commit único da personalização, com gravação bloqueada em janelas privadas;
 - abas horizontais ou verticais dos dois lados, com largura configurável e fallback responsivo;
 - Central de comandos por `Ctrl/Cmd+Shift+P`, reunindo comandos, abas, histórico, favoritos, workspaces e configurações;
 - Foco/Zen temporizado, Pomodoro, contínuo ou até horário, com presets, allowlists, pausa, extensão, recuperação e resumo local;
@@ -52,7 +54,7 @@
 - transferência da arquitetura validada em `heitgh/Moon-tests-1` para o repositório oficial `heitgh/Moon-browser`, preservando os dois históricos;
 - versão do produto, workspaces npm, metadados, links e documentação alinhados à série `0.5 Demo`;
 - README reconstruído com estado real, arquitetura, segurança, guia de screenshots, comunidade, roadmap e ideias estratégicas;
-- navegação, abas, workspaces, Home, Settings V3, SQLite, sessões, downloads, AdBlock, permissões, menu contextual e Moon Themes apresentados como capacidades da demo;
+- navegação, abas, workspaces, Home, Settings V4, SQLite, sessões, downloads, AdBlock, permissões, menu contextual e Moon Themes apresentados como capacidades da demo;
 - IA, extensões, plugins, Smart Spaces, Timeline, VPN, sync e auto-update mantidos desativados até implementação verificável;
 - build Linux validado em AppImage e Debian, além dos gates de TypeScript, ESLint, testes e auditoria de dependências.
 

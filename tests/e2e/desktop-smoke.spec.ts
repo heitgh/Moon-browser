@@ -152,8 +152,8 @@ test("persists theme, sidebar and Home customization after restart", async () =>
       await expect.poll(() => restored.evaluate(() => document.documentElement.dataset.moonTheme)).toBe("light");
       await expect.poll(() => restored.evaluate(() => document.documentElement.dataset.moonSidebar)).toBe("right");
       await expect(restored.locator('.moon-home-clock[data-widget="clock"]')).toHaveCount(0);
-      const storedVersion = await restored.evaluate(() => JSON.parse(localStorage.getItem("moon:customization:v3") ?? "{}").version as number);
-      expect(storedVersion).toBe(3);
+      const storedVersion = await restored.evaluate(() => JSON.parse(localStorage.getItem("moon:customization:v4") ?? "{}").version as number);
+      expect(storedVersion).toBe(4);
     } finally { await application.close(); }
   } finally { await rm(userData, { recursive: true, force: true }); }
 });

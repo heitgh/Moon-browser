@@ -48,6 +48,8 @@ contextBridge.exposeInMainWorld("moonBrowser", Object.freeze({
   fetchWallpaper: url => invoke("product:fetch-wallpaper", { url }),
   fetchFavicon: url => invoke("product:fetch-favicon", { url }),
   migrateLegacyProfile: content => invoke("product:migrate-legacy-profile", { content }),
+  loadCustomization: legacy => invoke("customization:load", { legacy }),
+  commitCustomization: document => invoke("customization:commit", { document }),
   getProfileData: () => invoke("profile:get-data"),
   mutateProfileData: mutation => invoke("profile:mutate", mutation),
   discoverImportSources: () => invoke("import:discover"),

@@ -34,8 +34,8 @@ Isso demonstra que compilação e lint isoladamente não detectavam as regressõ
 
 | ID | Sintoma reproduzido | Causa raiz | Impacto | Prioridade | Estado |
 | --- | --- | --- | --- | --- | --- |
-| REC-001 | Clicar em uma categoria no modo Essencial não mostrava seus controles; exportação e ajustes avançados pareciam inexistentes | A navegação alterava apenas a categoria ativa, mas o renderer do modo Essencial ignorava a categoria | Controles reais inacessíveis e 3 testes posteriores contaminados pelo painel aberto | P0 | corrigido; categoria explícita entra em Avançado |
-| REC-002 | Alterações de preview apareciam imediatamente em `moon:customization:v3` | `CustomizationStore.#mutate` persistia o rascunho em toda alteração | Cancelamento dependia de uma segunda gravação; crash ou quota podia confirmar mudanças não aplicadas | P0 | corrigido; rascunho fica apenas em memória e Aplicar confirma |
+| REC-001 | Clicar em uma categoria no antigo modo Essencial não mostrava seus controles; exportação e ajustes avançados pareciam inexistentes | A navegação alterava apenas a categoria ativa, mas o renderer do modo Essencial ignorava a categoria | Controles reais inacessíveis e 3 testes posteriores contaminados pelo painel aberto | P0 | corrigido no V4; os modos são Simples/Avançado, categorias não trocam o modo silenciosamente e “Ver tudo” é explícito |
+| REC-002 | Alterações de preview apareciam imediatamente em `moon:customization:v3` | `CustomizationStore.#mutate` persistia o rascunho em toda alteração | Cancelamento dependia de uma segunda gravação; crash ou quota podia confirmar mudanças não aplicadas | P0 | corrigido; rascunho fica em memória, Aplicar faz um commit SQLite e `moon:customization:v4` é apenas espelho local |
 | REC-003 | Falha de gravação podia fechar o painel sem confirmação confiável | `applyPreview` apenas encerrava a sessão de preview e não reportava falha | Perda de confiança e possível divergência entre UI e armazenamento | P0 | corrigido; Aplicar retorna falha, mantém preview aberto e mostra erro |
 | REC-004 | Busca por “tipografia” deixou de encontrar a área correspondente | O novo catálogo de intenções não incluía metadados de tipografia | Busca global incompleta | P1 | corrigido; metadado estável adicionado |
 | REC-005 | Preview continha texto literal de 6 px e 7 px | Mock visual novo não respeitou o piso tipográfico semântico de 11 px | Ilegibilidade e gate visual vermelho | P1 | corrigido para 11 px |
@@ -47,21 +47,21 @@ Isso demonstra que compilação e lint isoladamente não detectavam as regressõ
 
 ### REC-001 — categoria inacessível
 
-1. Abrir Configurações com a experiência no modo Essencial.
+1. Abrir Configurações com a experiência no modo Simples.
 2. Clicar em “Workspaces e dados”.
-3. Antes da correção, o conteúdo permanecia na visão Essencial e “Exportar tudo” não existia no DOM.
+3. Antes da correção, o conteúdo permanecia na visão antiga e “Exportar tudo” não existia no DOM.
 4. O teste falhava com `Cannot read properties of null (reading 'click')`.
 
-Critério de aceite: clicar em uma categoria explícita abre a visão Avançada naquela categoria e mantém a navegação acessível.
+Critério de aceite V4: clicar em uma categoria mantém o modo escolhido; a troca para Avançado ou “Ver tudo” exige ação explícita.
 
 ### REC-002 — preview persistido prematuramente
 
-1. Carregar o store e guardar o conteúdo de `moon:customization:v3`.
+1. Carregar o store e guardar o conteúdo do espelho `moon:customization:v4`.
 2. Iniciar preview e mudar `appearance.colors.accent`.
 3. Antes da correção, a chave persistida mudava antes de “Aplicar”.
 4. Cancelar exigia outra escrita para recuperar o valor.
 
-Critério de aceite: durante preview a UI muda, mas a chave confirmada permanece byte a byte igual; Aplicar grava; Cancelar apenas restaura o rascunho em memória.
+Critério de aceite: durante preview a UI muda, mas o espelho confirmado permanece byte a byte igual; Aplicar valida no processo principal e grava documento/último estado válido em uma transação SQLite; Cancelar apenas restaura o rascunho em memória.
 
 ### REC-003 — erro ao aplicar
 

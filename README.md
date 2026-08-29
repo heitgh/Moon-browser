@@ -75,7 +75,7 @@ O desenvolvimento dessa base aconteceu em [`heitgh/Moon-tests-1`](https://github
 | Conteúdo web por estrutura legada | `WebContentsView` gerenciado no processo principal |
 | Estado principalmente em `localStorage` | Perfil local, SQLite, migrations e repositories |
 | Poucos testes automatizados | Unitários, integração, Electron e E2E |
-| Configurações acopladas à tela | Settings V3 versionado, recuperável e com preview |
+| Configurações acopladas à tela | Settings V4 versionado, SQLite canônico, migração recuperável e preview |
 | Recursos futuros misturados à interface | Feature flags e documentação de disponibilidade |
 | Build manual e pouco verificável | CI, AppImage, pacote Debian e quality gates |
 
@@ -137,7 +137,7 @@ O Moon diferencia recurso funcional, entrega parcial, preview e plano. Código d
 | Favoritos, histórico e notas | **Funcional** | Ainda há migração gradual do estado do renderer para repositories |
 | Downloads | **Funcional** | Eventos e progresso reais do Electron |
 | AdBlock | **Funcional** | Serviço nativo conectado à interface |
-| Settings V3 | **Funcional** | Preview, recuperação, importação e exportação |
+| Settings V4 | **Funcional** | Modos Simples/Avançado, preview, commit SQLite, recuperação, importação e exportação |
 | Temas e wallpapers | **Funcional / parcial** | Biblioteca avançada, favoritos e deduplicação ainda estão no backlog |
 | Moon Themes `.moontheme` | **Funcional localmente** | Conta, catálogo remoto e OAuth dependem do serviço externo |
 | Permissões de sites | **Parcial** | Decisão explícita existe; persistência e revogação por origem serão ampliadas |
@@ -206,7 +206,7 @@ preload.cjs
   └─ window.moonBrowser — bridge explícita e limitada
 
 index.html
-  └─ ui/browser-shell.ts — shell, Home, painéis e Settings V3
+  └─ ui/browser-shell.ts — shell, Home, painéis e Settings V4
 ```
 
 ### Estrutura do repositório
@@ -266,7 +266,7 @@ O roadmap é orientativo e pode mudar conforme testes, segurança, desempenho e 
 
 | Marco | Objetivo | Entregas principais |
 | --- | --- | --- |
-| **0.5 Demo — agora** | Fundação pública verificável | Navegação, abas, workspaces, Settings V3, SQLite, sessões, AdBlock, downloads, temas, Moon Themes, CI e builds Linux |
+| **0.5 Demo — agora** | Fundação pública verificável | Navegação, abas, workspaces, Settings V4, SQLite, sessões, AdBlock, downloads, temas, Moon Themes, CI e builds Linux |
 | **0.6 — Ergonomia e produtividade** | Tornar o uso diário mais fluido | Home Fase B, presets realmente distintos, biblioteca de wallpapers, sidebar evoluída, pesquisa de configurações e início da Universal Search |
 | **0.7 — Moon Intelligence** | IA útil com controle humano | Providers opcionais, permissões de contexto, resumo, explicação, tradução, tarefas, flashcards e comparação entre páginas |
 | **0.8 — Contextual Browser** | Organizar atividades, não apenas URLs | Smart Sessions, Smart Spaces sugeridos, Navigation Timeline e Command Center |

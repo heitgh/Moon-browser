@@ -17,6 +17,7 @@ import { normalizeMoonInternalUrl } from "../../../../packages/navigation/intern
 import type { ProfileDataMutation, ProfileDataSnapshot } from "../../../../packages/ipc/profile-data-contract.js";
 import { parseSitePermissionRecords, type SitePermissionRecord } from "../../../../packages/ipc/site-permission-contract.js";
 import type { ImportedProfileData, ImportResult } from "../../../../packages/ipc/browser-import-contract.js";
+import { createDefaultCustomization, validateCustomization, type CustomizationSchemaV4 } from "../../../../ui/customization/customization-schema.js";
 
 export interface RestorableBrowserTab {
   readonly id: string;
@@ -31,6 +32,10 @@ interface BrowserSessionRecord {
   readonly savedAt: number;
   readonly tabs: readonly RestorableBrowserTab[];
 }
+
+const CUSTOMIZATION_SETTING = "customization:v4";
+const CUSTOMIZATION_LAST_GOOD_SETTING = "customization:last-known-good:v4";
+const CUSTOMIZATION_V3_BACKUP_SETTING = "customization:backup:v3";
 
 export class ProfileStorage {
   readonly #connection: BetterSqliteConnection;
@@ -63,6 +68,49 @@ export class ProfileStorage {
 
   async close(): Promise<void> {
     await this.#database.close();
+  }
+
+  async loadCustomization(legacyDocument?: unknown): Promise<CustomizationSchemaV4> {
+    const stored = await this.#settings.getValue<unknown>(CUSTOMIZATION_SETTING);
+    if (stored !== undefined) {
+      try { return validateCustomization(stored); }
+      catch {
+        const lastKnownGood = await this.#settings.getValue<unknown>(CUSTOMIZATION_LAST_GOOD_SETTING);
+        if (lastKnownGood !== undefined) return validateCustomization(lastKnownGood);
+        throw new Error("A personalização canônica e seu último estado válido estão corrompidos.");
+      }
+    }
+
+    let source: unknown = createDefaultCustomization();
+    if (legacyDocument !== undefined) {
+      try { source = legacyDocument; }
+      catch { source = createDefaultCustomization(); }
+    }
+    const canonical = validateCustomization(source);
+    const sourceVersion = isRecord(legacyDocument) ? legacyDocument.version : undefined;
+    await this.#database.transaction(async () => {
+      if (sourceVersion === 2 || sourceVersion === 3) await this.#settings.setValue(CUSTOMIZATION_V3_BACKUP_SETTING, legacyDocument);
+      await this.#settings.setValue(CUSTOMIZATION_SETTING, canonical);
+      await this.#settings.setValue(CUSTOMIZATION_LAST_GOOD_SETTING, canonical);
+      for (const theme of canonical.themes) {
+        await this.#themes.save({ id: theme.id, name: theme.name, tokens: JSON.stringify(theme.config), builtin: false, source: "legacy", createdAt: theme.createdAt, updatedAt: canonical.updatedAt, active: false });
+      }
+    });
+    return canonical;
+  }
+
+  async commitCustomization(document: unknown): Promise<CustomizationSchemaV4> {
+    const canonical = validateCustomization(document);
+    const currentValue = await this.#settings.getValue<unknown>(CUSTOMIZATION_SETTING);
+    if (currentValue !== undefined) {
+      const current = validateCustomization(currentValue);
+      if (canonical.revision < current.revision) throw new Error("A personalização foi alterada em outra janela. Reabra as configurações e tente novamente.");
+    }
+    await this.#database.transaction(async () => {
+      await this.#settings.setValue(CUSTOMIZATION_SETTING, canonical);
+      await this.#settings.setValue(CUSTOMIZATION_LAST_GOOD_SETTING, canonical);
+    });
+    return canonical;
   }
 
   async migrateLegacyProfile(content: string): Promise<{ readonly migrated: boolean; readonly version: number }> {
@@ -208,4 +256,8 @@ export class ProfileStorage {
     const value = Number(row?.value ?? 0);
     return Number.isSafeInteger(value) && value >= 0 ? value : 0;
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

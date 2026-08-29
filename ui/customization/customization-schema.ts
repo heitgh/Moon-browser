@@ -1,6 +1,8 @@
-export const CUSTOMIZATION_VERSION = 3 as const;
-export const CUSTOMIZATION_STORAGE_KEY = "moon:customization:v3";
-export const CUSTOMIZATION_LAST_VALID_KEY = "moon:customization:last-valid:v3";
+export const CUSTOMIZATION_VERSION = 4 as const;
+export const CUSTOMIZATION_STORAGE_KEY = "moon:customization:v4";
+export const CUSTOMIZATION_LAST_VALID_KEY = "moon:customization:last-valid:v4";
+export const CUSTOMIZATION_V3_STORAGE_KEY = "moon:customization:v3";
+export const CUSTOMIZATION_V3_LAST_VALID_KEY = "moon:customization:last-valid:v3";
 export const CUSTOMIZATION_V2_STORAGE_KEY = "moon:customization:v2";
 export const CUSTOMIZATION_V2_LAST_VALID_KEY = "moon:customization:last-valid:v2";
 
@@ -12,7 +14,8 @@ export type TabPosition = "top" | "left" | "right";
 export type OmniboxPosition = "toolbar" | "bottom" | "sidebar";
 export type WallpaperType = "local" | "https" | "color" | "gradient";
 export type SettingsScope = "global" | "workspace";
-export type SettingsMode = "essential" | "customize" | "advanced";
+export type SettingsMode = "simple" | "advanced";
+export type SettingsView = "section" | "all";
 export type WorkspaceVisibility = "always" | "collapsed" | "hover" | "auto-hide" | "home-only" | "hidden";
 export type HomePreset = "minimal" | "focus" | "study" | "work" | "dev" | "custom";
 export type HomeWidgetId = "clock" | "date" | "greeting" | "search" | "shortcuts" | "favorites" | "recentTabs" | "sessions" | "tasks" | "notes" | "downloads" | "focus" | "calendar" | "reading" | "performance";
@@ -83,17 +86,19 @@ export interface CustomizationConfig {
 }
 
 export interface SavedCustomizationTheme { readonly id: string; readonly name: string; readonly createdAt: number; readonly config: CustomizationConfig; }
-export interface CustomizationSchemaV3 {
+export interface CustomizationSchemaV4 {
   readonly version: typeof CUSTOMIZATION_VERSION;
   readonly revision: number;
   readonly scope: SettingsScope;
   readonly global: CustomizationConfig;
   readonly workspaces: Readonly<Record<string, CustomizationConfig>>;
   readonly themes: readonly SavedCustomizationTheme[];
-  readonly experience: { readonly mode: SettingsMode; readonly lastSection: string };
+  readonly experience: { readonly mode: SettingsMode; readonly view: SettingsView; readonly lastSection: string };
   readonly updatedAt: number;
 }
-export type CustomizationSchemaV2 = CustomizationSchemaV3;
+/** Compatibility aliases kept while V3 consumers are migrated incrementally. */
+export type CustomizationSchemaV3 = CustomizationSchemaV4;
+export type CustomizationSchemaV2 = CustomizationSchemaV4;
 
 const LOCAL_WALLPAPER = "./assets/wallpapers/aurora.svg";
 export const WALLPAPER_PRESETS = [
@@ -142,15 +147,15 @@ export const DEFAULT_CUSTOMIZATION: CustomizationConfig = {
   favicons: { enabled: true, persist: true, ttlDays: 30 }
 };
 
-export function createDefaultCustomization(now = Date.now()): CustomizationSchemaV3 {
-  return { version: 3, revision: 0, scope: "global", global: clone(DEFAULT_CUSTOMIZATION), workspaces: {}, themes: [], experience: { mode: "essential", lastSection: "appearance" }, updatedAt: now };
+export function createDefaultCustomization(now = Date.now()): CustomizationSchemaV4 {
+  return { version: 4, revision: 0, scope: "global", global: clone(DEFAULT_CUSTOMIZATION), workspaces: {}, themes: [], experience: { mode: "simple", view: "section", lastSection: "appearance" }, updatedAt: now };
 }
 
 export function clone<T>(value: T): T { return structuredClone(value); }
 
-export function validateCustomization(value: unknown): CustomizationSchemaV3 {
+export function validateCustomization(value: unknown): CustomizationSchemaV4 {
   const root = object(value, "personalização");
-  if (root.version !== 2 && root.version !== 3) throw new Error("Versão de personalização não suportada.");
+  if (root.version !== 2 && root.version !== 3 && root.version !== 4) throw new Error("Versão de personalização não suportada.");
   const global = config(root.global, "global");
   const workspaceValues = object(root.workspaces, "workspaces");
   const workspaces: Record<string, CustomizationConfig> = {};
@@ -161,20 +166,23 @@ export function validateCustomization(value: unknown): CustomizationSchemaV3 {
   });
   if (new Set(themes.map(theme => theme.id)).size !== themes.length) throw new Error("IDs de temas duplicados não são permitidos.");
   const scope = oneOf(root.scope, ["global", "workspace"] as const, "escopo");
-  const experienceValue = root.version === 3 ? object(root.experience, "experiência") : { mode: "essential", lastSection: "appearance" };
-  const experienceMode = experienceValue.mode === "all" ? "customize" : oneOf(experienceValue.mode, ["essential", "customize", "advanced"] as const, "modo das configurações");
-  const experience = { mode: experienceMode, lastSection: slug(experienceValue.lastSection, "última seção") };
-  return { version: 3, revision: integer(root.revision, "revisão", 0, Number.MAX_SAFE_INTEGER), scope, global, workspaces, themes, experience, updatedAt: integer(root.updatedAt, "data de atualização", 0, Number.MAX_SAFE_INTEGER) };
+  const experienceValue = root.version >= 3 ? object(root.experience, "experiência") : { mode: "essential", lastSection: "appearance" };
+  const legacyMode = oneOf(experienceValue.mode, ["simple", "advanced", "essential", "customize", "all"] as const, "modo das configurações");
+  const mode: SettingsMode = legacyMode === "essential" ? "simple" : "advanced";
+  const inferredView: SettingsView = legacyMode === "customize" || legacyMode === "all" ? "all" : "section";
+  const view = legacyMode === "customize" || legacyMode === "all" ? "all" : root.version === 4 && experienceValue.view !== undefined ? oneOf(experienceValue.view, ["section", "all"] as const, "visualização das configurações") : inferredView;
+  const experience = { mode, view, lastSection: slug(experienceValue.lastSection, "última seção") };
+  return { version: 4, revision: integer(root.revision, "revisão", 0, Number.MAX_SAFE_INTEGER), scope, global, workspaces, themes, experience, updatedAt: integer(root.updatedAt, "data de atualização", 0, Number.MAX_SAFE_INTEGER) };
 }
 
 export interface CustomizationRecoveryResult {
-  readonly document: CustomizationSchemaV3;
+  readonly document: CustomizationSchemaV4;
   readonly recoveredSections: readonly string[];
 }
 
-export function recoverCustomization(value: unknown, fallback: CustomizationSchemaV3 = createDefaultCustomization()): CustomizationRecoveryResult {
+export function recoverCustomization(value: unknown, fallback: CustomizationSchemaV4 = createDefaultCustomization()): CustomizationRecoveryResult {
   const base = validateCustomization(fallback); const root = object(value, "personalização");
-  if (root.version !== 2 && root.version !== 3) throw new Error("Versão de personalização não suportada.");
+  if (root.version !== 2 && root.version !== 3 && root.version !== 4) throw new Error("Versão de personalização não suportada.");
   const recoveredSections: string[] = [];
   const recoverConfig = (candidate: unknown, safe: CustomizationConfig, name: string): CustomizationConfig => {
     let source: Record<string, unknown>;
@@ -198,13 +206,13 @@ export function recoverCustomization(value: unknown, fallback: CustomizationSche
   } catch { recoveredSections.push("workspaces"); }
   let themes = base.themes;
   try { themes = validateCustomization({ ...base, themes: root.themes }).themes; } catch { recoveredSections.push("themes"); }
-  const recoverTop = <K extends "revision" | "scope" | "updatedAt" | "experience">(key: K): CustomizationSchemaV3[K] => {
+  const recoverTop = <K extends "revision" | "scope" | "updatedAt" | "experience">(key: K): CustomizationSchemaV4[K] => {
     try { return validateCustomization({ ...base, [key]: root[key], global, workspaces, themes })[key]; }
     catch { recoveredSections.push(key); return base[key]; }
   };
   const revision = recoverTop("revision"); const scope = recoverTop("scope"); const updatedAt = recoverTop("updatedAt");
   const experience = root.version === 2 && root.experience === undefined ? base.experience : recoverTop("experience");
-  return { document: validateCustomization({ version: 3, revision, scope, global, workspaces, themes, experience, updatedAt }), recoveredSections: [...new Set(recoveredSections)] };
+  return { document: validateCustomization({ version: 4, revision, scope, global, workspaces, themes, experience, updatedAt }), recoveredSections: [...new Set(recoveredSections)] };
 }
 
 function config(value: unknown, name: string): CustomizationConfig {
@@ -235,7 +243,7 @@ function config(value: unknown, name: string): CustomizationConfig {
   };
 }
 
-export function migrateLegacyCustomization(storage: Pick<Storage, "getItem">, now = Date.now()): CustomizationSchemaV3 {
+export function migrateLegacyCustomization(storage: Pick<Storage, "getItem">, now = Date.now()): CustomizationSchemaV4 {
   const next = createDefaultCustomization(now); let legacy: Record<string, unknown> = {};
   try { const raw = storage.getItem("moon:preferences:v1"); if (raw) legacy = object(JSON.parse(raw), "preferências antigas"); } catch { legacy = {}; }
   const global = clone(next.global);
@@ -248,19 +256,19 @@ export function migrateLegacyCustomization(storage: Pick<Storage, "getItem">, no
   return validateCustomization({ ...next, global });
 }
 
-export function resolveCustomization(document: CustomizationSchemaV3, workspaceId?: string): CustomizationConfig {
+export function resolveCustomization(document: CustomizationSchemaV4, workspaceId?: string): CustomizationConfig {
   return document.scope === "workspace" && workspaceId && document.workspaces[workspaceId] ? document.workspaces[workspaceId] : document.global;
 }
 
-export function serializeCustomization(document: CustomizationSchemaV3, scope: "all" | "appearance" | "workspace" = "all", workspaceId?: string): string {
-  const payload = scope === "appearance" ? { format: "moon-customization", version: 3, scope, appearance: resolveCustomization(document, workspaceId).appearance } : scope === "workspace" ? { format: "moon-customization", version: 3, scope, workspaceId, config: resolveCustomization(document, workspaceId) } : { format: "moon-customization", version: 3, scope, document };
+export function serializeCustomization(document: CustomizationSchemaV4, scope: "all" | "appearance" | "workspace" = "all", workspaceId?: string): string {
+  const payload = scope === "appearance" ? { format: "moon-customization", version: 4, scope, appearance: resolveCustomization(document, workspaceId).appearance } : scope === "workspace" ? { format: "moon-customization", version: 4, scope, workspaceId, config: resolveCustomization(document, workspaceId) } : { format: "moon-customization", version: 4, scope, document };
   return JSON.stringify(payload, null, 2);
 }
 
-export function parseCustomizationImport(content: string, current: CustomizationSchemaV3, workspaceId?: string): CustomizationSchemaV3 {
+export function parseCustomizationImport(content: string, current: CustomizationSchemaV4, workspaceId?: string): CustomizationSchemaV4 {
   if (content.length > 2_000_000) throw new Error("O arquivo de personalização excede 2 MB.");
   let parsed: unknown; try { parsed = JSON.parse(content); } catch { throw new Error("O arquivo não contém JSON válido."); }
-  const payload = object(parsed, "arquivo"); if (payload.format !== "moon-customization" || (payload.version !== 2 && payload.version !== 3)) throw new Error("Formato de personalização não suportado.");
+  const payload = object(parsed, "arquivo"); if (payload.format !== "moon-customization" || (payload.version !== 2 && payload.version !== 3 && payload.version !== 4)) throw new Error("Formato de personalização não suportado.");
   if (payload.scope === "all") return validateCustomization(payload.document);
   const next = clone(current);
   if (payload.scope === "appearance") { const candidate = config({ ...resolveCustomization(current, workspaceId), appearance: payload.appearance }, "importação"); setResolved(next, workspaceId, candidate); }
@@ -269,7 +277,7 @@ export function parseCustomizationImport(content: string, current: Customization
   return validateCustomization({ ...next, revision: next.revision + 1, updatedAt: Date.now() });
 }
 
-export function setResolved(document: CustomizationSchemaV3, workspaceId: string | undefined, configValue: CustomizationConfig): void {
+export function setResolved(document: CustomizationSchemaV4, workspaceId: string | undefined, configValue: CustomizationConfig): void {
   if (document.scope === "workspace" && workspaceId) (document.workspaces as Record<string, CustomizationConfig>)[workspaceId] = configValue;
   else (document as { global: CustomizationConfig }).global = configValue;
 }

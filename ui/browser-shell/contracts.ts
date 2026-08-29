@@ -38,6 +38,7 @@ import type { ProfileDataMutation, ProfileDataSnapshot } from "../../packages/ip
 import type { SitePermissionRecord } from "../../packages/ipc/site-permission-contract.js";
 export type { SitePermissionRecord } from "../../packages/ipc/site-permission-contract.js";
 import type { ImportResult, ImportSelection, ImportSourceSummary } from "../../packages/ipc/browser-import-contract.js";
+import type { CustomizationSchemaV4 } from "../customization/customization-schema.js";
 
 export interface MoonBrowserBridge {
   createTab(url?: string, workspaceId?: string): Promise<Tab>;
@@ -76,6 +77,8 @@ export interface MoonBrowserBridge {
   fetchWallpaper(url: string): Promise<string>;
   fetchFavicon(url: string): Promise<string>;
   migrateLegacyProfile(content: string): Promise<{ readonly migrated: boolean; readonly version: number }>;
+  loadCustomization(legacy?: unknown): Promise<CustomizationSchemaV4>;
+  commitCustomization(document: CustomizationSchemaV4): Promise<CustomizationSchemaV4>;
   getProfileData(): Promise<ProfileDataSnapshot>;
   mutateProfileData(mutation: ProfileDataMutation): Promise<void>;
   discoverImportSources(): Promise<readonly ImportSourceSummary[]>;

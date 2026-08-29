@@ -14,7 +14,7 @@ import { CustomizationStore } from "./customization-store.js";
 import type { MoonThemePayload, MoonThemePreview, MoonThemeSummary, Shortcut } from "../browser-shell/contracts.js";
 import { LiveBrowserPreview } from "./live-browser-preview.js";
 import { searchSettings, type SettingsSection } from "./settings-catalog.js";
-import type { SettingsMode } from "./customization-schema.js";
+import type { SettingsMode, SettingsView } from "./customization-schema.js";
 import type { ImportCategory, ImportResult, ImportSourceSummary } from "../../packages/ipc/browser-import-contract.js";
 import { applyHomePreset } from "./home-presets.js";
 
@@ -90,6 +90,7 @@ export class CustomizationCenter {
   readonly #closeControl = button("moon-settings-close", "Fechar e cancelar alterações", "close");
   #active: SectionId;
   #mode: SettingsMode;
+  #view: SettingsView;
   #presentation: "modal" | "page";
   #moonThemes: readonly MoonThemeSummary[] = [];
   #pendingMoonTheme: MoonThemePreview | undefined;
@@ -100,6 +101,7 @@ export class CustomizationCenter {
   constructor(readonly options: CustomizationCenterOptions) {
     this.#active = options.initialSection ?? options.store.document.experience.lastSection as SectionId;
     this.#mode = options.store.document.experience.mode;
+    this.#view = options.store.document.experience.view;
     this.#presentation = options.presentation ?? "modal";
     options.store.beginPreview();
     this.#build();
@@ -126,15 +128,16 @@ export class CustomizationCenter {
     const brand = element("div", "moon-settings-brand"); brand.append(icon("moon"), element("span", "", "Moon Studio"));
     const title = element("h2", "", "Personalização"); title.id = "moon-customization-title";
     this.#search.type = "search"; this.#search.placeholder = "Buscar configuração"; this.#search.setAttribute("aria-label", "Buscar nas configurações"); this.#search.addEventListener("input", () => this.#render());
-    const modes = element("div", "moon-settings-modes"); (["essential", "customize", "advanced"] as const).forEach(mode => { const labels = { essential: "Essencial", customize: "Personalizar", advanced: "Avançado" }; const control = button("moon-settings-mode", labels[mode]); control.append(element("span", "", labels[mode])); control.dataset.mode = mode; control.addEventListener("click", () => { this.#mode = mode; this.options.store.setExperience(mode, this.#active); this.#search.value = ""; this.#render(); void this.options.onNavigateSection?.(this.#active, mode); }); modes.append(control); });
+    const modes = element("div", "moon-settings-modes"); (["simple", "advanced"] as const).forEach(mode => { const labels = { simple: "Simples", advanced: "Avançado" }; const control = button("moon-settings-mode", labels[mode]); control.append(element("span", "", labels[mode])); control.dataset.mode = mode; control.addEventListener("click", () => { this.#mode = mode; this.#view = "section"; this.options.store.setExperience(mode, this.#active, this.#view); this.#search.value = ""; this.#render(); void this.options.onNavigateSection?.(this.#active, mode); }); modes.append(control); });
+    const viewAll = button("moon-settings-mode moon-settings-view-all", "Ver todas as configurações"); viewAll.append(element("span", "", "Ver tudo")); viewAll.dataset.view = "all"; viewAll.addEventListener("click", () => { this.#mode = "advanced"; this.#view = "all"; this.options.store.setExperience(this.#mode, this.#active, this.#view); this.#search.value = ""; this.#render(); void this.options.onNavigateSection?.(this.#active, this.#mode); }); modes.append(viewAll);
     this.#sidebar.append(brand, title, modes, this.#search);
     for (const [id, label, iconName, description] of SECTIONS) {
       const nav = button("moon-settings-nav", label, iconName); nav.dataset.section = id;
       const copy = element("span", "moon-settings-nav-copy"); copy.append(element("strong", "", label), element("small", "", description)); nav.append(copy);
       nav.addEventListener("click", () => {
         this.#active = id;
-        if (this.#mode === "essential") this.#mode = "advanced";
-        this.options.store.setExperience(this.#mode, id);
+        this.#view = "section";
+        this.options.store.setExperience(this.#mode, id, this.#view);
         this.#search.value = "";
         this.#render();
         void this.options.onNavigateSection?.(id, this.#mode);
@@ -165,16 +168,17 @@ export class CustomizationCenter {
 
   #render(): void {
     const section = SECTIONS.find(([id]) => id === this.#active)!;
-    const query = this.#search.value.trim(); this.#crumb.textContent = query ? "Resultados da busca" : this.#mode === "essential" ? "Essencial" : this.#mode === "customize" ? "Personalizar" : section[1]; this.#scope.value = this.options.store.document.scope;
+    const query = this.#search.value.trim(); this.#crumb.textContent = query ? "Resultados da busca" : this.#mode === "simple" ? "Simples" : this.#view === "all" ? "Todas as configurações" : section[1]; this.#scope.value = this.options.store.document.scope;
     this.#sidebar.querySelectorAll<HTMLElement>(".moon-settings-nav").forEach(node => node.classList.toggle("is-active", node.dataset.section === this.#active));
     this.#sidebar.querySelectorAll<HTMLElement>(".moon-settings-mode").forEach(node => node.classList.toggle("is-active", node.dataset.mode === this.#mode));
+    this.#sidebar.querySelector<HTMLElement>(".moon-settings-view-all")?.classList.toggle("is-active", this.#mode === "advanced" && this.#view === "all");
     this.#undo.disabled = !this.options.store.canUndo; this.#redo.disabled = !this.options.store.canRedo;
     this.#content.replaceChildren(); this.#content.dataset.searching = query ? "true" : "false";
     const config = this.options.store.config; this.#preview.apply(config);
     this.#syncPreviewState(); this.#footerState.textContent = this.options.store.dirty ? "Alterações ainda não aplicadas" : "Sem alterações pendentes"; this.#footerState.dataset.dirty = this.options.store.dirty ? "true" : "false";
     if (query) { this.#searchResults(query); return; }
-    if (this.#mode === "essential") this.#essential(config);
-    else if (this.#mode === "customize") { this.#content.append(this.#preview.element); for (const id of SECTIONS.map(([sectionId]) => sectionId)) this.#renderSection(id, config); }
+    if (this.#mode === "simple") this.#essential(config);
+    else if (this.#view === "all") { this.#content.append(this.#preview.element); for (const id of SECTIONS.map(([sectionId]) => sectionId)) this.#renderSection(id, config); }
     else { this.#content.append(this.#preview.element); this.#renderSection(this.#active, config); }
     this.#filter();
   }
@@ -189,7 +193,7 @@ export class CustomizationCenter {
   #searchResults(query: string): void {
     const results = searchSettings(query); const heading = element("header", "moon-settings-page-intro"); heading.append(element("h1", "", "Resultados"), element("p", "", results.length ? `${results.length} configurações encontradas por título, descrição ou intenção.` : `Nada encontrado para “${query}”.`)); this.#content.append(heading);
     const list = element("div", "moon-settings-results");
-    for (const result of results) { const item = button("moon-settings-result", `Abrir ${result.title}`); const copy = element("span", "moon-list-copy"); copy.append(element("small", "", `${result.category} · ${result.level === "essential" ? "Essencial" : "Avançado"}`), element("strong", "", result.title), element("p", "", result.description)); item.append(copy, icon("chevron")); item.addEventListener("click", () => { this.#active = result.section; this.#mode = "advanced"; this.options.store.setExperience(this.#mode, result.section); this.#search.value = ""; this.#render(); void this.options.onNavigateSection?.(result.section, this.#mode); requestAnimationFrame(() => { const target = this.#content.querySelector<HTMLElement>(`#moon-settings-${result.section}`); target?.focus(); target?.parentElement?.classList.add("is-highlighted"); }); }); list.append(item); }
+    for (const result of results) { const item = button("moon-settings-result", `Abrir ${result.title}`); const copy = element("span", "moon-list-copy"); copy.append(element("small", "", `${result.category} · ${result.level === "simple" ? "Simples" : "Avançado"}`), element("strong", "", result.title), element("p", "", result.description)); item.append(copy, icon("chevron")); item.addEventListener("click", () => { this.#active = result.section; this.#mode = "advanced"; this.#view = "section"; this.options.store.setExperience(this.#mode, result.section, this.#view); this.#search.value = ""; this.#render(); void this.options.onNavigateSection?.(result.section, this.#mode); requestAnimationFrame(() => { const target = this.#content.querySelector<HTMLElement>(`#moon-settings-${result.section}`); target?.focus(); target?.parentElement?.classList.add("is-highlighted"); }); }); list.append(item); }
     this.#content.append(list);
   }
 
@@ -370,7 +374,7 @@ export class CustomizationCenter {
     try {
       if (this.#pendingMoonTheme) { await this.options.onCancelMoonTheme(this.#pendingMoonTheme.intentId); this.#pendingMoonTheme = undefined; }
       if (applied && this.#selectedMoonThemeId) await this.options.onActivateMoonTheme(this.#selectedMoonThemeId);
-      if (applied && !this.options.store.applyPreview()) {
+      if (applied && !await this.options.store.applyPreview()) {
         this.#error(new Error(this.options.store.lastError ?? "Não foi possível salvar a personalização."));
         return;
       }

@@ -36,7 +36,7 @@ import { createMoonProfileBackup } from "../packages/storage/backup/profile-back
 import { CustomizationStore } from "./customization/customization-store.js";
 import { CustomizationApplier } from "./customization/customization-applier.js";
 import { CustomizationCenter } from "./customization/customization-center.js";
-import type { CustomizationConfig } from "./customization/customization-schema.js";
+import { CUSTOMIZATION_V2_STORAGE_KEY, CUSTOMIZATION_V3_STORAGE_KEY, type CustomizationConfig, type SettingsMode, type SettingsView } from "./customization/customization-schema.js";
 import { SETTINGS_CATALOG, type SettingsSection } from "./customization/settings-catalog.js";
 import { isMoonSettingsUrl, normalizeMoonInternalUrl } from "../packages/navigation/internal-routes.js";
 import { FaviconCache } from "./browser-shell/favicon-cache.js";
@@ -143,6 +143,11 @@ class BrowserShell {
     this.#bridge.onPermissionRequested(request => this.#permissionController?.enqueue(request));
     try {
       const context = await this.#bridge.getWindowContext(); this.#windowPrivate = context.private; this.#renderPrivateIdentity(); this.#sitePermissions = await this.#bridge.listSitePermissions();
+      const legacyRaw = localStorage.getItem(CUSTOMIZATION_V3_STORAGE_KEY) ?? localStorage.getItem(CUSTOMIZATION_V2_STORAGE_KEY);
+      let migrationSource: unknown = this.#customization.document;
+      if (legacyRaw) { try { migrationSource = JSON.parse(legacyRaw) as unknown; } catch { /* the validated local V4 recovery remains the safe source */ } }
+      const canonical = await this.#bridge.loadCustomization(migrationSource);
+      this.#customization.useCanonical(canonical, context.private ? undefined : document => this.#bridge!.commitCustomization(document));
       this.#focus = new FocusSessionController(document.documentElement, context.private ? undefined : localStorage, message => this.#flash(message));
       this.#focus.subscribe(() => this.#renderFocusIndicator());
       await this.#migrateLegacyProfile();
@@ -444,17 +449,18 @@ class BrowserShell {
     if (!this.#bridge || !this.#activeTabId) return;
     this.#settingsCenter?.setPresentation("page"); if (this.#settingsCenter) this.#stage.append(this.#settingsCenter.element);
     this.#settingsReturnHome = true;
-    await this.#bridge.showInternalPage(this.#activeTabId, this.#settingsUrl(section, this.#customization.document.experience.mode));
+    const experience = this.#customization.document.experience;
+    await this.#bridge.showInternalPage(this.#activeTabId, this.#settingsUrl(section, experience.mode, experience.view));
   }
 
   async #ensureSettingsPage(url: string): Promise<void> {
-    const state = this.#settingsState(url); this.#customization.setExperience(state.mode, state.section);
+    const state = this.#settingsState(url); this.#customization.setExperience(state.mode, state.section, state.view);
     await this.#openSettings("page", state.section);
   }
 
-  async #navigateSettingsSection(section: SettingsSection, mode: "essential" | "customize" | "advanced"): Promise<void> {
+  async #navigateSettingsSection(section: SettingsSection, mode: SettingsMode): Promise<void> {
     if (!this.#bridge || !this.#activeTabId) return;
-    await this.#bridge.showInternalPage(this.#activeTabId, this.#settingsUrl(section, mode));
+    await this.#bridge.showInternalPage(this.#activeTabId, this.#settingsUrl(section, mode, this.#customization.document.experience.view));
   }
 
   async #dismissSettings(returnHome: boolean): Promise<void> {
@@ -463,16 +469,16 @@ class BrowserShell {
     await center.cancel(); if (this.#settingsCenter === center) this.#settingsClosing = false;
   }
 
-  #settingsState(url: string): { readonly section: SettingsSection; readonly mode: "essential" | "customize" | "advanced" } {
+  #settingsState(url: string): { readonly section: SettingsSection; readonly mode: SettingsMode; readonly view: SettingsView } {
     const route = normalizeMoonInternalUrl(url)?.split("/").at(-1);
-    if (route === "settings") return { section: "appearance", mode: "essential" };
-    if (route === "all" || route === "personalize") return { section: "appearance", mode: "customize" };
+    if (route === "settings") return { section: "appearance", mode: "simple", view: "section" };
+    if (route === "all" || route === "personalize") return { section: "appearance", mode: "advanced", view: "all" };
     const sections: Readonly<Record<string, SettingsSection>> = { appearance: "appearance", themes: "appearance", home: "home", sidebar: "layout", workspaces: "data", search: "search", privacy: "data", advanced: this.#customization.document.experience.lastSection as SettingsSection };
-    return { section: sections[route ?? ""] ?? "appearance", mode: "advanced" };
+    return { section: sections[route ?? ""] ?? "appearance", mode: "advanced", view: "section" };
   }
 
-  #settingsUrl(section: SettingsSection, mode: "essential" | "customize" | "advanced"): string {
-    if (mode === "essential") return "moon://settings/settings"; if (mode === "customize") return "moon://settings/personalize";
+  #settingsUrl(section: SettingsSection, mode: SettingsMode, view: SettingsView): string {
+    if (mode === "simple") return "moon://settings/settings"; if (view === "all") return "moon://settings/all";
     const route: Readonly<Record<SettingsSection, string>> = { appearance: "appearance", layout: "sidebar", home: "home", typography: "advanced", search: "search", data: "privacy" };
     return `moon://settings/${route[section]}`;
   }

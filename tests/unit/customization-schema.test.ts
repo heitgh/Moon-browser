@@ -30,10 +30,10 @@ class FailingStorage extends MemoryStorage {
   }
 }
 
-describe("CustomizationSchemaV3", () => {
+describe("CustomizationSchemaV4", () => {
   it("creates a complete, valid and versioned default", () => {
     const document = validateCustomization(createDefaultCustomization(123));
-    expect(document.version).toBe(3);
+    expect(document.version).toBe(4);
     expect(document.global.appearance.colors).toMatchObject({ background: "#0a0c11", accent: "#8a5cf5", danger: "#f43f5e" });
     expect(document.global.layout.toolbar.items).toHaveLength(12);
     expect(document.global.home.widgets).toHaveLength(15);
@@ -62,7 +62,7 @@ describe("CustomizationSchemaV3", () => {
   it("migrates the legacy all-settings experience to the progressive Personalizar level", () => {
     const legacy = structuredClone(createDefaultCustomization());
     (legacy.experience as { mode: string }).mode = "all";
-    expect(validateCustomization(legacy).experience.mode).toBe("customize");
+    expect(validateCustomization(legacy).experience).toMatchObject({ mode: "advanced", view: "all" });
   });
 
   it("hydrates the safe top-tab default for documents created before tab positioning", () => {
@@ -77,7 +77,7 @@ describe("CustomizationSchemaV3", () => {
     for (const scope of ["all", "appearance", "workspace"] as const) {
       const serialized = serializeCustomization(current, scope, "research");
       const imported = parseCustomizationImport(serialized, createDefaultCustomization(200), "research");
-      expect(imported.version).toBe(3);
+      expect(imported.version).toBe(4);
       expect(resolveCustomization(imported, "research").appearance.colors.accent).toBe("#8a5cf5");
     }
   });
@@ -97,7 +97,7 @@ describe("CustomizationStore", () => {
   it("migrates the V2 key without deleting or mutating its original value", () => {
     const storage = new MemoryStorage(); const legacy = { ...createDefaultCustomization(77), version: 2 }; delete (legacy as Partial<typeof legacy>).experience;
     const original = JSON.stringify(legacy); storage.setItem("moon:customization:v2", original); const store = CustomizationStore.load(storage);
-    expect(store.document.version).toBe(3); expect(store.document.updatedAt).toBe(77); expect(storage.getItem("moon:customization:v2")).toBe(original); expect(storage.getItem(CUSTOMIZATION_STORAGE_KEY)).not.toBeNull();
+    expect(store.document.version).toBe(4); expect(store.document.updatedAt).toBe(77); expect(storage.getItem("moon:customization:v2")).toBe(original); expect(storage.getItem(CUSTOMIZATION_STORAGE_KEY)).not.toBeNull();
   });
   it("recovers the last valid document when the primary value is corrupt", () => {
     const storage = new MemoryStorage(); const valid = createDefaultCustomization(42);
@@ -127,18 +127,36 @@ describe("CustomizationStore", () => {
     store.cancelPreview(); expect(store.config.appearance.colors.accent).toBe(original); expect(storage.getItem(CUSTOMIZATION_STORAGE_KEY)).toBe(confirmed);
   });
 
-  it("persists a preview only after apply", () => {
+  it("persists a preview only after apply", async () => {
     const storage = new MemoryStorage(); const store = CustomizationStore.load(storage); store.beginPreview();
     expect(store.set("appearance.colors.accent", "#38bdf8")).toBe(true);
     expect(JSON.parse(storage.getItem(CUSTOMIZATION_STORAGE_KEY)!).global.appearance.colors.accent).not.toBe("#38bdf8");
-    expect(store.applyPreview()).toBe(true);
+    expect(await store.applyPreview()).toBe(true);
     expect(JSON.parse(storage.getItem(CUSTOMIZATION_STORAGE_KEY)!).global.appearance.colors.accent).toBe("#38bdf8");
   });
 
-  it("keeps the confirmed state and the preview open when saving fails", () => {
+  it("sends exactly one canonical commit for a complete preview", async () => {
+    const storage = new MemoryStorage(); const commits: unknown[] = [];
+    const store = CustomizationStore.load(storage, async document => { commits.push(document); return document; });
+    store.beginPreview(); store.set("appearance.colors.accent", "#38bdf8"); store.set("layout.uiScale", 1.1);
+    expect(commits).toHaveLength(0);
+    expect(await store.applyPreview()).toBe(true);
+    expect(commits).toHaveLength(1);
+  });
+
+  it("keeps the draft open and local mirror unchanged when the canonical commit fails", async () => {
+    const storage = new MemoryStorage(); const store = CustomizationStore.load(storage, async () => { throw new Error("SQLite indisponível"); });
+    const confirmed = storage.getItem(CUSTOMIZATION_STORAGE_KEY);
+    store.beginPreview(); store.set("appearance.colors.accent", "#38bdf8");
+    expect(await store.applyPreview()).toBe(false);
+    expect(store.previewing).toBe(true); expect(store.lastError).toContain("SQLite indisponível");
+    expect(storage.getItem(CUSTOMIZATION_STORAGE_KEY)).toBe(confirmed);
+  });
+
+  it("keeps the confirmed state and the preview open when saving fails", async () => {
     const storage = new FailingStorage(); const store = CustomizationStore.load(storage); const confirmed = storage.getItem(CUSTOMIZATION_STORAGE_KEY);
     store.beginPreview(); expect(store.set("appearance.colors.accent", "#38bdf8")).toBe(true); storage.failWrites = true;
-    expect(store.applyPreview()).toBe(false); expect(store.previewing).toBe(true); expect(storage.getItem(CUSTOMIZATION_STORAGE_KEY)).toBe(confirmed);
+    expect(await store.applyPreview()).toBe(false); expect(store.previewing).toBe(true); expect(storage.getItem(CUSTOMIZATION_STORAGE_KEY)).toBe(confirmed);
     expect(store.lastError).toMatch(/Falha ao gravar/);
   });
 

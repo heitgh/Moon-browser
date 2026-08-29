@@ -31,6 +31,17 @@ export function registerProductIpc(
     }
     return payload.id;
   };
+  const assertNormalWindow = (event: Electron.IpcMainInvokeEvent): void => {
+    const windowId = windows.idForWebContents(event.sender);
+    if (!windowId || windows.isPrivate(windowId)) throw new Error("Esta operação não está disponível em janelas privadas");
+  };
+  const boundedCustomization = (value: unknown): unknown => {
+    let serialized: string;
+    try { serialized = JSON.stringify(value); }
+    catch { throw new TypeError("Invalid customization payload"); }
+    if (serialized.length > 2_000_000) throw new TypeError("Customization payload exceeds 2 MB");
+    return value;
+  };
 
   router.register("download:list", () => downloads.list());
   router.register("download:pause", (_event, payload: IdPayload) => downloads.pause(idFrom(payload)));
@@ -107,6 +118,14 @@ export function registerProductIpc(
     }
     return profile.migrateLegacyProfile(payload.content);
   });
+  router.register("customization:load", (_event, payload?: { readonly legacy?: unknown }) => {
+    return profile.loadCustomization(payload?.legacy === undefined ? undefined : boundedCustomization(payload.legacy));
+  });
+  router.register("customization:commit", (event, payload?: { readonly document?: unknown }) => {
+    assertNormalWindow(event);
+    if (!payload || payload.document === undefined) throw new TypeError("A customization document is required");
+    return profile.commitCustomization(boundedCustomization(payload.document));
+  });
   router.register("profile:get-data", async event => {
     const snapshot = await profile.loadProfileData();
     const windowId = windows.idForWebContents(event.sender);
@@ -120,10 +139,6 @@ export function registerProductIpc(
     if (windows.isPrivate(windowId) && (mutation.type === "history:record" || mutation.type === "notes:save")) throw new Error("Private windows cannot persist history or notes");
     return profile.applyProfileMutation(mutation);
   });
-  const assertNormalWindow = (event: Electron.IpcMainInvokeEvent): void => {
-    const windowId = windows.idForWebContents(event.sender);
-    if (!windowId || windows.isPrivate(windowId)) throw new Error("Profile import is unavailable in private windows");
-  };
   router.register("import:discover", event => { assertNormalWindow(event); return profileImporter.discover(); });
   router.register("import:run", (event, payload: unknown) => { assertNormalWindow(event); return profileImporter.import(parseImportSelection(payload)); });
   router.register("import:bookmarks-html", event => { assertNormalWindow(event); return profileImporter.importBookmarksHtml(); });

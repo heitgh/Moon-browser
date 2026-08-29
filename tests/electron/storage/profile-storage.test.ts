@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import { ProfileStorage } from "../../../apps/desktop/electron/services/profile-storage.js";
 import { createMoonProfileBackup } from "../../../packages/storage/backup/profile-backup.js";
+import { createDefaultCustomization } from "../../../ui/customization/customization-schema.js";
 
 const temporaryDirectories: string[] = [];
 const backup = createMoonProfileBackup({
@@ -29,6 +30,31 @@ async function profile(): Promise<{ directory: string; storage: ProfileStorage }
 }
 
 describe("ProfileStorage", () => {
+  it("migrates V3 customization to canonical V4 exactly once", async () => {
+    const { storage } = await profile();
+    const legacy = { ...createDefaultCustomization(100), version: 3, experience: { mode: "customize", lastSection: "layout" } };
+    const migrated = await storage.loadCustomization(legacy);
+    expect(migrated).toMatchObject({ version: 4, updatedAt: 100, experience: { mode: "advanced", view: "all", lastSection: "layout" } });
+    const competingLegacy = createDefaultCustomization(200);
+    (competingLegacy.global.appearance.colors as { accent: string }).accent = "#38bdf8";
+    expect((await storage.loadCustomization(competingLegacy)).updatedAt).toBe(100);
+    expect((await storage.loadCustomization()).global.appearance.colors.accent).toBe(migrated.global.appearance.colors.accent);
+    await storage.close();
+  });
+
+  it("commits customization atomically and rejects stale revisions", async () => {
+    const { storage } = await profile();
+    const initial = await storage.loadCustomization(createDefaultCustomization(100));
+    const next = structuredClone(initial);
+    (next as { revision: number; updatedAt: number }).revision = initial.revision + 2;
+    (next as { revision: number; updatedAt: number }).updatedAt = 200;
+    (next.global.appearance.colors as { accent: string }).accent = "#38bdf8";
+    expect((await storage.commitCustomization(next)).global.appearance.colors.accent).toBe("#38bdf8");
+    await expect(storage.commitCustomization(initial)).rejects.toThrow(/outra janela/i);
+    expect((await storage.loadCustomization()).global.appearance.colors.accent).toBe("#38bdf8");
+    await storage.close();
+  });
+
   it("backs up and migrates the legacy profile exactly once", async () => {
     const { directory, storage } = await profile();
     expect(await storage.migrateLegacyProfile(JSON.stringify(backup))).toEqual({ migrated: true, version: 1 });

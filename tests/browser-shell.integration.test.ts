@@ -30,7 +30,7 @@ const bridge = {
   exportCustomization: vi.fn(async (_content: string) => true), importCustomization: vi.fn(async () => null), fetchWallpaper: vi.fn(async () => "data:image/png;base64,YQ=="),
   exportSettingsDiagnostic: vi.fn(async (_content: string) => true),
   fetchFavicon: vi.fn(async () => "data:image/png;base64,YQ=="),
-  migrateLegacyProfile: vi.fn(async () => ({ migrated: true, version: 1 })), getProfileData: vi.fn(async () => profileData), mutateProfileData, onTabUpdated: vi.fn((listener: (update: unknown) => void) => { tabUpdateListeners.push(listener); return () => undefined; }), onTabClosed: vi.fn(() => () => undefined),
+  migrateLegacyProfile: vi.fn(async () => ({ migrated: true, version: 1 })), loadCustomization: vi.fn(async (legacy: unknown) => legacy), commitCustomization: vi.fn(async (document: unknown) => document), getProfileData: vi.fn(async () => profileData), mutateProfileData, onTabUpdated: vi.fn((listener: (update: unknown) => void) => { tabUpdateListeners.push(listener); return () => undefined; }), onTabClosed: vi.fn(() => () => undefined),
   discoverImportSources: vi.fn(async () => [{ id: "source-12345678", browser: "chromium", name: "Chromium — Default", modifiedAt: Date.now(), categories: { bookmarks: 3, history: 5 } }]),
   importBrowserProfile: vi.fn(async (selection: { sourceId: string; categories: readonly string[] }) => ({ sourceId: selection.sourceId, imported: { bookmarks: selection.categories.includes("bookmarks") ? 3 : 0, history: selection.categories.includes("history") ? 5 : 0 }, skipped: { bookmarks: 0, history: 0 } })),
   importBookmarksHtml: vi.fn(async () => null),
@@ -165,7 +165,7 @@ describe("Moon browser shell", () => {
     toggle.click(); await flush();
     expect(bridge.setAdblockEnabled).toHaveBeenCalledWith(false);
   });
-  it("exports validated V3 customization through the native bridge", async () => {
+  it("exports validated V4 customization through the native bridge", async () => {
     bridge.exportCustomization.mockClear();
     (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
     (document.querySelector('[aria-label="Workspaces e dados"]') as HTMLButtonElement).click();
@@ -188,14 +188,14 @@ describe("Moon browser shell", () => {
   it("applies customization live without persisting the draft and cancels the preview", async () => {
     const before = document.documentElement.dataset.moonTheme;
     (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
-    (document.querySelector('[data-mode="essential"]') as HTMLButtonElement).click(); await flush();
-    const confirmed = localStorage.getItem("moon:customization:v3");
+    (document.querySelector('[data-mode="simple"]') as HTMLButtonElement).click(); await flush();
+    const confirmed = localStorage.getItem("moon:customization:v4");
     (document.querySelector(`[aria-label="${before === "light" ? "Escuro" : "Claro"}"]`) as HTMLButtonElement).click(); await flush();
     expect(document.documentElement.dataset.moonTheme).not.toBe(before);
     expect(document.querySelector('.moon-settings-footer-copy strong[data-dirty="true"]')?.textContent).toContain("não aplicadas");
     (document.querySelector('[aria-label="Recolher prévia"]') as HTMLButtonElement).click();
     expect((document.querySelector(".moon-live-preview") as HTMLElement).hidden).toBe(true);
-    expect(localStorage.getItem("moon:customization:v3")).toBe(confirmed);
+    expect(localStorage.getItem("moon:customization:v4")).toBe(confirmed);
     (document.querySelector('[aria-label="Cancelar mudanças"]') as HTMLButtonElement).click(); await flush();
     expect(document.documentElement.dataset.moonTheme).toBe(before);
   });
@@ -209,10 +209,10 @@ describe("Moon browser shell", () => {
     expect(document.querySelector(".moon-customization-content")?.textContent).toContain("Família e ritmo");
     (document.querySelector('[aria-label="Layout e densidade"]') as HTMLButtonElement).click(); await flush();
     const first = document.querySelector(".moon-order-row") as HTMLElement;
-    const confirmed = localStorage.getItem("moon:customization:v3"); const firstLabel = first.querySelector("strong")?.textContent; const secondLabel = document.querySelectorAll(".moon-order-row")[1]?.querySelector("strong")?.textContent;
+    const confirmed = localStorage.getItem("moon:customization:v4"); const firstLabel = first.querySelector("strong")?.textContent; const secondLabel = document.querySelectorAll(".moon-order-row")[1]?.querySelector("strong")?.textContent;
     first.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true })); await flush();
     expect(document.querySelectorAll(".moon-order-row")[0]?.querySelector("strong")?.textContent).toBe(secondLabel); expect(document.querySelectorAll(".moon-order-row")[1]?.querySelector("strong")?.textContent).toBe(firstLabel);
-    expect(localStorage.getItem("moon:customization:v3")).toBe(confirmed);
+    expect(localStorage.getItem("moon:customization:v4")).toBe(confirmed);
     expect(document.querySelector(".moon-visually-hidden")?.textContent).toContain("posição");
     (document.querySelector('[aria-label="Cancelar mudanças"]') as HTMLButtonElement).click(); await flush();
   });
@@ -230,7 +230,7 @@ describe("Moon browser shell", () => {
   });
   it("applies workspace visibility live and keeps keyboard recovery available", async () => {
     (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
-    (document.querySelector('[data-mode="essential"]') as HTMLButtonElement).click(); await flush();
+    (document.querySelector('[data-mode="simple"]') as HTMLButtonElement).click(); await flush();
     const workspaceGroup = [...document.querySelectorAll<HTMLElement>(".moon-setting-group")].find(group => group.querySelector("h3")?.textContent === "Workspaces")!;
     const visibility = workspaceGroup.querySelector("select") as HTMLSelectElement; visibility.value = "hidden"; visibility.dispatchEvent(new Event("change", { bubbles: true })); await flush();
     expect(document.documentElement.dataset.moonWorkspaces).toBe("hidden");
@@ -246,7 +246,7 @@ describe("Moon browser shell", () => {
   });
   it("switches between top and functional vertical tabs through Settings", async () => {
     (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
-    (document.querySelector('[data-mode="essential"]') as HTMLButtonElement).click(); await flush();
+    (document.querySelector('[data-mode="simple"]') as HTMLButtonElement).click(); await flush();
     const tabsGroup = [...document.querySelectorAll<HTMLElement>(".moon-setting-group")].find(group => group.querySelector("h3")?.textContent === "Abas")!;
     const position = tabsGroup.querySelector("select") as HTMLSelectElement;
     position.value = "left"; position.dispatchEvent(new Event("change", { bubbles: true })); await flush();
