@@ -87,7 +87,7 @@ Medição local reproduzível deste corte: cold boot até Home utilizável após
 
 | Entrega | Estado | Evidência |
 |---|---|---|
-| Contrato `.moontheme` v1 e fixtures hostis | Concluído | `packages/theme-contract` e `tests/unit/moon-theme-contract.test.ts` |
+| Contrato `.moontheme` V2 retrocompatível com V1 e fixtures hostis | Concluído | `packages/theme-contract` e `tests/unit/moon-theme-contract.test.ts` |
 | Importar, quarentena, preview, confirmar e exportar | Concluído | `moon-theme-service.ts`, IPC allowlisted e Moon Studio |
 | Aplicar, atualizar, manter versão, remover e rollback | Concluído | ThemeRepository, Personalização V2 e teste Electron de reinício |
 | Menu página/link/seleção/editável/imagem/mídia | Concluído | `context-menu.ts` e modelo tipado testável |
