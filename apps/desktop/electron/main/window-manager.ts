@@ -3,9 +3,11 @@ import { BrowserWindow, type BrowserWindowConstructorOptions, type WebContents }
 export class WindowManager {
   readonly #windows = new Map<string, BrowserWindow>();
   readonly #privateWindows = new Set<string>();
+  readonly #guestWindows = new Set<string>();
+  readonly #profileIds = new Map<string, string>();
   #nextId = 0;
 
-  create(options: BrowserWindowConstructorOptions = {}, context: { readonly private?: boolean } = {}): string {
+  create(options: BrowserWindowConstructorOptions = {}, context: { readonly private?: boolean; readonly guest?: boolean; readonly profileId?: string } = {}): string {
     const id = `window-${++this.#nextId}`;
     const window = new BrowserWindow({
       width: 1280,
@@ -21,10 +23,12 @@ export class WindowManager {
 
     this.#windows.set(id, window);
     if (context.private) this.#privateWindows.add(id);
+    if (context.guest) this.#guestWindows.add(id);
+    this.#profileIds.set(id, context.profileId ?? "default");
     window.once("ready-to-show", () => {
       if (!window.isDestroyed()) window.show();
     });
-    window.once("closed", () => { this.#windows.delete(id); this.#privateWindows.delete(id); });
+    window.once("closed", () => { this.#windows.delete(id); this.#privateWindows.delete(id); this.#guestWindows.delete(id); this.#profileIds.delete(id); });
     return id;
   }
 
@@ -47,6 +51,11 @@ export class WindowManager {
   }
 
   isPrivate(id: string): boolean { return this.#privateWindows.has(id); }
+  isGuest(id: string): boolean { return this.#guestWindows.has(id); }
+  profileId(id: string): string { if (!this.#windows.has(id)) throw new Error(`Window not found: ${id}`); return this.#profileIds.get(id) ?? "default"; }
+  hasProfileWindows(profileId: string, excludingWindowId?: string): boolean {
+    return [...this.#windows.keys()].some(id => id !== excludingWindowId && this.#profileIds.get(id) === profileId);
+  }
 
   close(id: string): void { this.require(id).close(); }
   focus(id: string): void { this.require(id).focus(); }

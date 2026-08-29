@@ -6,6 +6,8 @@ import {
   type Drawer,
   type ManagedDownload,
   type Navigation,
+  type LocalProfileAvatar,
+  type LocalProfileSummary,
   type ProfileDataMutation,
   type ProfileDataSnapshot,
   type SavedLink,
@@ -76,7 +78,7 @@ class BrowserShell {
     onOpenAi: () => this.#toggleDrawer("ai"),
     onOpenDownloads: () => this.#toggleDrawer("downloads"),
     onOpenModules: () => this.#toggleDrawer("extensions"),
-    onOpenProfile: () => this.#toggleDrawer("workspaces"),
+    onOpenProfile: () => this.#toggleDrawer("profiles"),
     onOpenMenu: () => { void this.#openSettings(); }
   }, { ai: AI_ENABLED, modules: MODULES_ENABLED });
   readonly #omnibox = this.#toolbar.omnibox;
@@ -113,6 +115,7 @@ class BrowserShell {
   readonly #securityText = this.#toolbar.securityText;
   readonly #status = el("div", "moon-status");
   readonly #privateBadge = el("div", "moon-private-badge", "ANÔNIMO");
+  readonly #profileName = el("span", "", "Padrão");
   readonly #zenExit = btn("moon-zen-exit", "Sair do modo Foco (Ctrl+Shift+Z)", "close");
   readonly #rail = new Map<string, HTMLButtonElement>();
   #workspaces = load<Workspace[]>(KEYS.workspaces, [...WORKSPACES]);
@@ -126,6 +129,9 @@ class BrowserShell {
   #sitePermissions: readonly SitePermissionRecord[] = [];
   #workspaceId = this.#workspaces[0]?.id ?? "research";
   #windowPrivate = false;
+  #windowGuest = false;
+  #activeProfile: LocalProfileSummary | undefined;
+  #profiles: readonly LocalProfileSummary[] = [];
   #activeTabId: string | undefined;
   #openDrawer: Drawer | undefined;
   #settings: HTMLElement | undefined;
@@ -156,7 +162,7 @@ class BrowserShell {
     this.#bridge.onAdblockStatus(status => { this.#adblock = status; this.#renderAdblock(); this.#renderDrawer(); });
     this.#bridge.onPermissionRequested(request => this.#permissionController?.enqueue(request));
     try {
-      const context = await this.#bridge.getWindowContext(); this.#windowPrivate = context.private; this.#renderPrivateIdentity(); this.#sitePermissions = await this.#bridge.listSitePermissions();
+      const context = await this.#bridge.getWindowContext(); this.#windowPrivate = context.private; this.#windowGuest = context.guest; this.#profiles = await this.#bridge.listLocalProfiles(); this.#activeProfile = this.#profiles.find(profile => profile.id === context.profileId); this.#renderProfileIdentity(); this.#renderPrivateIdentity(); this.#sitePermissions = await this.#bridge.listSitePermissions();
       const legacyRaw = localStorage.getItem(CUSTOMIZATION_V3_STORAGE_KEY) ?? localStorage.getItem(CUSTOMIZATION_V2_STORAGE_KEY);
       let migrationSource: unknown = this.#customization.document;
       if (legacyRaw) { try { migrationSource = JSON.parse(legacyRaw) as unknown; } catch { /* the validated local V4 recovery remains the safe source */ } }
@@ -186,7 +192,7 @@ class BrowserShell {
     const rail = this.#railElement;
     const brand = btn("moon-brand", "Moon Browser", "moon"); brand.addEventListener("click", () => void this.#showHome()); rail.append(brand);
     const controls: readonly [string, string, IconName, () => void][] = [
-      ["home", "Página inicial", "home", () => void this.#showHome()], ["commands", "Central de comandos", "search", () => { void this.#openCommandCenter(); }], ["workspaces", "Workspaces", "grid", () => this.#toggleDrawer("workspaces")],
+      ["home", "Página inicial", "home", () => void this.#showHome()], ["commands", "Central de comandos", "search", () => { void this.#openCommandCenter(); }], ["profiles", "Gerenciar perfis", "moon", () => this.#toggleDrawer("profiles")], ["workspaces", "Workspaces", "grid", () => this.#toggleDrawer("workspaces")],
       ["bookmarks", "Favoritos", "star", () => this.#toggleDrawer("bookmarks")], ["downloads", "Downloads", "download", () => this.#toggleDrawer("downloads")],
       ["history", "Histórico", "history", () => this.#toggleDrawer("history")], ["translate", "Traduzir página", "translate", () => this.#toggleDrawer("translate")],
       ["notes", "Bloco de notas", "note", () => this.#toggleDrawer("notes")], ["focus", "Foco e Zen", "play", () => this.#toggleDrawer("focus")], ["extensions", "Extensões", "plugin", () => this.#toggleDrawer("extensions")],
@@ -200,7 +206,7 @@ class BrowserShell {
     const drawerResize = el("div", "moon-drawer-resize"); drawerResize.tabIndex = 0; drawerResize.setAttribute("role", "separator"); drawerResize.setAttribute("aria-label", "Redimensionar painel"); drawerResize.setAttribute("aria-orientation", "vertical");
     drawerHeader.append(this.#drawerTitle, drawerClose); this.#drawer.append(drawerHeader, this.#drawerBody, drawerResize); this.#bindDrawerResize(drawerResize);
 
-    const main = el("section", "moon-browser-main"); const tabsBar = this.#tabsBar; const mark = el("div", "moon-window-mark"); mark.append(svg("moon"), el("span", "", "MOON"));
+    const main = el("section", "moon-browser-main"); const tabsBar = this.#tabsBar; const mark = btn("moon-window-mark", "Gerenciar perfis", "moon"); mark.append(this.#profileName); mark.addEventListener("click", () => this.#toggleDrawer("profiles"));
     this.#addTab.addEventListener("click", () => void this.#createTab()); this.#privateBadge.hidden = true; this.#privateBadge.title = "O modo anônimo não oculta o tráfego do seu provedor, empresa, escola ou dos sites acessados."; tabsBar.append(mark, this.#tabStrip.element, this.#addTab, this.#privateBadge);
 
     const content = el("div", "moon-content"); this.#renderHomeShortcuts(); this.#stage.append(this.#home, this.#viewport, this.#status); content.append(this.#stage);
@@ -268,9 +274,64 @@ class BrowserShell {
   #toggleDrawer(name: Drawer): void { if (this.#openDrawer === name) return this.#closeDrawer(); this.#openDrawer = name; this.#drawer.classList.add("is-open"); this.#renderDrawer(); requestAnimationFrame(() => this.#syncBounds()); }
   #closeDrawer(): void { this.#openDrawer = undefined; this.#drawer.classList.remove("is-open"); this.#rail.forEach(item => item.classList.remove("is-active")); this.#render(); requestAnimationFrame(() => this.#syncBounds()); }
   #renderDrawer(): void {
-    if (!this.#openDrawer) return; const titles: Readonly<Record<Drawer, string>> = { workspaces: "Workspaces", bookmarks: "Favoritos", downloads: "Downloads", history: "Histórico", translate: "Tradutor", notes: "Bloco de notas", focus: "Foco e Zen", extensions: "Extensões", ai: "Moon AI", security: "Proteção" };
+    if (!this.#openDrawer) return; const titles: Readonly<Record<Drawer, string>> = { profiles: "Gerenciar perfis", workspaces: "Workspaces", bookmarks: "Favoritos", downloads: "Downloads", history: "Histórico", translate: "Tradutor", notes: "Bloco de notas", focus: "Foco e Zen", extensions: "Extensões", ai: "Moon AI", security: "Proteção" };
     this.#drawerTitle.textContent = titles[this.#openDrawer]; this.#drawerBody.replaceChildren(); this.#rail.forEach(item => item.classList.remove("is-active")); this.#rail.get(this.#openDrawer)?.classList.add("is-active");
-    if (this.#openDrawer === "workspaces") this.#workspaceDrawer(); if (this.#openDrawer === "bookmarks") this.#bookmarksDrawer(); if (this.#openDrawer === "downloads") this.#downloadsDrawer(); if (this.#openDrawer === "history") this.#historyDrawer(); if (this.#openDrawer === "translate") this.#translateDrawer(); if (this.#openDrawer === "notes") this.#notesDrawer(); if (this.#openDrawer === "focus") this.#focusPanel.render(this.#drawerBody); if (this.#openDrawer === "extensions") this.#extensionsDrawer(); if (this.#openDrawer === "ai") this.#aiDrawer(); if (this.#openDrawer === "security") this.#securityDrawer();
+    if (this.#openDrawer === "profiles") this.#profilesDrawer(); if (this.#openDrawer === "workspaces") this.#workspaceDrawer(); if (this.#openDrawer === "bookmarks") this.#bookmarksDrawer(); if (this.#openDrawer === "downloads") this.#downloadsDrawer(); if (this.#openDrawer === "history") this.#historyDrawer(); if (this.#openDrawer === "translate") this.#translateDrawer(); if (this.#openDrawer === "notes") this.#notesDrawer(); if (this.#openDrawer === "focus") this.#focusPanel.render(this.#drawerBody); if (this.#openDrawer === "extensions") this.#extensionsDrawer(); if (this.#openDrawer === "ai") this.#aiDrawer(); if (this.#openDrawer === "security") this.#securityDrawer();
+  }
+  #profilesDrawer(): void {
+    this.#drawerBody.append(el("p", "moon-drawer-description", "Perfis isolam sessões, histórico, temas, Home e preferências. Workspaces continuam dentro de cada perfil."));
+    if (this.#windowPrivate) this.#drawerBody.append(el("div", "moon-info-card", "Feche a janela anônima para criar, editar ou alternar perfis."));
+    const list = el("div", "moon-profile-list");
+    this.#profiles.forEach(profile => {
+      const card = el("article", `moon-profile-card${profile.id === this.#activeProfile?.id ? " is-active" : ""}`);
+      const header = el("div", "moon-profile-card-header"); const avatar = el("span", "moon-profile-avatar", profile.name[0]?.toUpperCase() ?? "M"); avatar.style.background = profile.color;
+      const copy = el("span", "moon-list-copy"); copy.append(el("strong", "", profile.name), el("small", "", profile.kind === "guest" ? "Temporário · apagado ao fechar" : profile.default ? "Perfil padrão" : "Perfil local isolado"));
+      header.append(avatar, copy); if (profile.id === this.#activeProfile?.id) header.append(el("span", "moon-profile-active", "ATIVO")); card.append(header);
+      const actions = el("div", "moon-profile-actions");
+      if (profile.id !== this.#activeProfile?.id) { const open = btn("moon-text-button", `Alternar para ${profile.name}`, "chevron"); open.append(el("span", "", "Alternar")); open.disabled = this.#windowPrivate; open.addEventListener("click", () => { void this.#switchLocalProfile(profile.id); }); actions.append(open); }
+      if (profile.kind === "persistent") {
+        const edit = btn("moon-text-button", `Editar ${profile.name}`, "palette"); edit.append(el("span", "", "Editar")); edit.disabled = this.#windowPrivate; actions.append(edit);
+        const form = this.#profileForm(profile, async value => { await this.#bridge!.updateLocalProfile({ id: profile.id, ...value }); await this.#reloadLocalProfiles(); }); form.hidden = true; edit.addEventListener("click", () => { form.hidden = !form.hidden; }); card.append(actions, form);
+      } else card.append(actions);
+      if (!profile.default && profile.id !== this.#activeProfile?.id) { const remove = btn("moon-text-button is-danger", `Excluir ${profile.name}`, "trash"); remove.append(el("span", "", "Excluir")); remove.disabled = this.#windowPrivate; remove.addEventListener("click", () => { void this.#deleteLocalProfile(profile.id); }); actions.append(remove); }
+      list.append(card);
+    });
+    this.#drawerBody.append(list);
+    if (this.#windowPrivate || this.#windowGuest) return;
+    const createTitle = el("h3", "moon-panel-section-title", "Novo perfil local");
+    this.#drawerBody.append(createTitle, this.#profileForm(undefined, async value => { await this.#bridge!.createLocalProfile(value); await this.#reloadLocalProfiles(); }));
+    const guest = btn("moon-secondary-button moon-profile-guest", "Abrir perfil convidado", "moon"); guest.append(el("span", "", "Usar como convidado")); guest.addEventListener("click", () => { void this.#createGuestProfile(); }); this.#drawerBody.append(guest);
+  }
+  #profileForm(profile: LocalProfileSummary | undefined, onSubmit: (value: { readonly name: string; readonly avatar: LocalProfileAvatar; readonly color: string }) => Promise<void>): HTMLFormElement {
+    const form = el("form", "moon-profile-form"); const name = el("input", "moon-settings-input"); name.value = profile?.name ?? ""; name.placeholder = "Nome do perfil"; name.required = true; name.maxLength = 40;
+    const avatar = el("select", "moon-select"); (["moon", "person", "briefcase", "palette", "game"] as const).forEach(value => { const option = el("option", "", ({ moon: "Lua", person: "Pessoal", briefcase: "Trabalho", palette: "Criativo", game: "Jogos" })[value]); option.value = value; option.selected = profile?.avatar === value; avatar.append(option); });
+    const color = el("input", "moon-profile-color"); color.type = "color"; color.value = profile?.color ?? "#8b5cf6"; color.setAttribute("aria-label", "Cor do perfil");
+    const saveButton = btn("moon-primary-button", profile ? "Salvar perfil" : "Criar perfil", profile ? "palette" : "plus"); saveButton.type = "submit"; saveButton.append(el("span", "", profile ? "Salvar" : "Criar"));
+    form.append(name, avatar, color, saveButton); form.addEventListener("submit", event => { event.preventDefault(); saveButton.disabled = true; void onSubmit({ name: name.value, avatar: avatar.value as LocalProfileAvatar, color: color.value }).then(() => { if (!profile) name.value = ""; }).catch(error => this.#showError(error)).finally(() => { saveButton.disabled = false; }); }); return form;
+  }
+  async #reloadLocalProfiles(): Promise<void> { if (!this.#bridge) return; this.#profiles = await this.#bridge.listLocalProfiles(); if (this.#activeProfile) this.#activeProfile = this.#profiles.find(profile => profile.id === this.#activeProfile!.id) ?? this.#activeProfile; this.#renderProfileIdentity(); this.#renderDrawer(); }
+  async #switchLocalProfile(id: string): Promise<void> {
+    if (!this.#bridge || id === this.#activeProfile?.id) return;
+    if (this.#customization.dirty && !window.confirm("Há um rascunho de personalização. Descartar o rascunho e alternar de perfil?")) return;
+    if (this.#customization.dirty) this.#customization.cancelPreview();
+    try { await this.#bridge.openLocalProfile(id); } catch (error) { this.#showError(error); }
+  }
+  async #createGuestProfile(): Promise<void> {
+    if (!this.#bridge) return;
+    if (this.#customization.dirty && !window.confirm("Há um rascunho de personalização. Descartá-lo e abrir um perfil convidado?")) return;
+    if (this.#customization.dirty) this.#customization.cancelPreview();
+    try { await this.#bridge.createGuestProfile(); } catch (error) { this.#showError(error); }
+  }
+  async #deleteLocalProfile(id: string): Promise<void> {
+    if (!this.#bridge) return;
+    try {
+      const summary = await this.#bridge.getLocalProfileDeletionSummary(id);
+      const confirmation = window.prompt(`Isso removerá ${summary.includes.join(", ")} do perfil “${summary.profile.name}”. Digite exatamente o nome para continuar.`);
+      if (confirmation === null) return;
+      const backup = window.confirm("Criar um backup local recuperável antes de excluir?");
+      const result = await this.#bridge.deleteLocalProfile({ id, confirmation, backup });
+      await this.#reloadLocalProfiles(); this.#flash(result.backupPath ? "Perfil excluído; backup local criado." : "Perfil excluído permanentemente.");
+    } catch (error) { this.#showError(error); }
   }
   #workspaceDrawer(): void {
     this.#drawerBody.append(el("p", "moon-drawer-description", "Separe abas e sessões por contexto.")); const list = el("div", "moon-panel-list");
@@ -516,8 +577,11 @@ class BrowserShell {
   }
   #renderPrivateIdentity(): void {
     document.documentElement.dataset.moonPrivate = this.#windowPrivate ? "on" : "off";
-    this.#privateBadge.hidden = !this.#windowPrivate;
+    document.documentElement.dataset.moonGuest = this.#windowGuest ? "on" : "off";
+    this.#privateBadge.textContent = this.#windowPrivate ? "ANÔNIMO" : "CONVIDADO";
+    this.#privateBadge.hidden = !this.#windowPrivate && !this.#windowGuest;
   }
+  #renderProfileIdentity(): void { const profile = this.#activeProfile; this.#profileName.textContent = profile?.name ?? "Moon"; this.#profileName.parentElement?.style.setProperty("--moon-profile-color", profile?.color ?? "var(--moon-user-accent)"); }
   async #mutateProfileData(mutation: ProfileDataMutation): Promise<boolean> {
     if (!this.#bridge) { this.#saveLegacyProjection(mutation); return true; }
     try { await this.#bridge.mutateProfileData(mutation); return true; }

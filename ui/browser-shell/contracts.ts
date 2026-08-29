@@ -32,17 +32,19 @@ export interface PermissionRequest { readonly id: string; readonly origin: strin
 export interface MoonThemeSummary { readonly id: string; readonly packageId: string; readonly name: string; readonly version: string; readonly author: string; readonly trust: "official" | "local"; readonly active: boolean; readonly installedAt: number; }
 export interface MoonThemePayload { readonly summary: MoonThemeSummary; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; readonly iconData?: Readonly<Partial<Record<"logo" | "newTab" | "privateTab", string>>>; }
 export interface MoonThemePreview extends MoonThemeSummary { readonly intentId: string; readonly description?: string; readonly changes: readonly string[]; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; readonly iconData?: Readonly<Partial<Record<"logo" | "newTab" | "privateTab", string>>>; }
-export type Drawer = "workspaces" | "bookmarks" | "downloads" | "history" | "translate" | "notes" | "focus" | "extensions" | "ai" | "security";
+export type Drawer = "profiles" | "workspaces" | "bookmarks" | "downloads" | "history" | "translate" | "notes" | "focus" | "extensions" | "ai" | "security";
 export type { ProfileDataMutation, ProfileDataSnapshot } from "../../packages/ipc/profile-data-contract.js";
 import type { ProfileDataMutation, ProfileDataSnapshot } from "../../packages/ipc/profile-data-contract.js";
 import type { SitePermissionRecord } from "../../packages/ipc/site-permission-contract.js";
 export type { SitePermissionRecord } from "../../packages/ipc/site-permission-contract.js";
 import type { ImportResult, ImportSelection, ImportSourceSummary } from "../../packages/ipc/browser-import-contract.js";
 import type { CustomizationSchemaV4 } from "../customization/customization-schema.js";
+export type { LocalProfileAvatar, LocalProfileSummary } from "../../packages/ipc/local-profile-contract.js";
+import type { CreateLocalProfileRequest, DeleteLocalProfileRequest, LocalProfileSummary, UpdateLocalProfileRequest } from "../../packages/ipc/local-profile-contract.js";
 
 export interface MoonBrowserBridge {
   createTab(url?: string, workspaceId?: string): Promise<Tab>;
-  getWindowContext(): Promise<{ readonly private: boolean }>;
+  getWindowContext(): Promise<{ readonly private: boolean; readonly guest: boolean; readonly profileId: string }>;
   createPrivateWindow(): Promise<void>;
   getTabs(): Promise<readonly Tab[]>;
   closeTab(tabId: string): Promise<void>;
@@ -83,6 +85,13 @@ export interface MoonBrowserBridge {
   commitCustomization(document: CustomizationSchemaV4): Promise<CustomizationSchemaV4>;
   getProfileData(): Promise<ProfileDataSnapshot>;
   mutateProfileData(mutation: ProfileDataMutation): Promise<void>;
+  listLocalProfiles(): Promise<readonly LocalProfileSummary[]>;
+  createLocalProfile(profile: CreateLocalProfileRequest): Promise<LocalProfileSummary>;
+  updateLocalProfile(profile: UpdateLocalProfileRequest): Promise<LocalProfileSummary>;
+  openLocalProfile(id: string): Promise<LocalProfileSummary>;
+  createGuestProfile(): Promise<LocalProfileSummary>;
+  getLocalProfileDeletionSummary(id: string): Promise<{ readonly profile: LocalProfileSummary; readonly directoryName: string; readonly includes: readonly string[] }>;
+  deleteLocalProfile(request: DeleteLocalProfileRequest): Promise<{ readonly id: string; readonly backupPath?: string }>;
   discoverImportSources(): Promise<readonly ImportSourceSummary[]>;
   importBrowserProfile(selection: ImportSelection): Promise<ImportResult>;
   importBookmarksHtml(): Promise<ImportResult | null>;

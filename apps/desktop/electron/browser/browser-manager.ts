@@ -63,7 +63,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     readonly downloads?: ElectronDownloadManager,
     readonly adblock?: ElectronAdblockService,
     readonly requestPipeline?: SessionRequestPipeline,
-    readonly permissions?: SitePermissionService
+    readonly permissionsForWindow?: (windowId: string) => SitePermissionService | undefined
   ) {}
 
   onTabUpdated(listener: (windowId: string, update: BrowserTabUpdate) => void | Promise<void>): () => void {
@@ -88,19 +88,23 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     const sessionId = options.private ? options.sessionId ?? id : options.sessionId;
 
     const window = this.windows.require(windowId);
+    const profileId = this.windows.profileId(windowId);
+    const guest = this.windows.isGuest(windowId);
     const surface = new ElectronBrowserSurface(`surface-${id}`, id, window, {
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
         partition: options.private
-          ? `private:${sessionId}`
+          ? `private:${profileId}:${sessionId}`
+          : guest
+            ? `guest:${profileId}:${options.workspaceId ?? "default"}`
           : options.workspaceId
-            ? `persist:workspace:${options.workspaceId}`
-            : "persist:default"
+            ? `persist:profile:${profileId}:workspace:${options.workspaceId}`
+            : `persist:profile:${profileId}:default`
       }
     });
-    this.downloads?.attach(surface.view.webContents.session);
+    this.downloads?.attach(surface.view.webContents.session, profileId);
     this.requestPipeline?.attach(surface.view.webContents.session);
     this.#installPermissionHandler(surface.view.webContents.session);
 
@@ -289,7 +293,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       if (request.private) {
         const records = this.#privatePermissions.get(request.session) ?? new Map<string, "allow" | "deny">();
         records.set(this.#permissionKey(request.origin, request.permission), decision); this.#privatePermissions.set(request.session, records);
-      } else if (this.permissions) await this.permissions.set(request.origin, request.permission, decision);
+      } else await this.permissionsForWindow?.(windowId)?.set(request.origin, request.permission, decision);
     } catch (error) {
       request.callback(false);
       throw error;
@@ -297,8 +301,8 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     request.callback(granted);
   }
 
-  listPermissions(): readonly SitePermissionRecord[] { return this.permissions?.list() ?? []; }
-  clearPermission(origin: string, permission: string): Promise<void> { return this.permissions?.clear(origin, permission) ?? Promise.resolve(); }
+  listPermissions(windowId: string): readonly SitePermissionRecord[] { return this.permissionsForWindow?.(windowId)?.list() ?? []; }
+  clearPermission(windowId: string, origin: string, permission: string): Promise<void> { return this.permissionsForWindow?.(windowId)?.clear(origin, permission) ?? Promise.resolve(); }
 
   async closeTabsForWindow(windowId: string): Promise<void> {
     const ids = [...this.#tabs.keys()].filter(id => this.#tabWindows.get(id) === windowId);
@@ -416,7 +420,8 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       if (["clipboard-sanitized-write", "fullscreen"].includes(permission)) return true;
       const origin = this.#permissionOrigin(requestingOrigin || contents?.getURL()); if (!origin) return false;
       const tab = contents ? this.#tabForContents(contents.id) : undefined;
-      const decision = tab?.private ? this.#privatePermissions.get(session)?.get(this.#permissionKey(origin, permission)) : this.permissions?.get(origin, permission);
+      const windowId = tab ? this.#tabWindows.get(tab.id) : undefined;
+      const decision = tab?.private ? this.#privatePermissions.get(session)?.get(this.#permissionKey(origin, permission)) : windowId ? this.permissionsForWindow?.(windowId)?.get(origin, permission) : undefined;
       return decision === "allow";
     });
     session.setPermissionRequestHandler((contents, permission, callback) => {
@@ -429,7 +434,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
         return;
       }
       const origin = this.#permissionOrigin(contents.getURL()); if (!origin) { callback(false); return; }
-      const cached = tab?.private ? this.#privatePermissions.get(session)?.get(this.#permissionKey(origin, permission)) : this.permissions?.get(origin, permission);
+      const cached = tab?.private ? this.#privatePermissions.get(session)?.get(this.#permissionKey(origin, permission)) : this.permissionsForWindow?.(windowId)?.get(origin, permission);
       if (cached) { callback(cached === "allow"); return; }
       const id = randomUUID();
       const timeout = setTimeout(() => {

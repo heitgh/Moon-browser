@@ -97,7 +97,7 @@ O desenvolvimento dessa base aconteceu em [`heitgh/Moon-tests-1`](https://github
 - Home nativa e configurável;
 - sidebar modular e recuperável por teclado;
 - configurações em modal e como página interna `moon://settings/*`;
-- modos Essencial, Todas e Avançado, com pesquisa por intenção;
+- modos Simples e Avançado, com “Ver tudo” explícito e pesquisa por intenção;
 - personalização de aparência, layout, Home, tipografia, busca e workspace;
 - preview ao vivo, aplicar, cancelar, desfazer, refazer e reset granular;
 - largura e comportamento da sidebar, visibilidade dos workspaces e ordem da toolbar;
@@ -140,13 +140,14 @@ O Moon diferencia recurso funcional, entrega parcial, preview e plano. Código d
 | Settings V4 | **Funcional** | Modos Simples/Avançado, preview, commit SQLite, recuperação, importação e exportação |
 | Temas e wallpapers | **Funcional / parcial** | Biblioteca unificada, regiões semânticas, paleta local e animação segura; favoritos/deduplicação avançada seguem no backlog |
 | Moon Themes `.moontheme` | **Funcional localmente** | Conta, catálogo remoto e OAuth dependem do serviço externo |
+| Perfis locais | **Funcional** | SQLite, shell, sessões, partições, downloads e preferências isolados; convidado temporário e migração do perfil Padrão cobertos por E2E |
 | Permissões de sites | **Parcial** | Decisão explícita existe; persistência e revogação por origem serão ampliadas |
 | Moon AI | **Preview desativado** | Não há provider de IA conectado; o painel não deve ser anunciado como IA operacional |
 | Extensões Chromium | **Planejado / desativado** | Contratos existem, mas instalação segura ainda não está liberada |
 | Plugins e marketplace | **Planejado / desativado** | SDK, sandbox e cadeia de confiança ainda serão concluídos |
 | Universal Search | **Planejado** | Há fundação de busca; a experiência unificada ainda não está no shell |
 | Smart Spaces e Timeline | **Planejado / desativado** | Estruturas internas não equivalem a produto conectado |
-| VPN, sync e auto-update | **Planejado / desativado** | Nenhum desses recursos é anunciado como proteção ativa |
+| VPN, sync em nuvem e auto-update | **Planejado / desativado** | Não existe provider oficial configurado; nenhuma sincronização remota é anunciada como ativa |
 | Android e iOS | **Fundação arquitetural** | Existem contratos compartilhados, não aplicativos distribuíveis |
 
 Para a matriz técnica completa, consulte [`docs/roadmap/status.md`](docs/roadmap/status.md).

@@ -25,17 +25,20 @@ export class BrowserApplicationService {
 
   constructor(
     readonly browser: ElectronBrowserManager,
-    readonly profile: ProfileStorage
+    profile: ProfileStorage | ((windowId: string) => Promise<ProfileStorage>)
   ) {
+    this.#profileForWindow = typeof profile === "function" ? profile : async () => profile;
     this.#browserPlatform = new ElectronBrowserPlatform(browser);
     this.tabs = new TabManager(this.#browserPlatform, this.eventBus, this.stateStore);
     this.#unsubscribe = browser.onTabUpdated((windowId, update) => this.#handleTabUpdate(windowId, update));
   }
 
+  readonly #profileForWindow: (windowId: string) => Promise<ProfileStorage>;
+
   get shuttingDown(): boolean { return this.#shuttingDown; }
 
   async restoreWindow(windowId: string): Promise<number> {
-    const savedTabs = await this.profile.loadBrowserSession();
+    const savedTabs = await (await this.#profileForWindow(windowId)).loadBrowserSession();
     let restored = 0;
     let activeTabId: string | undefined;
     this.#restoringWindows.add(windowId);
@@ -79,8 +82,8 @@ export class BrowserApplicationService {
   setSearchTemplate(windowId: string, template: string): void { this.browser.setSearchTemplate(windowId, template); }
   ownsTab(tabId: string, windowId: string): boolean { return this.browser.ownsTab(tabId, windowId); }
   respondToPermission(windowId: string, requestId: string, granted: boolean): Promise<void> { return this.browser.respondToPermission(windowId, requestId, granted); }
-  listPermissions(): readonly SitePermissionRecord[] { return this.browser.listPermissions(); }
-  clearPermission(origin: string, permission: string): Promise<void> { return this.browser.clearPermission(origin, permission); }
+  listPermissions(windowId: string): readonly SitePermissionRecord[] { return this.browser.listPermissions(windowId); }
+  clearPermission(windowId: string, origin: string, permission: string): Promise<void> { return this.browser.clearPermission(windowId, origin, permission); }
 
   async flushWindow(windowId: string): Promise<void> {
     const timer = this.#persistenceTimers.get(windowId);
@@ -88,7 +91,13 @@ export class BrowserApplicationService {
     this.#persistenceTimers.delete(windowId);
     const tabs = await this.browser.getTabs(windowId);
     if (tabs.length > 0 && tabs.every(tab => tab.private)) return;
-    await this.profile.saveBrowserSession(tabs);
+    await (await this.#profileForWindow(windowId)).saveBrowserSession(tabs);
+  }
+
+  async closeWindow(windowId: string): Promise<void> {
+    await this.flushWindow(windowId);
+    await this.browser.closeTabsForWindow(windowId);
+    await this.tabs.forgetWindow(windowId);
   }
 
   async shutdown(): Promise<void> {
@@ -99,7 +108,6 @@ export class BrowserApplicationService {
     this.#persistenceTimers.clear();
     for (const windowId of this.browser.windowIds()) await this.flushWindow(windowId);
     await this.browser.destroy();
-    await this.profile.close();
   }
 
   async #handleTabUpdate(windowId: string, update: BrowserTabUpdate): Promise<void> {
@@ -134,6 +142,7 @@ export interface BrowserApplicationApi {
   setSearchTemplate(windowId: string, template: string): void;
   ownsTab(tabId: string, windowId: string): boolean;
   respondToPermission(windowId: string, requestId: string, granted: boolean): Promise<void>;
-  listPermissions(): readonly SitePermissionRecord[];
-  clearPermission(origin: string, permission: string): Promise<void>;
+  listPermissions(windowId: string): readonly SitePermissionRecord[];
+  clearPermission(windowId: string, origin: string, permission: string): Promise<void>;
+  closeWindow(windowId: string): Promise<void>;
 }

@@ -25,6 +25,8 @@
 - Central de comandos por `Ctrl/Cmd+Shift+P`, reunindo comandos, abas, histórico, favoritos, workspaces e configurações;
 - Foco/Zen temporizado, Pomodoro, contínuo ou até horário, com presets, allowlists, pausa, extensão, recuperação e resumo local;
 - composições realmente distintas da Home para Minimalista, Foco, Estudo, Trabalho e Desenvolvimento.
+- perfis locais com nome, avatar e cor, indicador no chrome, SQLite e partições Chromium isolados, troca protegida por rascunho e migração preservando o diretório atual como perfil Padrão;
+- perfil convidado inteiramente temporário, downloads filtrados por perfil e exclusão com resumo, confirmação forte e backup local opcional.
 
 ### Corrigido
 
@@ -39,6 +41,7 @@
 - deduplicação que não reconhecia URLs repetidas dentro do mesmo payload;
 - resumo de Foco contando pausas como tempo focado;
 - automações de performance/captura bloqueadas pelo onboarding e overflow horizontal no seletor de níveis de Settings.
+- sessões e modelos do Core permanecendo órfãos ao fechar uma janela durante a troca de perfil.
 
 ### Desempenho
 
@@ -53,6 +56,7 @@
 - o importador usa IDs opacos, raízes conhecidas, cópia temporária read-only, limites, protocolos HTTP(S), limpeza de staging e transação SQLite;
 - cookies, tokens, sessões autenticadas, senhas, carteiras, extensões e arquivos internos não são importados;
 - Moon Intelligence permanece invisível no shell e bloqueada pelo gate de release mesmo diante de override local.
+- IDs, nomes, avatares e cores de perfil passam por contrato compartilhado; o registro é atômico e só marca a migração após o SQLite existente abrir com sucesso.
 
 ## 0.5.0-demo.1 — Demo pública (2026-08-27)
 

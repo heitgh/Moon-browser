@@ -1,6 +1,6 @@
 import { _electron as electron, expect, test } from "@playwright/test";
 import type { ElectronApplication, Page } from "@playwright/test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { existsSync } from "node:fs";
@@ -71,8 +71,9 @@ test("starts the packaged desktop shell and opens every primary panel", async ()
 
     await window.getByLabel("Configurações", { exact: true }).click();
     await expect(window.getByRole("dialog")).toBeVisible();
+    await window.getByLabel("Simples", { exact: true }).click();
     await expect(window.getByRole("heading", { name: "Personalize o essencial" })).toBeVisible();
-    await expect(window.locator(".moon-settings-mode")).toHaveText(["Essencial", "Personalizar", "Avançado"]);
+    await expect(window.locator(".moon-settings-mode")).toHaveText(["Simples", "Avançado", "Ver tudo"]);
     const search = window.getByLabel("Buscar nas configurações"); await search.fill("grossura da sidebar");
     await window.locator(".moon-settings-result").click(); await expect(window.getByRole("heading", { name: "Layout e densidade" })).toBeVisible();
     await window.getByLabel("Abrir configurações em página completa").evaluate(button => (button as HTMLButtonElement).click());
@@ -265,4 +266,43 @@ test("opens a real isolated private window and never restores it", async () => {
       expect(restoredTabs.every(tab => !tab.private)).toBe(true);
     } finally { await application.close(); }
   } finally { await rm(userData, { recursive: true, force: true }); }
+});
+
+test("keeps local profile SQLite data and Chromium partitions isolated", async () => {
+  const userData = await mkdtemp(join(tmpdir(), "moon-e2e-local-profiles-"));
+  const application = await electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData } });
+  try {
+    const primary = await shellWindow(application); await dismissOnboarding(primary);
+    const secondId = await primary.evaluate(async () => {
+      const bridge = (window as unknown as { moonBrowser: {
+        createLocalProfile(value: { name: string; avatar: string; color: string }): Promise<{ id: string }>;
+        mutateProfileData(value: unknown): Promise<void>;
+      } }).moonBrowser;
+      await bridge.mutateProfileData({ type: "bookmark:save", value: { id: "only-default", title: "Default", url: "https://default.test/", time: Date.now() } });
+      return (await bridge.createLocalProfile({ name: "Produto", avatar: "briefcase", color: "#2563eb" })).id;
+    });
+    await primary.evaluate(async id => (window as unknown as { moonBrowser: { openLocalProfile(id: string): Promise<unknown> } }).moonBrowser.openLocalProfile(id), secondId);
+    await expect.poll(async () => {
+      const pages = application.windows().filter(page => page.url().endsWith("/index.html"));
+      const contexts = await Promise.all(pages.map(page => page.evaluate(() => (window as unknown as { moonBrowser: { getWindowContext(): Promise<{ profileId: string }> } }).moonBrowser.getWindowContext()).catch(() => undefined)));
+      return contexts.some(context => context?.profileId === secondId);
+    }).toBe(true);
+    const product = application.windows().filter(page => page.url().endsWith("/index.html")).find(page => page !== primary)!;
+    await dismissOnboarding(product);
+    const productSnapshot = await product.evaluate(() => (window as unknown as { moonBrowser: { getProfileData(): Promise<{ bookmarks: Array<{ id: string }> }> } }).moonBrowser.getProfileData());
+    expect(productSnapshot.bookmarks).toEqual([]);
+    await product.evaluate(async () => (window as unknown as { moonBrowser: { mutateProfileData(value: unknown): Promise<void> } }).moonBrowser.mutateProfileData({ type: "bookmark:save", value: { id: "only-product", title: "Produto", url: "https://product.test/", time: Date.now() } }));
+    expect(await application.evaluate(({ session, webContents }, partition) => webContents.getAllWebContents().some(contents => contents.session === session.fromPartition(partition)), `persist:profile:${secondId}:workspace:research`)).toBe(true);
+    await product.evaluate(async () => (window as unknown as { moonBrowser: { openLocalProfile(id: string): Promise<unknown> } }).moonBrowser.openLocalProfile("default"));
+    await expect.poll(async () => {
+      const pages = application.windows().filter(page => page.url().endsWith("/index.html"));
+      const contexts = await Promise.all(pages.map(page => page.evaluate(() => (window as unknown as { moonBrowser: { getWindowContext(): Promise<{ profileId: string }> } }).moonBrowser.getWindowContext()).catch(() => undefined)));
+      return contexts.some(context => context?.profileId === "default" && context !== undefined);
+    }).toBe(true);
+    const restored = application.windows().filter(page => page.url().endsWith("/index.html")).find(page => page !== product)!;
+    const primarySnapshot = await restored.evaluate(() => (window as unknown as { moonBrowser: { getProfileData(): Promise<{ bookmarks: Array<{ id: string }> }> } }).moonBrowser.getProfileData());
+    expect(primarySnapshot.bookmarks.map(item => item.id)).toContain("only-default"); expect(primarySnapshot.bookmarks.map(item => item.id)).not.toContain("only-product");
+    expect((await stat(join(userData, "moon.sqlite3"))).isFile()).toBe(true);
+    expect((await stat(join(userData, "profiles", secondId, "moon.sqlite3"))).isFile()).toBe(true);
+  } finally { await application.close(); await rm(userData, { recursive: true, force: true }); }
 });

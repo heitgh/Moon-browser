@@ -12,6 +12,7 @@ const tabUpdateListeners: Array<(update: unknown) => void> = [];
 const permissionListeners: Array<(request: { readonly id: string; readonly origin: string; readonly permission: string }) => void> = [];
 const profileData = { bookmarks: [] as Array<{ id: string; title: string; url: string; time: number }>, history: [] as Array<{ id: string; title: string; url: string; time: number }>, notes: "", workspaces: [{ id: "research", name: "Pesquisa", position: 0 }, { id: "study", name: "Estudos", position: 1 }, { id: "projects", name: "Projetos", position: 2 }] };
 let sitePermissions: Array<{ origin: string; permission: string; decision: "allow" | "deny"; updatedAt: number }> = [];
+let localProfiles = [{ id: "default", name: "Padrão", avatar: "moon", color: "#8b5cf6", kind: "persistent", default: true, createdAt: 1, lastUsedAt: 1 }];
 const mutateProfileData = vi.fn(async (mutation: { type: string; id?: string; content?: string; value?: { id: string; title?: string; url?: string; time?: number; name?: string; position?: number } }) => {
   if (mutation.type === "bookmark:save" && mutation.value) profileData.bookmarks.unshift(mutation.value as typeof profileData.bookmarks[number]);
   if (mutation.type === "bookmark:delete") profileData.bookmarks = profileData.bookmarks.filter(item => item.id !== mutation.id);
@@ -22,7 +23,7 @@ const mutateProfileData = vi.fn(async (mutation: { type: string; id?: string; co
   if (mutation.type === "workspace:delete") profileData.workspaces = profileData.workspaces.filter(item => item.id !== mutation.id);
 });
 const bridge = {
-  createTab, getWindowContext: vi.fn(async () => ({ private: false })), createPrivateWindow: vi.fn(async () => undefined), getTabs: vi.fn(async () => []), closeTab: vi.fn(async () => undefined), activateTab: vi.fn(async () => undefined), showHome: vi.fn(async () => undefined), showInternalPage, navigate,
+  createTab, getWindowContext: vi.fn(async () => ({ private: false, guest: false, profileId: "default" })), createPrivateWindow: vi.fn(async () => undefined), getTabs: vi.fn(async () => []), closeTab: vi.fn(async () => undefined), activateTab: vi.fn(async () => undefined), showHome: vi.fn(async () => undefined), showInternalPage, navigate,
   back: vi.fn(async () => undefined), forward: vi.fn(async () => undefined), reload: vi.fn(async () => undefined), stop: vi.fn(async () => undefined), setBounds: vi.fn(async () => undefined), setContentVisible, respondToPermission: vi.fn(async () => undefined), listSitePermissions: vi.fn(async () => sitePermissions), clearSitePermission: vi.fn(async (origin: string, permission: string) => { sitePermissions = sitePermissions.filter(item => item.origin !== origin || item.permission !== permission); }),
   getDownloads: vi.fn(async () => []), pauseDownload: vi.fn(async () => undefined), resumeDownload: vi.fn(async () => undefined), cancelDownload: vi.fn(async () => undefined), openDownload: vi.fn(async () => undefined), showDownloadInFolder: vi.fn(async () => undefined), clearFinishedDownloads: vi.fn(async () => undefined),
   getAdblockStatus: vi.fn(async () => ({ phase: "active", enabled: true, blockedCount: 12 })), setAdblockEnabled: vi.fn(async (enabled: boolean) => ({ phase: enabled ? "active" : "disabled", enabled, blockedCount: 12 })),
@@ -32,6 +33,8 @@ const bridge = {
   exportSettingsDiagnostic: vi.fn(async (_content: string) => true),
   fetchFavicon: vi.fn(async () => "data:image/png;base64,YQ=="),
   migrateLegacyProfile: vi.fn(async () => ({ migrated: true, version: 1 })), loadCustomization: vi.fn(async (legacy: unknown) => legacy), commitCustomization: vi.fn(async (document: unknown) => document), getProfileData: vi.fn(async () => profileData), mutateProfileData, onTabUpdated: vi.fn((listener: (update: unknown) => void) => { tabUpdateListeners.push(listener); return () => undefined; }), onTabClosed: vi.fn(() => () => undefined),
+  listLocalProfiles: vi.fn(async () => localProfiles),
+  createLocalProfile: vi.fn(async (profile: { name: string; avatar: string; color: string }) => { const created = { id: "profile-product", ...profile, kind: "persistent", default: false, createdAt: 2, lastUsedAt: 2 }; localProfiles = [...localProfiles, created]; return created; }), updateLocalProfile: vi.fn(async (profile: unknown) => profile), openLocalProfile: vi.fn(async () => undefined), createGuestProfile: vi.fn(async () => undefined), getLocalProfileDeletionSummary: vi.fn(async () => undefined), deleteLocalProfile: vi.fn(async () => undefined),
   discoverImportSources: vi.fn(async () => [{ id: "source-12345678", browser: "chromium", name: "Chromium — Default", modifiedAt: Date.now(), categories: { bookmarks: 3, history: 5 } }]),
   importBrowserProfile: vi.fn(async (selection: { sourceId: string; categories: readonly string[] }) => ({ sourceId: selection.sourceId, imported: { bookmarks: selection.categories.includes("bookmarks") ? 3 : 0, history: selection.categories.includes("history") ? 5 : 0 }, skipped: { bookmarks: 0, history: 0 } })),
   importBookmarksHtml: vi.fn(async () => null),
@@ -52,12 +55,21 @@ beforeEach(() => { navigate.mockClear(); setContentVisible.mockClear(); });
 
 describe("Moon browser shell", () => {
   it("renders every primary product control", () => {
-    for (const label of ["Página inicial", "Central de comandos", "Workspaces", "Favoritos", "Downloads", "Histórico", "Traduzir página", "Bloco de notas", "Configurações"]) {
+    for (const label of ["Página inicial", "Central de comandos", "Gerenciar perfis", "Workspaces", "Favoritos", "Downloads", "Histórico", "Traduzir página", "Bloco de notas", "Configurações"]) {
       expect(document.querySelector(`[aria-label="${label}"]`)).not.toBeNull();
     }
     expect(document.querySelector('[aria-label="Moon AI"]')).toBeNull(); expect(document.querySelector('[aria-label="Extensões"]')).toBeNull();
     expect((document.querySelector('[aria-label="Abrir Moon AI"]') as HTMLButtonElement).hidden).toBe(true);
     expect((document.querySelector('[aria-label="Abrir módulos pela toolbar"]') as HTMLButtonElement).hidden).toBe(true);
+  });
+  it("shows the active profile and creates a real isolated profile from the manager", async () => {
+    (document.querySelector('[aria-label="Gerenciar perfis"]') as HTMLButtonElement).click(); await flush();
+    expect(document.querySelector(".moon-profile-card.is-active")?.textContent).toContain("Padrão");
+    const form = [...document.querySelectorAll<HTMLFormElement>(".moon-profile-form")].find(candidate => !candidate.hidden)!;
+    (form.querySelector('input[type="text"], input:not([type])') as HTMLInputElement).value = "Produto";
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await flush();
+    expect(bridge.createLocalProfile).toHaveBeenCalledWith(expect.objectContaining({ name: "Produto" }));
+    expect(document.querySelector(".moon-profile-list")?.textContent).toContain("Produto");
   });
   it("opens every sidebar module with its real content", () => {
     const modules = [

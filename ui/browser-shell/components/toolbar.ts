@@ -28,7 +28,7 @@ export class Toolbar {
   readonly securityText = element("span", "moon-security-text", "AdBlock carregando");
   readonly downloads = button("moon-nav-button", "Abrir downloads pela toolbar", "download");
   readonly modules = button("moon-nav-button", "Abrir módulos pela toolbar", "plugin");
-  readonly profile = button("moon-nav-button", "Abrir workspaces e perfil", "grid");
+  readonly profile = button("moon-nav-button", "Gerenciar perfis", "moon");
   readonly menu = button("moon-nav-button", "Abrir menu do Moon", "settings");
   readonly ai = button("moon-ai-button", "Abrir Moon AI", "sparkles");
   readonly address = element("form", "moon-address");

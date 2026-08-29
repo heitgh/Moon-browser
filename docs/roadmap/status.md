@@ -74,10 +74,10 @@ A atualização atual parte diretamente de `heitgh/Moon-browser@8d5a35b24e7b6827
 ## Quality gates atuais
 
 - TypeScript estrito e ESLint.
-- 76 testes unitários.
-- 23 testes de integração do shell.
-- 9 testes SQLite/serviços no runtime Electron.
-- 6 E2E Electron: smoke/modal/página/busca/teclado, restore de sessão, persistência V3, import/export, ergonomia e janela privada.
+- 93 testes unitários.
+- 26 testes de integração do shell.
+- 15 testes SQLite/serviços no runtime Electron.
+- 7 E2E Electron: smoke/modal/página/busca/teclado, restore de sessão, persistência V4, import/export, ergonomia, janela privada e isolamento de perfis.
 - Build Linux AppImage e deb aprovado neste checkpoint.
 - `npm audit --omit=dev --audit-level=moderate`: 0 vulnerabilidades de produção neste checkpoint.
 
@@ -94,6 +94,20 @@ Medição local reproduzível deste corte: cold boot até Home utilizável após
 | Clipboard, impressão e downloads com progresso | Concluído | APIs nativas do Electron e DownloadManager existente |
 | Deep link/API oficial | Bloqueado por integração externa | faltam domínio, endpoint, trust roots e contrato de intent oficiais |
 | Conta, favoritos e Device Authorization | Bloqueado por integração externa | faltam issuer OAuth, client ID e API do Moon Themes |
+
+## Perfis locais
+
+| Entrega | Estado | Evidência |
+|---|---|---|
+| Perfil atual convertido em Padrão sem mover o diretório | Concluído | `LocalProfileManager` abre/valida o SQLite antes de gravar metadados atômicos e mantém o caminho legado |
+| Criar, renomear, avatar e cor | Concluído | contrato IPC compartilhado, gerenciador no main e tela acessível pela rail/indicador do chrome |
+| SQLite, shell e sessões Chromium por perfil | Concluído | storage resolver por janela e partições `persist:moon-shell:*`/`persist:profile:*`; E2E verifica bancos e partições distintos |
+| Dados, temas, Home, workspaces, favoritos, histórico, notas e preferências | Concluído no runtime atual | todos os handlers persistentes resolvem o `profileId` da janela chamadora; localStorage da shell também usa partição própria |
+| Downloads e permissões | Concluído | downloads possuem ownership por perfil; permissões usam um serviço hidratado por SQLite/perfil |
+| Convidado temporário sem persistência | Concluído | diretório e partições não persistentes removidos ao fechar a última janela convidada |
+| Troca com proteção de rascunho | Concluído | UI exige descarte explícito do preview antes de alternar e a janela anterior só fecha após a nova abrir |
+| Exclusão segura | Concluído | perfil Padrão protegido, janelas precisam estar fechadas, resumo + nome exato + backup opcional antes da remoção |
+| Sincronização em nuvem | Desativada | nenhum provider oficial, endpoint ou autenticação configurados; a próxima fase implementa apenas engine/fixture e contratos honestos |
 
 ## Dívida explícita antes das fases de produto
 
