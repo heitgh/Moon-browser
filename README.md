@@ -141,6 +141,8 @@ O Moon diferencia recurso funcional, entrega parcial, preview e plano. Código d
 | Temas e wallpapers | **Funcional / parcial** | Biblioteca unificada, regiões semânticas, paleta local e animação segura; favoritos/deduplicação avançada seguem no backlog |
 | Moon Themes `.moontheme` | **Funcional localmente** | Conta, catálogo remoto e OAuth dependem do serviço externo |
 | Perfis locais | **Funcional** | SQLite, shell, sessões, partições, downloads e preferências isolados; convidado temporário e migração do perfil Padrão cobertos por E2E |
+| Engine de sync/E2EE | **Preparada / produção desativada** | Contratos e fixture local cobrem merge, tombstone, conflito, retry, recuperação e ausência de plaintext; não existe provider oficial |
+| Cofre de credenciais | **Bloqueado com interface honesta** | Motor local e testes existem; esta build não possui backend seguro do SO, captura ou autofill |
 | Permissões de sites | **Parcial** | Decisão explícita existe; persistência e revogação por origem serão ampliadas |
 | Moon AI | **Preview desativado** | Não há provider de IA conectado; o painel não deve ser anunciado como IA operacional |
 | Extensões Chromium | **Planejado / desativado** | Contratos existem, mas instalação segura ainda não está liberada |

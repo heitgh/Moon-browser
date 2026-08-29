@@ -27,6 +27,9 @@
 - composições realmente distintas da Home para Minimalista, Foco, Estudo, Trabalho e Desenvolvimento.
 - perfis locais com nome, avatar e cor, indicador no chrome, SQLite e partições Chromium isolados, troca protegida por rascunho e migração preservando o diretório atual como perfil Padrão;
 - perfil convidado inteiramente temporário, downloads filtrados por perfil e exclusão com resumo, confirmação forte e backup local opcional.
+- contratos de sync offline-first, provider fixture em memória, merge não destrutivo, tombstones, conflitos determinísticos, retry/cancelamento e revogação de dispositivos;
+- E2EE com AES-256-GCM, metadata autenticada, nonce único, chave mestra separada da frase, wrapping por KDF versionada e recovery key exportável;
+- cofre local isolado por contrato, origem HTTPS exata, revelação consciente, auto-lock e backend seguro em memória exclusivo para testes.
 
 ### Corrigido
 
@@ -57,6 +60,8 @@
 - cookies, tokens, sessões autenticadas, senhas, carteiras, extensões e arquivos internos não são importados;
 - Moon Intelligence permanece invisível no shell e bloqueada pelo gate de release mesmo diante de override local.
 - IDs, nomes, avatares e cores de perfil passam por contrato compartilhado; o registro é atômico e só marca a migração após o SQLite existente abrir com sucesso.
+- `mobile-sync` passa a ser release-gated; sem provider oficial, nem override local pode fazer a UI simular sincronização;
+- testes procuram texto conhecido nos envelopes/provider e nos registros selados do cofre para impedir vazamento em claro.
 
 ## 0.5.0-demo.1 — Demo pública (2026-08-27)
 

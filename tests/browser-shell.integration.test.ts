@@ -187,6 +187,13 @@ describe("Moon browser shell", () => {
     expect(bridge.exportCustomization.mock.calls[0]?.[0]).toContain('"format": "moon-customization"');
     (document.querySelector('[aria-label="Fechar e cancelar alterações"]') as HTMLButtonElement).click(); await flush();
   });
+  it("states honestly that cloud sync and the credential vault are unavailable", async () => {
+    (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
+    (document.querySelector('[data-mode="advanced"]') as HTMLButtonElement).click(); (document.querySelector('[aria-label="Workspaces e dados"]') as HTMLButtonElement).click(); await flush();
+    expect(document.querySelector(".moon-customization-content")?.textContent).toContain("Sincronização em nuvem ainda não configurada");
+    expect(document.querySelector(".moon-customization-content")?.textContent).toContain("Cofre indisponível nesta build");
+    (document.querySelector('[aria-label="Fechar e cancelar alterações"]') as HTMLButtonElement).click(); await flush();
+  });
 
   it("previews local browser profiles and imports only explicitly selected categories", async () => {
     bridge.discoverImportSources.mockClear(); bridge.importBrowserProfile.mockClear();

@@ -74,8 +74,8 @@ A atualização atual parte diretamente de `heitgh/Moon-browser@8d5a35b24e7b6827
 ## Quality gates atuais
 
 - TypeScript estrito e ESLint.
-- 93 testes unitários.
-- 26 testes de integração do shell.
+- 104 testes unitários.
+- 27 testes de integração do shell.
 - 15 testes SQLite/serviços no runtime Electron.
 - 7 E2E Electron: smoke/modal/página/busca/teclado, restore de sessão, persistência V4, import/export, ergonomia, janela privada e isolamento de perfis.
 - Build Linux AppImage e deb aprovado neste checkpoint.
@@ -107,7 +107,21 @@ Medição local reproduzível deste corte: cold boot até Home utilizável após
 | Convidado temporário sem persistência | Concluído | diretório e partições não persistentes removidos ao fechar a última janela convidada |
 | Troca com proteção de rascunho | Concluído | UI exige descarte explícito do preview antes de alternar e a janela anterior só fecha após a nova abrir |
 | Exclusão segura | Concluído | perfil Padrão protegido, janelas precisam estar fechadas, resumo + nome exato + backup opcional antes da remoção |
-| Sincronização em nuvem | Desativada | nenhum provider oficial, endpoint ou autenticação configurados; a próxima fase implementa apenas engine/fixture e contratos honestos |
+| Sincronização em nuvem | Desativada | engine/fixture existem, mas nenhum provider oficial, endpoint ou autenticação foi configurado |
+
+## Sync E2EE e credenciais
+
+| Entrega | Estado | Evidência |
+|---|---|---|
+| Contratos desacoplados de servidor | Concluído | `packages/sync/types.ts` define engine, provider, record, envelope, device, categorias e estados |
+| Engine offline-first e provider fixture | Concluído para testes | merge inicial não destrutivo, tombstone, conflito determinístico, retry exponencial, cancelamento, reset e revogação |
+| Categorias opt-in | Concluído | histórico desligado por padrão; credenciais desligadas e exigindo consentimento separado |
+| E2EE | Concluído no engine | AES-256-GCM, nonce aleatório de 96 bits, AAD, PBKDF2-SHA-256 versionado, chave mestra e recovery key separadas |
+| Ausência de plaintext | Concluído | unit tests procuram texto conhecido no envelope/provider e validam adulteração de metadata |
+| Provider oficial/Moon ID | Bloqueado externamente | sem endpoint, autenticação, política ou trust roots; `mobile-sync` permanece release-gated |
+| Cofre local | Concluído como motor gated | origem HTTPS exata, segredo selado, interação consciente e auto-lock; backend seguro em memória é somente fixture |
+| Captura/autofill e persistência de credenciais | Bloqueado | backend seguro do SO e auditoria de origem/vazamentos ainda inexistentes; UI declara indisponibilidade |
+| Threat model e recuperação | Concluído para o desenho atual | `docs/architecture/sync-e2ee-threat-model.md` documenta chaves, riscos, recuperação e gates |
 
 ## Dívida explícita antes das fases de produto
 

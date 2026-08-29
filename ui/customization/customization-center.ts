@@ -297,7 +297,7 @@ export class CustomizationCenter {
   }
 
   #data(config: CustomizationConfig): void {
-    this.#intro("Workspaces e dados", "Escopo global ou por workspace, JSON V3 validado e recuperação segura.");
+    this.#intro("Workspaces e dados", "Escopo global ou por workspace, JSON V4 validado e recuperação segura.");
     const portability = this.#group("Portabilidade", "Exporte apenas aparência, o workspace atual ou tudo. Cookies e senhas nunca entram no arquivo.", "importar exportar json aparência workspace tudo preview"); const actions = element("div", "moon-portability-grid");
     for (const [scope, label] of [["appearance", "Exportar aparência"], ["workspace", "Exportar workspace"], ["all", "Exportar tudo"]] as const) { const action = button("moon-secondary-button", label, "download"); action.append(element("span", "", label)); action.addEventListener("click", () => void this.#export(scope)); actions.append(action); }
     const importButton = button("moon-primary-button", "Importar personalização", "folder"); importButton.append(element("span", "", "Importar JSON")); importButton.addEventListener("click", () => void this.#import()); actions.append(importButton); portability.append(actions);
@@ -308,7 +308,12 @@ export class CustomizationCenter {
     const diagnostic = button("moon-secondary-button", "Exportar diagnóstico e backup", "download"); diagnostic.append(element("span", "", "Exportar diagnóstico")); diagnostic.addEventListener("click", () => void this.#exportDiagnostic());
     const current = button("moon-secondary-button", "Restaurar escopo atual", "reload"); current.append(element("span", "", "Restaurar este escopo")); current.addEventListener("click", () => { if (confirm("Restaurar o escopo atual? O preview atual será substituído.")) { this.options.store.resetAll("current"); this.#render(); } });
     const all = button("moon-danger-button", "Reset total", "trash"); all.append(element("span", "", "Reset total")); all.addEventListener("click", () => { if (confirm("Reset total remove personalizações e temas salvos. Exporte um backup antes de continuar. Prosseguir?")) { this.options.store.resetAll("everything"); this.#render(); } }); resetActions.append(safe, restore, diagnostic, current, all); reset.append(resetActions, element("p", "moon-recovery-note", this.options.store.loadResult.message ?? "O último estado válido é atualizado apenas quando você confirma as mudanças."));
-    this.#content.append(this.#importControls(), portability, favicons, reset);
+    const sync = this.#group("Perfis e sincronização", "A engine E2EE offline-first está validada com um fixture local, mas nenhum serviço remoto oficial foi configurado.", "sync sincronização nuvem e2ee dispositivos recovery conflito offline provider");
+    const syncStatus = element("div", "moon-info-card"); syncStatus.append(icon("shield"), element("p", "", "Sincronização em nuvem ainda não configurada. Nenhum dado é enviado para servidores."));
+    const categories = element("p", "moon-recovery-note", "Categorias preparadas: configurações, temas, Home, workspaces, favoritos, atalhos, notas e sessões. Histórico permanece opt-in; credenciais exigem consentimento separado."); sync.append(syncStatus, categories);
+    const vault = this.#group("Credenciais e cofre", "O cofre exige um backend seguro do sistema operacional. Captura e autofill permanecem desligados até auditoria específica.", "senhas credenciais cofre secret service keychain autofill captura bloqueio");
+    const vaultStatus = element("div", "moon-info-card"); vaultStatus.append(icon("shield"), element("p", "", "Cofre indisponível nesta build: backend seguro do sistema ainda não integrado. Senhas não entram no backup comum nem no sync.")); vault.append(vaultStatus);
+    this.#content.append(this.#importControls(), portability, favicons, sync, vault, reset);
   }
 
   #importControls(): HTMLElement {
