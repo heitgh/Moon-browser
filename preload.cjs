@@ -45,6 +45,8 @@ contextBridge.exposeInMainWorld("moonBrowser", Object.freeze({
   exportCustomization: content => invoke("product:export-customization", { content }),
   exportSettingsDiagnostic: content => invoke("product:export-settings-diagnostic", { content }),
   importCustomization: () => invoke("product:import-customization"),
+  exportMoonHome: content => invoke("product:export-moon-home", { content }),
+  importMoonHome: () => invoke("product:import-moon-home"),
   fetchWallpaper: url => invoke("product:fetch-wallpaper", { url }),
   fetchFavicon: url => invoke("product:fetch-favicon", { url }),
   migrateLegacyProfile: content => invoke("product:migrate-legacy-profile", { content }),

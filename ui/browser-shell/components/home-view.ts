@@ -17,21 +17,49 @@ export interface HomeRuntimeData {
   readonly favicons: Readonly<Record<string, string>>;
 }
 
+export interface HomeEditorHandlers {
+  readonly onBegin: () => void;
+  readonly onMove: (source: HomeWidgetId, target: HomeWidgetId) => void;
+  readonly onNudge: (id: HomeWidgetId, direction: -1 | 1) => void;
+  readonly onAdd: (id: HomeWidgetId) => void;
+  readonly onRemove: (id: HomeWidgetId) => void;
+  readonly onApply: () => Promise<boolean>;
+  readonly onCancel: () => void;
+  readonly onExport: () => Promise<boolean>;
+  readonly onImport: () => Promise<boolean>;
+}
+
 export class HomeView {
   readonly element = element("main", "moon-home");
   readonly #wallpaper = element("div", "moon-home-wallpaper");
   readonly #grid = element("div", "moon-home-grid");
+  readonly #editor = element("div", "moon-home-editor");
+  readonly #tray = element("div", "moon-home-content-tray");
+  readonly #editorStatus = element("span", "moon-home-editor-status");
   #config: CustomizationConfig | undefined;
   #data: HomeRuntimeData = { shortcuts: [], bookmarks: [], tabs: [], workspaces: [], downloads: [], notes: "", favicons: {} };
   #clockTimer: number | undefined;
+  #editing = false;
+  #draggedWidget: HomeWidgetId | undefined;
+  #wallpaperSettings: WallpaperSettings | undefined;
+  #motionPreference: MediaQueryList | undefined;
+  #lowPower = false;
+  readonly #visibilityListener = (): void => this.#renderWallpaper();
+  readonly #motionListener = (): void => this.#renderWallpaper();
 
-  constructor(readonly onNavigate: (value: string) => void, readonly onOpenNew: (value: string) => void = onNavigate, readonly onOpenFocus: () => void = () => undefined) { this.element.append(this.#wallpaper, this.#grid); }
+  constructor(readonly onNavigate: (value: string) => void, readonly onOpenNew: (value: string) => void = onNavigate, readonly onOpenFocus: () => void = () => undefined, readonly editorHandlers?: HomeEditorHandlers) {
+    this.#buildEditor(); this.element.append(this.#wallpaper, this.#grid, this.#editor, this.#tray);
+    document.addEventListener("visibilitychange", this.#visibilityListener);
+    if (typeof matchMedia === "function") { this.#motionPreference = matchMedia("(prefers-reduced-motion: reduce)"); this.#motionPreference.addEventListener("change", this.#motionListener); }
+    const getBattery = (navigator as Navigator & { readonly getBattery?: () => Promise<{ readonly charging: boolean; readonly level: number; addEventListener(type: string, listener: () => void): void }> }).getBattery;
+    if (getBattery) void getBattery.call(navigator).then(battery => { const update = (): void => { this.#lowPower = !battery.charging && battery.level <= .2; this.#renderWallpaper(); }; battery.addEventListener("chargingchange", update); battery.addEventListener("levelchange", update); update(); }).catch(() => undefined);
+  }
 
   apply(config: CustomizationConfig): void { this.#config = config; this.#applyWallpaper(config.appearance.wallpaper); this.#render(); }
   updateData(data: HomeRuntimeData): void { this.#data = data; this.#render(); }
   focusSearch(): void { this.#grid.querySelector<HTMLInputElement>(".moon-home-search-input")?.focus(); }
   startClock(): void { this.#clockTimer = window.setInterval(() => this.#updateTimes(), 30_000); this.#updateTimes(); }
-  dispose(): void { if (this.#clockTimer !== undefined) window.clearInterval(this.#clockTimer); }
+  dispose(): void { if (this.#clockTimer !== undefined) window.clearInterval(this.#clockTimer); document.removeEventListener("visibilitychange", this.#visibilityListener); this.#motionPreference?.removeEventListener("change", this.#motionListener); }
 
   #render(): void {
     if (!this.#config) return;
@@ -42,9 +70,56 @@ export class HomeView {
     for (const state of widgets) {
       const widget = this.#widget(state.id); widget.classList.add("moon-home-widget"); widget.dataset.widget = state.id;
       widget.style.setProperty("--moon-widget-columns", String(Math.min(home.columns, state.columns))); widget.style.setProperty("--moon-widget-opacity", String(state.opacity));
+      if (this.#editing) this.#decorateWidget(widget, state.id);
       fragment.append(widget);
     }
     this.#grid.replaceChildren(fragment); this.#updateTimes();
+    this.#renderEditor();
+  }
+
+  #buildEditor(): void {
+    if (!this.editorHandlers) { this.#editor.hidden = true; this.#tray.hidden = true; return; }
+    const edit = button("moon-secondary-button moon-home-edit", "Editar Home", "grid"); edit.append(element("span", "", "Editar Home")); edit.addEventListener("click", () => { if (this.#editing) return; this.#editing = true; this.editorHandlers?.onBegin(); this.#render(); });
+    const exportHome = button("moon-secondary-button", "Exportar arquivo .moonhome", "download"); exportHome.append(element("span", "", "Exportar")); exportHome.addEventListener("click", () => void this.#runEditorAction("Exportando…", () => this.editorHandlers!.onExport()));
+    const importHome = button("moon-secondary-button", "Importar arquivo .moonhome", "download"); importHome.append(element("span", "", "Importar")); importHome.addEventListener("click", () => void this.#runEditorAction("Importando…", () => this.editorHandlers!.onImport()));
+    const cancel = button("moon-secondary-button", "Cancelar edição da Home"); cancel.append(element("span", "", "Cancelar")); cancel.addEventListener("click", () => { this.editorHandlers?.onCancel(); this.#editing = false; this.#editorStatus.textContent = "Edição cancelada."; this.#render(); });
+    const apply = button("moon-primary-button", "Aplicar edição da Home"); apply.append(element("span", "", "Aplicar")); apply.addEventListener("click", () => void this.#applyEditor());
+    this.#editor.append(edit, this.#editorStatus, exportHome, importHome, cancel, apply);
+  }
+
+  #renderEditor(): void {
+    if (!this.editorHandlers || !this.#config) return;
+    this.element.classList.toggle("is-home-editing", this.#editing);
+    this.#editor.querySelector<HTMLElement>(".moon-home-edit")!.hidden = this.#editing;
+    [...this.#editor.children].slice(1).forEach(node => { (node as HTMLElement).hidden = !this.#editing; });
+    this.#tray.hidden = !this.#editing;
+    if (!this.#editing) { this.#tray.replaceChildren(); return; }
+    const title = element("strong", "", "Adicionar conteúdo"); const list = element("div", "moon-home-content-list");
+    this.#config.home.widgets.filter(widget => !widget.visible).forEach(widget => { const add = button("moon-secondary-button", `Adicionar ${widget.id}`, "plus"); add.append(element("span", "", widgetLabel(widget.id))); add.addEventListener("click", () => this.editorHandlers?.onAdd(widget.id)); list.append(add); });
+    if (!list.childElementCount) list.append(element("small", "", "Todos os widgets estão visíveis."));
+    this.#tray.replaceChildren(title, list);
+  }
+
+  #decorateWidget(widget: HTMLElement, id: HomeWidgetId): void {
+    widget.classList.add("is-editable"); widget.tabIndex = 0; widget.setAttribute("aria-label", `${widgetLabel(id)}. Alt e setas para mover.`); widget.setAttribute("aria-grabbed", "false");
+    const remove = button("moon-home-widget-remove", `Remover ${widgetLabel(id)}`, "close"); remove.addEventListener("click", event => { event.stopPropagation(); this.editorHandlers?.onRemove(id); }); widget.append(remove);
+    widget.addEventListener("keydown", event => { if (!event.altKey || !["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(event.key)) return; event.preventDefault(); this.editorHandlers?.onNudge(id, event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1); });
+    widget.addEventListener("pointerdown", event => { if (event.button !== 0 || (event.target as HTMLElement).closest("button,input,a")) return; this.#draggedWidget = id; widget.setPointerCapture(event.pointerId); widget.setAttribute("aria-grabbed", "true"); });
+    widget.addEventListener("pointerup", event => { if (!this.#draggedWidget) return; const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-widget]")?.dataset.widget as HomeWidgetId | undefined; widget.releasePointerCapture(event.pointerId); widget.setAttribute("aria-grabbed", "false"); if (target && target !== this.#draggedWidget) this.editorHandlers?.onMove(this.#draggedWidget, target); this.#draggedWidget = undefined; });
+    widget.addEventListener("pointercancel", () => { this.#draggedWidget = undefined; widget.setAttribute("aria-grabbed", "false"); });
+  }
+
+  async #applyEditor(): Promise<void> {
+    if (!this.editorHandlers) return;
+    this.#editorStatus.textContent = "Salvando…";
+    if (!await this.editorHandlers.onApply()) { this.#editorStatus.textContent = "Falha ao salvar; a edição continua aberta."; return; }
+    this.#editing = false; this.#editorStatus.textContent = "Home aplicada."; this.#render();
+  }
+
+  async #runEditorAction(message: string, action: () => Promise<boolean>): Promise<void> {
+    this.#editorStatus.textContent = message;
+    try { this.#editorStatus.textContent = await action() ? "Concluído." : "Operação cancelada."; }
+    catch (error) { this.#editorStatus.textContent = error instanceof Error ? error.message : String(error); }
   }
 
   #widget(id: HomeWidgetId): HTMLElement {
@@ -104,8 +179,10 @@ export class HomeView {
 
   #card(className: string, title: string): HTMLElement { const card = element("section", `moon-home-card ${className}`.trim()); if (title) card.append(element("h2", "moon-widget-title", title)); return card; }
   #updateTimes(): void { const now = new Date(); this.#grid.querySelectorAll<HTMLTimeElement>('[data-widget="clock"]').forEach(node => { node.dateTime = now.toISOString(); node.textContent = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(now); }); this.#grid.querySelectorAll<HTMLTimeElement>('[data-widget="date"]').forEach(node => { node.dateTime = now.toISOString().slice(0, 10); node.textContent = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long" }).format(now); }); }
-  #applyWallpaper(settings: WallpaperSettings): void { const imageSource = settings.type === "https" ? settings.cachedData : settings.source; this.#wallpaper.style.backgroundImage = settings.type === "color" ? "none" : settings.type === "gradient" ? settings.source : imageSource ? `url(${JSON.stringify(imageSource)})` : "none"; this.#wallpaper.style.backgroundColor = settings.type === "color" ? settings.source : ""; this.#wallpaper.style.backgroundSize = settings.fit; this.#wallpaper.style.backgroundPosition = settings.position; this.#wallpaper.style.backgroundRepeat = settings.repeat ? "repeat" : "no-repeat"; }
+  #applyWallpaper(settings: WallpaperSettings): void { this.#wallpaperSettings = settings; this.#renderWallpaper(); }
+  #renderWallpaper(): void { const settings = this.#wallpaperSettings; if (!settings) return; const paused = settings.type === "animated" && (document.hidden || this.#lowPower || this.#motionPreference?.matches === true); const imageSource = settings.type === "https" ? settings.cachedData : settings.source; this.#wallpaper.dataset.playback = paused ? "paused" : "running"; this.#wallpaper.style.backgroundImage = paused || settings.type === "color" ? "none" : settings.type === "gradient" ? settings.source : imageSource ? `url(${JSON.stringify(imageSource)})` : "none"; this.#wallpaper.style.backgroundColor = settings.type === "color" ? settings.source : paused ? this.#config?.appearance.colors.background ?? "" : ""; this.#wallpaper.style.backgroundSize = settings.fit; this.#wallpaper.style.backgroundPosition = settings.position; this.#wallpaper.style.backgroundRepeat = settings.repeat ? "repeat" : "no-repeat"; }
 }
 
 function hostname(url: string): string { try { return new URL(url).hostname; } catch { return url; } }
 function origin(url: string): string { try { return new URL(url).origin; } catch { return url; } }
+function widgetLabel(id: HomeWidgetId): string { return ({ clock: "Relógio", date: "Data", greeting: "Saudação", search: "Pesquisa", shortcuts: "Atalhos", favorites: "Favoritos", recentTabs: "Abas recentes", sessions: "Workspaces", tasks: "Tarefas", notes: "Notas", downloads: "Downloads", focus: "Foco", calendar: "Calendário", reading: "Leitura", performance: "Performance" })[id]; }

@@ -28,6 +28,7 @@ const bridge = {
   getAdblockStatus: vi.fn(async () => ({ phase: "active", enabled: true, blockedCount: 12 })), setAdblockEnabled: vi.fn(async (enabled: boolean) => ({ phase: enabled ? "active" : "disabled", enabled, blockedCount: 12 })),
   exportProductData: vi.fn(async (_content: string) => true), importProductData: vi.fn(async () => null),
   exportCustomization: vi.fn(async (_content: string) => true), importCustomization: vi.fn(async () => null), fetchWallpaper: vi.fn(async () => "data:image/png;base64,YQ=="),
+  exportMoonHome: vi.fn(async (_content: string) => true), importMoonHome: vi.fn(async () => null),
   exportSettingsDiagnostic: vi.fn(async (_content: string) => true),
   fetchFavicon: vi.fn(async () => "data:image/png;base64,YQ=="),
   migrateLegacyProfile: vi.fn(async () => ({ migrated: true, version: 1 })), loadCustomization: vi.fn(async (legacy: unknown) => legacy), commitCustomization: vi.fn(async (document: unknown) => document), getProfileData: vi.fn(async () => profileData), mutateProfileData, onTabUpdated: vi.fn((listener: (update: unknown) => void) => { tabUpdateListeners.push(listener); return () => undefined; }), onTabClosed: vi.fn(() => () => undefined),
@@ -200,6 +201,20 @@ describe("Moon browser shell", () => {
     expect(document.documentElement.dataset.moonTheme).toBe(before);
   });
 
+  it("edits the real Home with keyboard controls and cancels the draft exactly", async () => {
+    (document.querySelector('[aria-label="Editar Home"]') as HTMLButtonElement).click(); await flush();
+    const before = [...document.querySelectorAll<HTMLElement>(".moon-home-widget")].map(widget => widget.dataset.widget);
+    const first = document.querySelector<HTMLElement>(".moon-home-widget")!;
+    first.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true })); await flush();
+    expect([...document.querySelectorAll<HTMLElement>(".moon-home-widget")].map(widget => widget.dataset.widget)).not.toEqual(before);
+    const removable = document.querySelector<HTMLButtonElement>(".moon-home-widget-remove")!; const removedId = removable.closest<HTMLElement>("[data-widget]")!.dataset.widget;
+    removable.click(); await flush(); expect(document.querySelector(`[data-widget="${removedId}"]`)).toBeNull();
+    expect(document.querySelector(`[aria-label="Adicionar ${removedId}"]`)).not.toBeNull();
+    bridge.exportMoonHome.mockClear(); (document.querySelector('[aria-label="Exportar arquivo .moonhome"]') as HTMLButtonElement).click(); await flush(); expect(bridge.exportMoonHome).toHaveBeenCalledOnce();
+    (document.querySelector('[aria-label="Cancelar edição da Home"]') as HTMLButtonElement).click(); await flush();
+    expect([...document.querySelectorAll<HTMLElement>(".moon-home-widget")].map(widget => widget.dataset.widget)).toEqual(before);
+  });
+
   it("searches across settings categories and reorders toolbar controls by keyboard", async () => {
     (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
     const search = document.querySelector('[aria-label="Buscar nas configurações"]') as HTMLInputElement;
@@ -254,6 +269,17 @@ describe("Moon browser shell", () => {
     expect(document.documentElement.style.getPropertyValue("--moon-tabs-width")).toBe("240px");
     (document.querySelector('[aria-label="Cancelar mudanças"]') as HTMLButtonElement).click(); await flush();
     expect(document.documentElement.dataset.moonTabs).toBe("top");
+  });
+  it("moves or hides the new-tab button while Ctrl+T remains available", async () => {
+    (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
+    (document.querySelector('[data-mode="advanced"]') as HTMLButtonElement).click(); (document.querySelector('[aria-label="Layout e densidade"]') as HTMLButtonElement).click(); await flush();
+    const group = [...document.querySelectorAll<HTMLElement>(".moon-setting-group")].find(item => item.querySelector("h3")?.textContent === "Posição das abas")!;
+    const position = [...group.querySelectorAll<HTMLSelectElement>("select")].find(select => select.closest("label")?.textContent?.includes("Botão de nova aba"))!;
+    position.value = "toolbar"; position.dispatchEvent(new Event("change", { bubbles: true })); await flush();
+    expect(document.querySelector(".moon-toolbar-v2 > .moon-add-tab")).not.toBeNull();
+    position.value = "hidden"; position.dispatchEvent(new Event("change", { bubbles: true })); await flush(); expect(document.querySelector(".moon-add-tab")).toBeNull();
+    createTab.mockClear(); window.dispatchEvent(new KeyboardEvent("keydown", { key: "t", ctrlKey: true })); await flush(); expect(createTab).toHaveBeenCalledOnce();
+    (document.querySelector('[aria-label="Cancelar mudanças"]') as HTMLButtonElement).click(); await flush(); expect(document.querySelector(".moon-tabs-bar > .moon-add-tab")).not.toBeNull();
   });
   it("queues site permissions and sends an explicit user decision", async () => {
     bridge.respondToPermission.mockClear(); setContentVisible.mockClear();

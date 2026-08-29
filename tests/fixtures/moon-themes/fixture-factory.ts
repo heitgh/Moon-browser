@@ -6,6 +6,9 @@ interface FixtureOptions {
   readonly extraEntries?: Readonly<Record<string, Uint8Array>>;
   readonly minimumVersion?: string;
   readonly version?: string;
+  readonly schemaVersion?: 1 | 2;
+  readonly capabilities?: readonly string[];
+  readonly preview?: { readonly thumbnail?: string; readonly animated: boolean };
   readonly corruptHash?: boolean;
   readonly corruptSignature?: boolean;
 }
@@ -35,7 +38,8 @@ export function moonThemeFixture(options: FixtureOptions = {}): Uint8Array {
   const files = [{ path: "theme.json", bytes: themeBytes.length, mime: "application/json", sha256: createHash("sha256").update(themeBytes).digest("hex") }, ...Object.entries(assets).map(([path, asset]) => ({ path, bytes: asset.bytes.length, mime: asset.mime, sha256: createHash("sha256").update(asset.bytes).digest("hex") }))];
   if (options.corruptHash) files[0] = { ...files[0]!, sha256: "0".repeat(64) };
   const version = options.version ?? "1.0.0";
-  const manifestBytes = Buffer.from(JSON.stringify({ format: "moon-theme", schemaVersion: 1, id: "fixture.theme", slug: "fixture-theme", name: "Fixture Theme", version, author: "Moon Tests", description: "Fixture seguro", license: "MIT", minMoonVersion: options.minimumVersion ?? "0.1.0", capabilities: ["appearance"], assets: files, marketplace: { themeId: "fixture-market-theme", releaseId: `fixture-release-${version}` } }));
+  const schemaVersion = options.schemaVersion ?? 1;
+  const manifestBytes = Buffer.from(JSON.stringify({ format: "moon-theme", schemaVersion, id: "fixture.theme", slug: "fixture-theme", name: "Fixture Theme", version, author: "Moon Tests", description: "Fixture seguro", license: "MIT", minMoonVersion: options.minimumVersion ?? "0.1.0", capabilities: options.capabilities ?? ["appearance"], assets: files, marketplace: { themeId: "fixture-market-theme", releaseId: `fixture-release-${version}` }, ...(schemaVersion === 2 && options.preview ? { preview: options.preview } : {}) }));
   const { privateKey, publicKey } = generateKeyPairSync("ed25519");
   const publicDer = publicKey.export({ format: "der", type: "spki" }); const signature = sign(null, manifestBytes, privateKey);
   if (options.corruptSignature) signature[0] = signature[0]! ^ 0xff;

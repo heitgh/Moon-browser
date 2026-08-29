@@ -7,12 +7,35 @@ function expectCode(action: () => unknown, code: string): void {
   catch (error) { expect(error).toBeInstanceOf(MoonThemeValidationError); expect((error as MoonThemeValidationError).code).toBe(code); }
 }
 
-describe(".moontheme v1 contract", () => {
+describe(".moontheme V1/V2 contract", () => {
   it("validates a signed, compatible package without trusting an unknown publisher", () => {
     const result = validateMoonTheme(moonThemeFixture(), "0.1.0");
     expect(result.manifest.id).toBe("fixture.theme");
+    expect(result.manifest.schemaVersion).toBe(1);
     expect(result.trust).toBe("local");
     expect(result.tokens.colors?.accent).toBe("#7c5cff");
+  });
+
+  it("accepts V2 Home, motion, animated wallpaper metadata and a declared thumbnail", () => {
+    const gif = Buffer.from("GIF89a-safe-fixture");
+    const result = validateMoonTheme(moonThemeFixture({
+      schemaVersion: 2,
+      capabilities: ["appearance", "wallpaper", "home", "animation"],
+      preview: { thumbnail: "assets/preview.gif", animated: true },
+      assets: { "assets/preview.gif": { bytes: gif, mime: "image/gif" } },
+      theme: {
+        colors: { accent: "#7c5cff" },
+        wallpaper: { asset: "assets/preview.gif", kind: "animated", fit: "cover" },
+        home: { preset: "focus", columns: 2, gap: 12, greeting: "Foco total" },
+        motion: { enabled: true, speed: 0.8 }
+      }
+    }), "0.1.0");
+    expect(result.manifest).toMatchObject({ schemaVersion: 2, preview: { thumbnail: "assets/preview.gif", animated: true } });
+    expect(result.tokens).toMatchObject({ wallpaper: { kind: "animated" }, home: { preset: "focus" }, motion: { speed: 0.8 } });
+  });
+
+  it("keeps V2-only fields out of strict V1 packages", () => {
+    expectCode(() => validateMoonTheme(moonThemeFixture({ theme: { home: { preset: "focus" } } }), "0.1.0"), "schema");
   });
 
   it("rejects hash and signature tampering", () => {

@@ -7,6 +7,7 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { parseMoonProfileBackup } from "../../../../packages/storage/backup/profile-backup.js";
 import { createDefaultCustomization, parseCustomizationImport } from "../../../../ui/customization/customization-schema.js";
+import { parseMoonHome, serializeMoonHome } from "../../../../ui/customization/moon-home-contract.js";
 import type { ProfileStorage } from "../services/profile-storage.js";
 import type { MoonThemeService } from "../services/moon-theme-service.js";
 import { parseProfileDataMutation } from "../../../../packages/ipc/profile-data-contract.js";
@@ -97,6 +98,18 @@ export function registerProductIpc(
     const result = await dialog.showOpenDialog({ title: "Importar personalização do Moon", properties: ["openFile"], filters: [{ name: "Moon Customization", extensions: ["json"] }] });
     const path = result.filePaths[0]; if (result.canceled || !path) return null;
     const content = await readFile(path, "utf8"); parseCustomizationImport(content, createDefaultCustomization()); return content;
+  });
+  router.register("product:export-moon-home", async (_event, payload?: { readonly content?: string }) => {
+    if (!payload || typeof payload.content !== "string" || payload.content.length > 512_000) throw new TypeError("Invalid .moonhome export");
+    const canonicalContent = serializeMoonHome(parseMoonHome(payload.content));
+    const result = await dialog.showSaveDialog({ title: "Exportar Home do Moon", defaultPath: `moon-home-${new Date().toISOString().slice(0, 10)}.moonhome`, filters: [{ name: "Moon Home", extensions: ["moonhome"] }] });
+    if (result.canceled || !result.filePath) return false;
+    await writeFile(result.filePath, canonicalContent, { encoding: "utf8", mode: 0o600 }); return true;
+  });
+  router.register("product:import-moon-home", async () => {
+    const result = await dialog.showOpenDialog({ title: "Importar Home do Moon", properties: ["openFile"], filters: [{ name: "Moon Home", extensions: ["moonhome"] }] });
+    const path = result.filePaths[0]; if (result.canceled || !path) return null;
+    const content = await readFile(path, "utf8"); return serializeMoonHome(parseMoonHome(content));
   });
   router.register("product:export-settings-diagnostic", async (_event, payload?: { readonly content?: string }) => {
     if (!payload || typeof payload.content !== "string" || payload.content.length > 100_000) throw new TypeError("Invalid settings diagnostic");

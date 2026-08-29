@@ -284,6 +284,13 @@ export class CustomizationStore {
         if (tokens.colors.textMuted) colors.textMuted = tokens.colors.textMuted;
         if (tokens.colors.accent) colors.accent = tokens.colors.accent;
         if (tokens.colors.border) colors.border = tokens.colors.border;
+        const regions = appearance.regions as Mutable<typeof appearance.regions>;
+        if (tokens.colors.toolbar) regions.toolbar = tokens.colors.toolbar;
+        if (tokens.colors.tabs) regions.tabs = tokens.colors.tabs;
+        if (tokens.colors.sidebar) regions.sidebar = tokens.colors.sidebar;
+        if (tokens.colors.home) regions.home = tokens.colors.home;
+        if (tokens.colors.content) regions.content = tokens.colors.content;
+        if (tokens.colors.selection) regions.selection = tokens.colors.selection;
       }
       if (tokens.shape?.radius !== undefined) (appearance.shape as Mutable<typeof appearance.shape>).radius = tokens.shape.radius;
       if (tokens.shape?.borderWidth !== undefined) (appearance.shape as Mutable<typeof appearance.shape>).borderWidth = tokens.shape.borderWidth;
@@ -296,7 +303,7 @@ export class CustomizationStore {
       if (tokens.glass?.intensity !== undefined) (appearance.glass as Mutable<typeof appearance.glass>).intensity = tokens.glass.intensity;
       if (tokens.glass?.opacity !== undefined) (appearance.opacity as Mutable<typeof appearance.opacity>).cards = tokens.glass.opacity;
       if (tokens.wallpaper && wallpaperData) {
-        const wallpaper = appearance.wallpaper as Mutable<typeof appearance.wallpaper>; wallpaper.type = "local"; wallpaper.source = wallpaperData; wallpaper.cachedData = undefined;
+        const wallpaper = appearance.wallpaper as Mutable<typeof appearance.wallpaper>; wallpaper.type = tokens.wallpaper.kind === "animated" ? "animated" : "local"; wallpaper.source = wallpaperData; wallpaper.cachedData = undefined;
         if (tokens.wallpaper.dim !== undefined) wallpaper.dim = tokens.wallpaper.dim;
         if (tokens.wallpaper.blur !== undefined) wallpaper.blur = tokens.wallpaper.blur;
         if (tokens.wallpaper.fit !== undefined) wallpaper.fit = tokens.wallpaper.fit;
@@ -312,6 +319,9 @@ export class CustomizationStore {
       if (tokens.typography?.scale) (config.typography as Mutable<typeof config.typography>).scale = scales[tokens.typography.scale];
       if (tokens.layout?.sidebar) (config.layout.sidebar as Mutable<typeof config.layout.sidebar>).position = tokens.layout.sidebar;
       if (tokens.layout?.tabStyle) (config.layout as Mutable<typeof config.layout>).density = tokens.layout.tabStyle;
+      if (tokens.home) Object.assign(config.home as Mutable<typeof config.home>, tokens.home);
+      if (tokens.motion?.enabled !== undefined) (appearance.motion as Mutable<typeof appearance.motion>).enabled = tokens.motion.enabled;
+      if (tokens.motion?.speed !== undefined) (appearance.motion as Mutable<typeof appearance.motion>).speed = tokens.motion.speed;
     });
   }
 

@@ -40,6 +40,8 @@ export class CustomizationApplier {
       "--moon-bg": colors.background, "--moon-surface": colors.surface, "--moon-surface-raised": colors.elevated,
       "--moon-text": colors.text, "--moon-text-muted": colors.textMuted, "--moon-border": colors.border,
       "--moon-success": colors.success, "--moon-warning": colors.warning, "--moon-danger": colors.danger,
+      "--moon-region-toolbar": appearance.regions.toolbar, "--moon-region-tabs": appearance.regions.tabs, "--moon-region-sidebar": appearance.regions.sidebar,
+      "--moon-region-home": appearance.regions.home, "--moon-region-content": appearance.regions.content, "--moon-region-selection": appearance.regions.selection,
       "--moon-sidebar-width": `${layout.sidebar.width}px`, "--moon-sidebar-icon": `${layout.sidebar.iconSize}px`, "--moon-sidebar-gap": `${layout.sidebar.spacing}px`,
       "--moon-sidebar-hide-delay": `${layout.sidebar.hideDelay}ms`,
       "--moon-drawer-width": `${layout.drawer.width}px`, "--moon-tabs-width": `${layout.tabs.width}px`, "--moon-toolbar-height": `${layout.toolbar.height}px`, "--moon-ui-scale": String(layout.uiScale),

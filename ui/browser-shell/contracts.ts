@@ -30,8 +30,8 @@ export interface ManagedDownload { readonly id: string; readonly url: string; re
 export interface AdblockStatus { readonly phase: "loading" | "active" | "disabled" | "failed"; readonly enabled: boolean; readonly blockedCount: number; readonly error?: string; }
 export interface PermissionRequest { readonly id: string; readonly origin: string; readonly permission: string; }
 export interface MoonThemeSummary { readonly id: string; readonly packageId: string; readonly name: string; readonly version: string; readonly author: string; readonly trust: "official" | "local"; readonly active: boolean; readonly installedAt: number; }
-export interface MoonThemePayload { readonly summary: MoonThemeSummary; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; }
-export interface MoonThemePreview extends MoonThemeSummary { readonly intentId: string; readonly description?: string; readonly changes: readonly string[]; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; }
+export interface MoonThemePayload { readonly summary: MoonThemeSummary; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; readonly iconData?: Readonly<Partial<Record<"logo" | "newTab" | "privateTab", string>>>; }
+export interface MoonThemePreview extends MoonThemeSummary { readonly intentId: string; readonly description?: string; readonly changes: readonly string[]; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; readonly iconData?: Readonly<Partial<Record<"logo" | "newTab" | "privateTab", string>>>; }
 export type Drawer = "workspaces" | "bookmarks" | "downloads" | "history" | "translate" | "notes" | "focus" | "extensions" | "ai" | "security";
 export type { ProfileDataMutation, ProfileDataSnapshot } from "../../packages/ipc/profile-data-contract.js";
 import type { ProfileDataMutation, ProfileDataSnapshot } from "../../packages/ipc/profile-data-contract.js";
@@ -74,6 +74,8 @@ export interface MoonBrowserBridge {
   exportCustomization(content: string): Promise<boolean>;
   exportSettingsDiagnostic(content: string): Promise<boolean>;
   importCustomization(): Promise<string | null>;
+  exportMoonHome(content: string): Promise<boolean>;
+  importMoonHome(): Promise<string | null>;
   fetchWallpaper(url: string): Promise<string>;
   fetchFavicon(url: string): Promise<string>;
   migrateLegacyProfile(content: string): Promise<{ readonly migrated: boolean; readonly version: number }>;

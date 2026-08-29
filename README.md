@@ -123,7 +123,7 @@ O desenvolvimento dessa base aconteceu em [`heitgh/Moon-tests-1`](https://github
 - prompts explícitos para permissões de sites;
 - CSP local sem carregamento remoto automático de scripts;
 - telemetria desativada por padrão;
-- formato `.moontheme` v1 com hashes, assinatura Ed25519, quarentena, preview e rollback;
+- formato `.moontheme` V2 retrocompatível com V1, com hashes, assinatura Ed25519, quarentena, preview/thumbnail, Home, animação e rollback;
 - bloqueio de traversal, arquivos executáveis, ZIP bombs, MIME falso e SVG ativo em pacotes de tema.
 
 ## Estado honesto das funcionalidades
@@ -132,13 +132,13 @@ O Moon diferencia recurso funcional, entrega parcial, preview e plano. Código d
 
 | Área | Estado na 0.5 Demo | Observação |
 | --- | --- | --- |
-| Home, navegação e abas | **Funcional** | Runtime desktop conectado ao Chromium |
+| Home, navegação e abas | **Funcional** | Runtime desktop, editor direto, `.moonhome`, abas configuráveis e `Ctrl/Cmd+T` conectado ao Chromium |
 | Workspaces | **Funcional** | Partições isoladas; evolução do estado continua |
 | Favoritos, histórico e notas | **Funcional** | Ainda há migração gradual do estado do renderer para repositories |
 | Downloads | **Funcional** | Eventos e progresso reais do Electron |
 | AdBlock | **Funcional** | Serviço nativo conectado à interface |
 | Settings V4 | **Funcional** | Modos Simples/Avançado, preview, commit SQLite, recuperação, importação e exportação |
-| Temas e wallpapers | **Funcional / parcial** | Biblioteca avançada, favoritos e deduplicação ainda estão no backlog |
+| Temas e wallpapers | **Funcional / parcial** | Biblioteca unificada, regiões semânticas, paleta local e animação segura; favoritos/deduplicação avançada seguem no backlog |
 | Moon Themes `.moontheme` | **Funcional localmente** | Conta, catálogo remoto e OAuth dependem do serviço externo |
 | Permissões de sites | **Parcial** | Decisão explícita existe; persistência e revogação por origem serão ampliadas |
 | Moon AI | **Preview desativado** | Não há provider de IA conectado; o painel não deve ser anunciado como IA operacional |

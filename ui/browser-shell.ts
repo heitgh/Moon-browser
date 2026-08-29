@@ -36,8 +36,9 @@ import { createMoonProfileBackup } from "../packages/storage/backup/profile-back
 import { CustomizationStore } from "./customization/customization-store.js";
 import { CustomizationApplier } from "./customization/customization-applier.js";
 import { CustomizationCenter } from "./customization/customization-center.js";
-import { CUSTOMIZATION_V2_STORAGE_KEY, CUSTOMIZATION_V3_STORAGE_KEY, type CustomizationConfig, type SettingsMode, type SettingsView } from "./customization/customization-schema.js";
+import { CUSTOMIZATION_V2_STORAGE_KEY, CUSTOMIZATION_V3_STORAGE_KEY, type CustomizationConfig, type HomeWidgetId, type SettingsMode, type SettingsView } from "./customization/customization-schema.js";
 import { SETTINGS_CATALOG, type SettingsSection } from "./customization/settings-catalog.js";
+import { parseMoonHome, serializeMoonHome } from "./customization/moon-home-contract.js";
 import { isMoonSettingsUrl, normalizeMoonInternalUrl } from "../packages/navigation/internal-routes.js";
 import { FaviconCache } from "./browser-shell/favicon-cache.js";
 import { PermissionPromptController } from "./browser-shell/controllers/permission-prompt-controller.js";
@@ -79,11 +80,24 @@ class BrowserShell {
     onOpenMenu: () => { void this.#openSettings(); }
   }, { ai: AI_ENABLED, modules: MODULES_ENABLED });
   readonly #omnibox = this.#toolbar.omnibox;
-  readonly #homeView = new HomeView(value => { void this.#navigate(value); }, value => { void this.#createTab(value); }, () => this.#toggleDrawer("focus"));
+  readonly #homeView = new HomeView(value => { void this.#navigate(value); }, value => { void this.#createTab(value); }, () => this.#toggleDrawer("focus"), {
+    onBegin: () => this.#customization.beginPreview(),
+    onMove: (source, target) => this.#moveHomeWidget(source, target),
+    onNudge: (id, direction) => this.#nudgeHomeWidget(id, direction),
+    onAdd: id => this.#setHomeWidgetVisibility(id, true),
+    onRemove: id => this.#setHomeWidgetVisibility(id, false),
+    onApply: () => this.#customization.applyPreview(),
+    onCancel: () => this.#customization.cancelPreview(),
+    onExport: () => this.#bridge?.exportMoonHome(serializeMoonHome(this.#customization.config.home)) ?? Promise.resolve(false),
+    onImport: async () => { const content = await this.#bridge?.importMoonHome(); if (!content) return false; const home = parseMoonHome(content); return this.#customization.update(config => { (config as { home: typeof home }).home = home; }); }
+  });
   readonly #focusPanel = new FocusPanel({ controller: () => this.#focus, workspaces: () => this.#workspaces, privateWindow: () => this.#windowPrivate, pendingNavigation: () => this.#pendingFocusNavigation, onProceedNavigation: url => { void this.#navigate(url, true); }, onDismissNavigation: () => { this.#pendingFocusNavigation = undefined; }, onEnd: () => this.#closeDrawer() });
   readonly #home = this.#homeView.element;
   readonly #viewport = el("div", "moon-browser-viewport");
   readonly #stage = el("div", "moon-stage");
+  readonly #railElement = el("aside", "moon-rail");
+  readonly #tabsBar = el("header", "moon-tabs-bar");
+  readonly #addTab = btn("moon-add-tab", "Nova aba (Ctrl+T)", "plus");
   readonly #drawer = el("aside", "moon-drawer");
   readonly #drawerBody = el("div", "moon-drawer-body");
   readonly #drawerTitle = el("h2", "moon-drawer-title", "Painel");
@@ -147,7 +161,7 @@ class BrowserShell {
       let migrationSource: unknown = this.#customization.document;
       if (legacyRaw) { try { migrationSource = JSON.parse(legacyRaw) as unknown; } catch { /* the validated local V4 recovery remains the safe source */ } }
       const canonical = await this.#bridge.loadCustomization(migrationSource);
-      this.#customization.useCanonical(canonical, context.private ? undefined : document => this.#bridge!.commitCustomization(document));
+      this.#customization.useCanonical(canonical, document => this.#bridge!.commitCustomization(document));
       this.#focus = new FocusSessionController(document.documentElement, context.private ? undefined : localStorage, message => this.#flash(message));
       this.#focus.subscribe(() => this.#renderFocusIndicator());
       await this.#migrateLegacyProfile();
@@ -169,7 +183,7 @@ class BrowserShell {
 
   #build(): void {
     const shell = el("div", "moon-browser-shell");
-    const rail = el("aside", "moon-rail");
+    const rail = this.#railElement;
     const brand = btn("moon-brand", "Moon Browser", "moon"); brand.addEventListener("click", () => void this.#showHome()); rail.append(brand);
     const controls: readonly [string, string, IconName, () => void][] = [
       ["home", "Página inicial", "home", () => void this.#showHome()], ["commands", "Central de comandos", "search", () => { void this.#openCommandCenter(); }], ["workspaces", "Workspaces", "grid", () => this.#toggleDrawer("workspaces")],
@@ -186,8 +200,8 @@ class BrowserShell {
     const drawerResize = el("div", "moon-drawer-resize"); drawerResize.tabIndex = 0; drawerResize.setAttribute("role", "separator"); drawerResize.setAttribute("aria-label", "Redimensionar painel"); drawerResize.setAttribute("aria-orientation", "vertical");
     drawerHeader.append(this.#drawerTitle, drawerClose); this.#drawer.append(drawerHeader, this.#drawerBody, drawerResize); this.#bindDrawerResize(drawerResize);
 
-    const main = el("section", "moon-browser-main"); const tabsBar = el("header", "moon-tabs-bar"); const mark = el("div", "moon-window-mark"); mark.append(svg("moon"), el("span", "", "MOON"));
-    const addTab = btn("moon-add-tab", "Nova aba (Ctrl+T)", "plus"); addTab.addEventListener("click", () => void this.#createTab()); this.#privateBadge.hidden = true; this.#privateBadge.title = "O modo anônimo não oculta o tráfego do seu provedor, empresa, escola ou dos sites acessados."; tabsBar.append(mark, this.#tabStrip.element, this.#privateBadge, addTab);
+    const main = el("section", "moon-browser-main"); const tabsBar = this.#tabsBar; const mark = el("div", "moon-window-mark"); mark.append(svg("moon"), el("span", "", "MOON"));
+    this.#addTab.addEventListener("click", () => void this.#createTab()); this.#privateBadge.hidden = true; this.#privateBadge.title = "O modo anônimo não oculta o tráfego do seu provedor, empresa, escola ou dos sites acessados."; tabsBar.append(mark, this.#tabStrip.element, this.#addTab, this.#privateBadge);
 
     const content = el("div", "moon-content"); this.#renderHomeShortcuts(); this.#stage.append(this.#home, this.#viewport, this.#status); content.append(this.#stage);
     this.#zenExit.append(el("span", "", "Sair do Foco")); this.#zenExit.hidden = true; this.#zenExit.addEventListener("click", () => this.#focus?.end());
@@ -564,6 +578,7 @@ class BrowserShell {
     if (!config.favicons.enabled) { this.#favicons.clear(); this.#siteFavicons.clear(); this.#renderTabs(); } else for (const tab of this.#tabs.values()) void this.#hydrateFavicon(tab);
     const provider = config.search.providers.find(item => item.id === config.search.defaultEngine); if (provider && this.#bridge?.setSearchTemplate) void this.#bridge.setSearchTemplate(provider.template);
     this.#toolbar.applyLayout(config.layout);
+    this.#placeNewTabButton(config.layout.tabs.newTabButton);
     this.#homeView.apply(config);
     this.#refreshHomeData();
     requestAnimationFrame(() => this.#syncBounds());
@@ -584,6 +599,27 @@ class BrowserShell {
   #faviconForUrl(url: string): string | undefined { try { return this.#siteFavicons.get(new URL(url).origin); } catch { return undefined; } }
   #refreshHomeData(): void {
     this.#homeView.updateData({ shortcuts: this.#shortcuts, bookmarks: this.#bookmarks, tabs: [...this.#tabs.values()], workspaces: this.#workspaces, downloads: this.#downloads, notes: this.#notes, favicons: Object.fromEntries(this.#siteFavicons) });
+  }
+  #placeNewTabButton(position: CustomizationConfig["layout"]["tabs"]["newTabButton"]): void {
+    this.#addTab.hidden = position === "hidden"; this.#addTab.classList.toggle("is-end", position === "end-bar");
+    if (position === "hidden") { this.#addTab.remove(); return; }
+    if (position === "before-tabs") this.#tabStrip.element.before(this.#addTab);
+    else if (position === "after-tabs") this.#tabStrip.element.after(this.#addTab);
+    else if (position === "end-bar") this.#tabsBar.append(this.#addTab);
+    else if (position === "toolbar") this.#toolbar.element.append(this.#addTab);
+    else this.#railElement.querySelector(".moon-rail-spacer")?.before(this.#addTab);
+  }
+  #moveHomeWidget(sourceId: HomeWidgetId, targetId: HomeWidgetId): void {
+    this.#customization.update(config => {
+      const source = config.home.widgets.find(widget => widget.id === sourceId); const target = config.home.widgets.find(widget => widget.id === targetId); if (!source || !target) return;
+      const sourceOrder = source.order; (source as { order: number }).order = target.order; (target as { order: number }).order = sourceOrder; (config.home as { preset: typeof config.home.preset }).preset = "custom";
+    });
+  }
+  #nudgeHomeWidget(id: HomeWidgetId, direction: -1 | 1): void {
+    const visible = [...this.#customization.config.home.widgets].filter(widget => widget.visible).sort((left, right) => left.order - right.order); const index = visible.findIndex(widget => widget.id === id); const target = visible[index + direction]; if (target) this.#moveHomeWidget(id, target.id);
+  }
+  #setHomeWidgetVisibility(id: HomeWidgetId, visible: boolean): void {
+    this.#customization.update(config => { const widget = config.home.widgets.find(candidate => candidate.id === id); if (!widget) return; (widget as { visible: boolean; order: number }).visible = visible; if (visible) (widget as { order: number }).order = Math.max(...config.home.widgets.map(candidate => candidate.order)) + 1; (config.home as { preset: typeof config.home.preset }).preset = "custom"; });
   }
   #bindDrawerResize(handle: HTMLElement): void {
     handle.addEventListener("pointerdown", event => {

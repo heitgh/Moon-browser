@@ -59,6 +59,15 @@ describe("CustomizationSchemaV4", () => {
     expect(() => validateCustomization(insecure)).toThrow(/HTTPS/i);
   });
 
+  it("accepts only bounded local GIF data for animated wallpapers", () => {
+    const document = createDefaultCustomization(); const animated = structuredClone(document);
+    (animated.global.appearance.wallpaper as { type: string; source: string }).type = "animated";
+    (animated.global.appearance.wallpaper as { type: string; source: string }).source = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+    expect(validateCustomization(animated).global.appearance.wallpaper.type).toBe("animated");
+    (animated.global.appearance.wallpaper as { source: string }).source = "https://example.test/track.gif";
+    expect(() => validateCustomization(animated)).toThrow(/animado/i);
+  });
+
   it("migrates the legacy all-settings experience to the progressive Personalizar level", () => {
     const legacy = structuredClone(createDefaultCustomization());
     (legacy.experience as { mode: string }).mode = "all";
@@ -69,7 +78,7 @@ describe("CustomizationSchemaV4", () => {
     const legacy = structuredClone(createDefaultCustomization());
     delete (legacy.global.layout as { tabs?: typeof legacy.global.layout.tabs }).tabs;
     const migrated = validateCustomization(legacy);
-    expect(migrated.global.layout.tabs).toEqual({ position: "top", width: 240 });
+    expect(migrated.global.layout.tabs).toEqual({ position: "top", width: 240, newTabButton: "after-tabs" });
   });
 
   it("round-trips all, appearance and workspace exports", () => {
@@ -165,6 +174,12 @@ describe("CustomizationStore", () => {
     expect(store.startSafeMode()).toBe(true); expect(store.config.appearance.wallpaper.type).toBe("color"); expect(store.config.appearance.motion.enabled).toBe(false); expect(store.config.layout.sidebar.position).toBe("left");
     const diagnostic = store.diagnostic(); expect(diagnostic).toContain("moon-settings-diagnostic"); expect(diagnostic).not.toContain("http");
     store.cancelPreview(); expect(store.config.appearance.wallpaper.type).toBe("local");
+  });
+
+  it("applies an animated V2 Moon Theme without downgrading it to a static wallpaper", () => {
+    const store = CustomizationStore.load(new MemoryStorage()); store.beginPreview();
+    expect(store.applyMoonTheme({ wallpaper: { asset: "assets/wallpaper.gif", kind: "animated" } }, "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==")).toBe(true);
+    expect(store.config.appearance.wallpaper.type).toBe("animated");
   });
 
   it("keeps workspace customization independent from global values", () => {
