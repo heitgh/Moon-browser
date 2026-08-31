@@ -26,9 +26,21 @@ O Moon é um navegador desktop open source da **Nexus Inc.**, construído sobre 
 > [!IMPORTANT]
 > **Moon Browser 0.5 Demo é uma versão pública de testes.** Ela já navega na web e possui recursos reais, mas ainda não deve ser tratada como um navegador estável para dados críticos ou como substituto definitivo do navegador principal. Relate falhas pelo [GitHub Issues](https://github.com/heitgh/Moon-browser/issues) ou pelo [Discord](https://discord.gg/skB4s8KWW).
 
+## Download rápido
+
+| Sistema                        | Formato       | Download direto                                                                                                                 |
+| ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Windows 10/11 x64              | Instalador    | [Baixar `.exe`](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Windows-x64-Setup.exe)             |
+| Windows 10/11 x64              | Portátil      | [Baixar `.exe` portátil](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Windows-x64-Portable.exe) |
+| Linux x64                      | AppImage      | [Baixar `.AppImage`](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Linux-x64.AppImage)           |
+| Debian, Ubuntu e derivados x64 | Pacote Debian | [Baixar `.deb`](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Linux-x64.deb)                     |
+
+Os arquivos são gerados em ambientes limpos pelo GitHub Actions e publicados em [Releases](https://github.com/heitgh/Moon-browser/releases). Confira também os arquivos `SHA256SUMS` da release. Como a versão Demo ainda não possui assinatura comercial de código, o Windows SmartScreen pode exibir um aviso antes da instalação.
+
 ## Sumário
 
 - [Visão do projeto](#visão-do-projeto)
+- [Download rápido](#download-rápido)
 - [Moon Browser 0.5 Demo](#moon-browser-05-demo)
 - [O que já funciona](#o-que-já-funciona)
 - [Estado honesto das funcionalidades](#estado-honesto-das-funcionalidades)
@@ -77,7 +89,7 @@ O desenvolvimento dessa base aconteceu em [`heitgh/Moon-tests-1`](https://github
 | Poucos testes automatizados             | Unitários, integração, Electron e E2E                                   |
 | Configurações acopladas à tela          | Settings V4 versionado, SQLite canônico, migração recuperável e preview |
 | Recursos futuros misturados à interface | Feature flags e documentação de disponibilidade                         |
-| Build manual e pouco verificável        | CI, AppImage, pacote Debian e quality gates                             |
+| Build manual e pouco verificável        | CI, instaladores Windows/Linux e quality gates                          |
 
 ## O que já funciona
 
@@ -278,7 +290,7 @@ O roadmap é orientativo e pode mudar conforme testes, segurança, desempenho e 
 
 | Marco                               | Objetivo                              | Entregas principais                                                                                                                          |
 | ----------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **0.5 Demo — agora**                | Fundação pública verificável          | Navegação, abas, workspaces, Settings V4, SQLite, sessões, AdBlock, downloads, temas, Moon Themes, CI e builds Linux                         |
+| **0.5 Demo — agora**                | Fundação pública verificável          | Navegação, abas, workspaces, Settings V4, SQLite, sessões, AdBlock, downloads, temas, Moon Themes, CI e builds Windows/Linux                 |
 | **0.6 — Ergonomia e produtividade** | Tornar o uso diário mais fluido       | Home Fase B, presets realmente distintos, biblioteca de wallpapers, sidebar evoluída, pesquisa de configurações e início da Universal Search |
 | **0.7 — Moon Intelligence**         | IA útil com controle humano           | Providers opcionais, permissões de contexto, resumo, explicação, tradução, tarefas, flashcards e comparação entre páginas                    |
 | **0.8 — Contextual Browser**        | Organizar atividades, não apenas URLs | Smart Sessions, Smart Spaces sugeridos, Navigation Timeline e Command Center                                                                 |
@@ -398,12 +410,12 @@ Copie `.env.example` para `.env` somente quando necessário e nunca versione cha
 npm run build:desktop
 ```
 
-Os artefatos são gravados em `release/`. Na validação atual, o build Linux gera:
+Os artefatos são gravados em `release/`. O alvo gerado depende do sistema operacional em que o comando é executado:
 
-- `Moon-Browser-0.5.0-demo.1-linux-x86_64.AppImage`;
-- `Moon-Browser-0.5.0-demo.1-linux-amd64.deb`.
+- Windows x64: `Moon-Browser-Windows-x64-Setup.exe` e `Moon-Browser-Windows-x64-Portable.exe`;
+- Linux x64: `Moon-Browser-Linux-x64.AppImage` e `Moon-Browser-Linux-x64.deb`.
 
-Windows e macOS possuem alvos declarados, mas só devem receber releases públicos depois de validação e assinatura próprias.
+O workflow [`release-desktop.yml`](.github/workflows/release-desktop.yml) compila Windows e Linux separadamente. Uma tag `v*` publica os quatro arquivos em GitHub Releases; a execução manual do workflow também permite informar a tag e decidir se a release será publicada.
 
 ## Testes e qualidade
 
