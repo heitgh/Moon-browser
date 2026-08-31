@@ -61,11 +61,18 @@ describe("CustomizationSchemaV4", () => {
 
   it("accepts only bounded local GIF data for animated wallpapers", () => {
     const document = createDefaultCustomization(); const animated = structuredClone(document);
-    (animated.global.appearance.wallpaper as { type: string; source: string }).type = "animated";
-    (animated.global.appearance.wallpaper as { type: string; source: string }).source = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
-    expect(validateCustomization(animated).global.appearance.wallpaper.type).toBe("animated");
+    const wallpaper = animated.global.appearance.wallpaper as { type: string; source: string; fallbackData?: string };
+    wallpaper.type = "animated";
+    wallpaper.source = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+    wallpaper.fallbackData = "data:image/webp;base64,YQ==";
+    expect(validateCustomization(animated).global.appearance.wallpaper).toMatchObject({ type: "animated", fallbackData: "data:image/webp;base64,YQ==" });
+    wallpaper.source = "data:image/webp;base64,UklGRlBJRgAAAFdFQlA="; (wallpaper as { animate?: boolean }).animate = false;
+    expect(validateCustomization(animated).global.appearance.wallpaper).toMatchObject({ type: "animated", animate: false });
     (animated.global.appearance.wallpaper as { source: string }).source = "https://example.test/track.gif";
     expect(() => validateCustomization(animated)).toThrow(/animado/i);
+    wallpaper.source = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+    wallpaper.fallbackData = "data:image/gif;base64,YQ==";
+    expect(() => validateCustomization(animated)).toThrow(/fallback estático/i);
   });
 
   it("migrates the legacy all-settings experience to the progressive Personalizar level", () => {
@@ -178,8 +185,28 @@ describe("CustomizationStore", () => {
 
   it("applies an animated V2 Moon Theme without downgrading it to a static wallpaper", () => {
     const store = CustomizationStore.load(new MemoryStorage()); store.beginPreview();
-    expect(store.applyMoonTheme({ wallpaper: { asset: "assets/wallpaper.gif", kind: "animated" } }, "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==")).toBe(true);
+    expect(store.applyMoonTheme({ wallpaper: { asset: "assets/wallpaper.gif", kind: "animated" } }, "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==", "data:image/webp;base64,YQ==")).toBe(true);
     expect(store.config.appearance.wallpaper.type).toBe("animated");
+    expect(store.config.appearance.wallpaper.fallbackData).toBe("data:image/webp;base64,YQ==");
+  });
+
+  it("persists sanitized semantic icon overrides and rejects active SVG content", () => {
+    const safe = `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="8"/></svg>').toString("base64")}`;
+    const document = createDefaultCustomization(); (document.global.icons.overrides as { home?: string }).home = safe;
+    expect(validateCustomization(document).global.icons.overrides.home).toBe(safe);
+    const unsafe = structuredClone(document); (unsafe.global.icons.overrides as { home?: string }).home = `data:image/svg+xml;base64,${Buffer.from('<svg><script>alert(1)</script></svg>').toString("base64")}`;
+    expect(() => validateCustomization(unsafe)).toThrow(/conteúdo ativo/i);
+  });
+
+  it("versions saved themes, keeps rollback history and survives a restart", async () => {
+    const storage = new MemoryStorage(); const store = CustomizationStore.load(storage); store.beginPreview();
+    const saved = store.saveTheme({ name: "Produto", description: "Tema da equipe", includes: ["colors", "icons", "home"] });
+    expect(saved).toMatchObject({ version: 1, favorite: false, includes: ["colors", "icons", "home"] });
+    store.updateTheme(saved.id, { name: "Produto V2", description: "Atualizado", includes: ["colors", "icons", "home"] });
+    expect(store.document.themes[0]).toMatchObject({ version: 2, history: [{ version: 1 }] });
+    store.restoreThemeRevision(saved.id); expect(store.document.themes[0]).toMatchObject({ version: 3, history: [] });
+    expect(await store.applyPreview()).toBe(true);
+    const restored = CustomizationStore.load(storage); expect(restored.document.themes[0]).toMatchObject({ name: "Produto V2", version: 3, description: "Atualizado" });
   });
 
   it("keeps workspace customization independent from global values", () => {

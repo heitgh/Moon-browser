@@ -213,6 +213,9 @@ describe("Moon browser shell", () => {
     (document.querySelector(`[aria-label="${before === "light" ? "Escuro" : "Claro"}"]`) as HTMLButtonElement).click(); await flush();
     expect(document.documentElement.dataset.moonTheme).not.toBe(before);
     expect(document.querySelector('.moon-settings-footer-copy strong[data-dirty="true"]')?.textContent).toContain("não aplicadas");
+    expect(document.querySelector<HTMLElement>(".moon-preview-wallpaper")?.style.backgroundImage).not.toBe("");
+    expect(document.querySelectorAll(".moon-preview-widget").length).toBeGreaterThan(0);
+    expect(document.querySelector(".moon-preview-brand .moon-icon")).not.toBeNull();
     (document.querySelector('[aria-label="Recolher prévia"]') as HTMLButtonElement).click();
     expect((document.querySelector(".moon-live-preview") as HTMLElement).hidden).toBe(true);
     expect(localStorage.getItem("moon:customization:v4")).toBe(confirmed);
@@ -220,11 +223,29 @@ describe("Moon browser shell", () => {
     expect(document.documentElement.dataset.moonTheme).toBe(before);
   });
 
+  it("saves a versioned visual theme with a deterministic thumbnail and restores it after reopening", async () => {
+    (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
+    (document.querySelector('[data-mode="advanced"]') as HTMLButtonElement).click(); (document.querySelector('[aria-label="Aparência"]') as HTMLButtonElement).click(); await flush();
+    (document.querySelector('[aria-label="Novo tema"]') as HTMLButtonElement).click(); await flush();
+    const form = document.querySelector<HTMLFormElement>(".moon-theme-save-form")!; const name = form.querySelector<HTMLInputElement>('[aria-label="Nome do tema"]')!; const description = form.querySelector<HTMLTextAreaElement>('[aria-label="Descrição do tema"]')!; name.value = "Moon Produto"; description.value = "Identidade persistente da startup"; form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await flush();
+    const card = [...document.querySelectorAll<HTMLElement>(".moon-theme-card")].find(candidate => candidate.textContent?.includes("Moon Produto")); expect(card?.querySelector(".moon-theme-thumbnail")).not.toBeNull(); expect(card?.textContent).toContain("Home");
+    (document.querySelector('[aria-label="Aplicar personalização"]') as HTMLButtonElement).click(); await flush();
+    (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush(); (document.querySelector('[data-mode="advanced"]') as HTMLButtonElement).click(); (document.querySelector('[aria-label="Aparência"]') as HTMLButtonElement).click(); await flush();
+    expect([...document.querySelectorAll(".moon-theme-card")].some(candidate => candidate.textContent?.includes("Moon Produto"))).toBe(true);
+    (document.querySelector('[aria-label="Fechar e cancelar alterações"]') as HTMLButtonElement).click(); await flush();
+  });
+
   it("edits the real Home with keyboard controls and cancels the draft exactly", async () => {
     (document.querySelector('[aria-label="Editar Home"]') as HTMLButtonElement).click(); await flush();
     const before = [...document.querySelectorAll<HTMLElement>(".moon-home-widget")].map(widget => widget.dataset.widget);
-    const first = document.querySelector<HTMLElement>(".moon-home-widget")!;
-    first.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true })); await flush();
+    const first = document.querySelector<HTMLElement>(".moon-home-widget")!; const firstId = first.dataset.widget!; const beforeColumns = first.style.getPropertyValue("--moon-widget-columns");
+    first.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true, shiftKey: true, bubbles: true })); await flush();
+    expect(document.querySelector<HTMLElement>(`[data-widget="${firstId}"]`)?.style.getPropertyValue("--moon-widget-columns")).not.toBe(beforeColumns);
+    const resize = document.querySelector<HTMLButtonElement>(".moon-home-widget-resize")!; const pointerWidget = resize.closest<HTMLElement>("[data-widget]")!; const pointerId = pointerWidget.dataset.widget!; const pointerBefore = pointerWidget.style.getPropertyValue("--moon-widget-columns"); const capture = new Set<number>();
+    resize.setPointerCapture = id => { capture.add(id); }; resize.hasPointerCapture = id => capture.has(id); resize.releasePointerCapture = id => { capture.delete(id); };
+    resize.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 7, clientX: 80 })); resize.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerId: 7, clientX: 20 })); resize.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 7, clientX: 20 })); await flush();
+    expect(document.querySelector<HTMLElement>(`[data-widget="${pointerId}"]`)?.style.getPropertyValue("--moon-widget-columns")).not.toBe(pointerBefore);
+    document.querySelector<HTMLElement>(`[data-widget="${firstId}"]`)!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true })); await flush();
     expect([...document.querySelectorAll<HTMLElement>(".moon-home-widget")].map(widget => widget.dataset.widget)).not.toEqual(before);
     const removable = document.querySelector<HTMLButtonElement>(".moon-home-widget-remove")!; const removedId = removable.closest<HTMLElement>("[data-widget]")!.dataset.widget;
     removable.click(); await flush(); expect(document.querySelector(`[data-widget="${removedId}"]`)).toBeNull();
@@ -282,10 +303,12 @@ describe("Moon browser shell", () => {
     (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
     (document.querySelector('[data-mode="simple"]') as HTMLButtonElement).click(); await flush();
     const tabsGroup = [...document.querySelectorAll<HTMLElement>(".moon-setting-group")].find(group => group.querySelector("h3")?.textContent === "Abas")!;
-    const position = tabsGroup.querySelector("select") as HTMLSelectElement;
+    const selects = [...tabsGroup.querySelectorAll<HTMLSelectElement>("select")]; const position = selects[0]!; const newTabPosition = selects[1];
+    expect(newTabPosition?.closest("label")?.textContent).toContain("Posição do botão +");
     position.value = "left"; position.dispatchEvent(new Event("change", { bubbles: true })); await flush();
     expect(document.documentElement.dataset.moonTabs).toBe("left");
     expect(document.documentElement.style.getPropertyValue("--moon-tabs-width")).toBe("240px");
+    expect(document.querySelector('[aria-label^="Usar wallpaper"]')).not.toBeNull();
     (document.querySelector('[aria-label="Cancelar mudanças"]') as HTMLButtonElement).click(); await flush();
     expect(document.documentElement.dataset.moonTabs).toBe("top");
   });

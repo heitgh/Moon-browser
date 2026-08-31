@@ -1,5 +1,5 @@
 import type { MoonThemeSummary } from "../browser-shell/contracts.js";
-import type { SavedCustomizationTheme } from "./customization-schema.js";
+import type { CustomizationConfig, SavedCustomizationTheme, ThemeIncludeArea } from "./customization-schema.js";
 
 export type ThemeCatalogSource = "builtin" | "user" | "moontheme";
 export type ThemeCatalogTrust = "builtin" | "official" | "local";
@@ -13,6 +13,12 @@ export interface ThemeCatalogEntry {
   readonly trust: ThemeCatalogTrust;
   readonly active: boolean;
   readonly installedAt: number;
+  readonly modifiedAt: number;
+  readonly description?: string;
+  readonly favorite: boolean;
+  readonly useCount: number;
+  readonly includes: readonly ThemeIncludeArea[];
+  readonly config?: CustomizationConfig;
   readonly packageId?: string;
   readonly capabilities: readonly ("appearance" | "wallpaper" | "typography" | "icons" | "layout" | "home" | "animation")[];
 }
@@ -26,6 +32,10 @@ const BUILTIN_THEMES: readonly ThemeCatalogEntry[] = [{
   trust: "builtin",
   active: false,
   installedAt: 0,
+  modifiedAt: 0,
+  favorite: false,
+  useCount: 0,
+  includes: ["colors", "wallpaper", "effects", "typography", "icons", "layout", "home"],
   capabilities: ["appearance", "wallpaper", "typography", "layout", "home"]
 }];
 
@@ -39,12 +49,18 @@ export function buildThemeCatalog(
     id: theme.id,
     source: "user",
     name: theme.name,
-    version: "local",
+    version: `v${theme.version}`,
     author: "Você",
     trust: "local",
     active: selectedId === theme.id,
     installedAt: theme.createdAt,
-    capabilities: ["appearance", "wallpaper", "typography", "layout", "home"]
+    modifiedAt: theme.updatedAt,
+    ...(theme.description ? { description: theme.description } : {}),
+    favorite: theme.favorite,
+    useCount: theme.useCount,
+    includes: theme.includes,
+    config: theme.config,
+    capabilities: ["appearance", "wallpaper", "typography", ...(Object.keys(theme.config.icons.overrides).length ? ["icons" as const] : []), "layout", "home"]
   }));
   const packages: ThemeCatalogEntry[] = moonThemes.map(theme => ({
     id: theme.id,
@@ -55,6 +71,10 @@ export function buildThemeCatalog(
     trust: theme.trust,
     active: selectedId ? selectedId === theme.id : theme.active,
     installedAt: theme.installedAt,
+    modifiedAt: theme.installedAt,
+    favorite: false,
+    useCount: 0,
+    includes: ["colors", "wallpaper", "effects", "typography", "icons", "layout"],
     packageId: theme.packageId,
     capabilities: ["appearance", "wallpaper", "typography", "icons", "layout"]
   }));

@@ -15,12 +15,14 @@
 - documento de personalização V4 canônico em SQLite, migração idempotente de V2/V3, último estado válido transacional e `localStorage` restrito a espelho/recuperação;
 - canais IPC limitados e validados para hidratação e commit único da personalização, com gravação bloqueada em janelas privadas;
 - biblioteca única para temas nativos, criações do usuário e pacotes `.moontheme`, exibindo origem, confiança, versão, capacidades e estado ativo;
+- biblioteca visual de temas com busca, filtros, ordenação, thumbnails determinísticas, favoritos, contador de uso, seleção parcial de áreas, duplicação e até dez revisões locais para rollback;
+- editor de ícones semânticos com busca, categorias, importação unitária ou por pack, preview, reset granular e persistência por perfil/workspace;
 - contrato `.moontheme` V2 retrocompatível com V1, incluindo thumbnail declarada, tokens de Home/movimento e wallpaper GIF animado validado por MIME/hash;
 - editor direto sobre a Home real com Pointer Events, alternativa de teclado, tray de conteúdo, preview transacional e portabilidade `.moonhome` estritamente validada;
 - seis posições para o botão de nova aba, incluindo oculto com `Ctrl/Cmd+T` preservado;
 - Icon Registry com allowlist SVG, atualização dos ícones montados e fallback nativo atômico em conteúdo rejeitado;
 - cores semânticas por região e extração opcional de paleta inteiramente local a partir de PNG/JPEG/WebP;
-- wallpaper GIF local com pausa quando a página está oculta, em baixa bateria ou com redução de movimento;
+- wallpapers GIF e WebP animados locais com poster estático, controle manual, pausa quando a Home está oculta, em baixa bateria ou com redução de movimento, além de validação de assinatura, decode e dimensões;
 - abas horizontais ou verticais dos dois lados, com largura configurável e fallback responsivo;
 - Central de comandos por `Ctrl/Cmd+Shift+P`, reunindo comandos, abas, histórico, favoritos, workspaces e configurações;
 - Foco/Zen temporizado, Pomodoro, contínuo ou até horário, com presets, allowlists, pausa, extensão, recuperação e resumo local;
@@ -46,6 +48,7 @@
 - resumo de Foco contando pausas como tempo focado;
 - automações de performance/captura bloqueadas pelo onboarding e overflow horizontal no seletor de níveis de Settings.
 - sessões e modelos do Core permanecendo órfãos ao fechar uma janela durante a troca de perfil.
+- tema salvo deixando de aparecer como ativo depois de reabrir o Studio e wallpaper animado permanecendo pausado ao reaplicar um tema.
 
 ### Desempenho
 

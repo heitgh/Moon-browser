@@ -26,8 +26,10 @@ import {
 } from "./browser-shell/profile.js";
 import {
   button as btn,
+  clearIconOverrides,
   element as el,
   icon as svg,
+  installIconOverrides,
   type IconName
 } from "./browser-shell/dom.js";
 import { HomeView } from "./browser-shell/components/home-view.js";
@@ -86,6 +88,7 @@ class BrowserShell {
     onBegin: () => this.#customization.beginPreview(),
     onMove: (source, target) => this.#moveHomeWidget(source, target),
     onNudge: (id, direction) => this.#nudgeHomeWidget(id, direction),
+    onResize: (id, direction) => this.#resizeHomeWidget(id, direction),
     onAdd: id => this.#setHomeWidgetVisibility(id, true),
     onRemove: id => this.#setHomeWidgetVisibility(id, false),
     onApply: () => this.#customization.applyPreview(),
@@ -242,7 +245,7 @@ class BrowserShell {
     const active = this.#activeTabId ? this.#tabs.get(this.#activeTabId) : undefined; this.#renderTabs(); this.#renderWorkspaces(); const isHome = !active || active.url === "moon://newtab"; const isSettings = Boolean(active && isMoonSettingsUrl(active.url));
     document.documentElement.dataset.moonPage = isHome ? "home" : isSettings ? "settings" : "web";
     if (active && isSettings) void this.#ensureSettingsPage(active.url); else if (this.#settingsCenter?.presentation === "page" && !this.#settingsClosing) void this.#dismissSettings(false);
-    this.#home.hidden = !isHome; this.#omnibox.value = isHome ? "" : active.url; const nav = active ? this.#navigation.get(active.id) : undefined; this.#back.disabled = !nav?.canGoBack; this.#forward.disabled = !nav?.canGoForward;
+    this.#home.hidden = !isHome; this.#homeView.setVisible(isHome); this.#omnibox.value = isHome ? "" : active.url; const nav = active ? this.#navigation.get(active.id) : undefined; this.#back.disabled = !nav?.canGoBack; this.#forward.disabled = !nav?.canGoForward;
     this.#reload.replaceChildren(svg(active?.loading ? "stop" : "reload")); this.#reload.title = active?.loading ? "Parar" : "Recarregar";
     const saved = active ? this.#bookmarks.some(item => item.url === active.url) : false; this.#bookmark.classList.toggle("is-active", saved); this.#bookmark.title = saved ? "Remover dos favoritos" : "Adicionar aos favoritos";
     this.#rail.get("home")?.classList.toggle("is-active", isHome && !this.#openDrawer); if (isHome) this.#refreshHomeData(); requestAnimationFrame(() => this.#syncBounds());
@@ -638,6 +641,8 @@ class BrowserShell {
   }
   #applyCustomization(config: CustomizationConfig): void {
     this.#customizationApplier.apply(config);
+    clearIconOverrides();
+    try { installIconOverrides(config.icons.overrides); } catch { clearIconOverrides(); }
     this.#faviconCache.configure(config.favicons);
     if (!config.favicons.enabled) { this.#favicons.clear(); this.#siteFavicons.clear(); this.#renderTabs(); } else for (const tab of this.#tabs.values()) void this.#hydrateFavicon(tab);
     const provider = config.search.providers.find(item => item.id === config.search.defaultEngine); if (provider && this.#bridge?.setSearchTemplate) void this.#bridge.setSearchTemplate(provider.template);
@@ -681,6 +686,9 @@ class BrowserShell {
   }
   #nudgeHomeWidget(id: HomeWidgetId, direction: -1 | 1): void {
     const visible = [...this.#customization.config.home.widgets].filter(widget => widget.visible).sort((left, right) => left.order - right.order); const index = visible.findIndex(widget => widget.id === id); const target = visible[index + direction]; if (target) this.#moveHomeWidget(id, target.id);
+  }
+  #resizeHomeWidget(id: HomeWidgetId, direction: -1 | 1): void {
+    this.#customization.update(config => { const widget = config.home.widgets.find(candidate => candidate.id === id); if (!widget) return; (widget as { columns: 1 | 2 | 3 | 4 }).columns = Math.max(1, Math.min(config.home.columns, widget.columns + direction)) as 1 | 2 | 3 | 4; (config.home as { preset: typeof config.home.preset }).preset = "custom"; });
   }
   #setHomeWidgetVisibility(id: HomeWidgetId, visible: boolean): void {
     this.#customization.update(config => { const widget = config.home.widgets.find(candidate => candidate.id === id); if (!widget) return; (widget as { visible: boolean; order: number }).visible = visible; if (visible) (widget as { order: number }).order = Math.max(...config.home.widgets.map(candidate => candidate.order)) + 1; (config.home as { preset: typeof config.home.preset }).preset = "custom"; });

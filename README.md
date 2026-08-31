@@ -69,15 +69,15 @@ O desenvolvimento dessa base aconteceu em [`heitgh/Moon-tests-1`](https://github
 
 ### O que mudou em relação ao protótipo
 
-| Protótipo inicial | Arquitetura 0.5 Demo |
-| --- | --- |
-| Interface concentrada em HTML/JS | Aplicação modular em TypeScript |
-| Conteúdo web por estrutura legada | `WebContentsView` gerenciado no processo principal |
-| Estado principalmente em `localStorage` | Perfil local, SQLite, migrations e repositories |
-| Poucos testes automatizados | Unitários, integração, Electron e E2E |
-| Configurações acopladas à tela | Settings V4 versionado, SQLite canônico, migração recuperável e preview |
-| Recursos futuros misturados à interface | Feature flags e documentação de disponibilidade |
-| Build manual e pouco verificável | CI, AppImage, pacote Debian e quality gates |
+| Protótipo inicial                       | Arquitetura 0.5 Demo                                                    |
+| --------------------------------------- | ----------------------------------------------------------------------- |
+| Interface concentrada em HTML/JS        | Aplicação modular em TypeScript                                         |
+| Conteúdo web por estrutura legada       | `WebContentsView` gerenciado no processo principal                      |
+| Estado principalmente em `localStorage` | Perfil local, SQLite, migrations e repositories                         |
+| Poucos testes automatizados             | Unitários, integração, Electron e E2E                                   |
+| Configurações acopladas à tela          | Settings V4 versionado, SQLite canônico, migração recuperável e preview |
+| Recursos futuros misturados à interface | Feature flags e documentação de disponibilidade                         |
+| Build manual e pouco verificável        | CI, AppImage, pacote Debian e quality gates                             |
 
 ## O que já funciona
 
@@ -130,27 +130,27 @@ O desenvolvimento dessa base aconteceu em [`heitgh/Moon-tests-1`](https://github
 
 O Moon diferencia recurso funcional, entrega parcial, preview e plano. Código de arquitetura ou uma tela demonstrativa, sozinhos, não significam que uma funcionalidade esteja pronta.
 
-| Área | Estado na 0.5 Demo | Observação |
-| --- | --- | --- |
-| Home, navegação e abas | **Funcional** | Runtime desktop, editor direto, `.moonhome`, abas configuráveis e `Ctrl/Cmd+T` conectado ao Chromium |
-| Workspaces | **Funcional** | Partições isoladas; evolução do estado continua |
-| Favoritos, histórico e notas | **Funcional** | Ainda há migração gradual do estado do renderer para repositories |
-| Downloads | **Funcional** | Eventos e progresso reais do Electron |
-| AdBlock | **Funcional** | Serviço nativo conectado à interface |
-| Settings V4 | **Funcional** | Modos Simples/Avançado, preview, commit SQLite, recuperação, importação e exportação |
-| Temas e wallpapers | **Funcional / parcial** | Biblioteca unificada, regiões semânticas, paleta local e animação segura; favoritos/deduplicação avançada seguem no backlog |
-| Moon Themes `.moontheme` | **Funcional localmente** | Conta, catálogo remoto e OAuth dependem do serviço externo |
-| Perfis locais | **Funcional** | SQLite, shell, sessões, partições, downloads e preferências isolados; convidado temporário e migração do perfil Padrão cobertos por E2E |
-| Engine de sync/E2EE | **Preparada / produção desativada** | Contratos e fixture local cobrem merge, tombstone, conflito, retry, recuperação e ausência de plaintext; não existe provider oficial |
-| Cofre de credenciais | **Bloqueado com interface honesta** | Motor local e testes existem; esta build não possui backend seguro do SO, captura ou autofill |
-| Permissões de sites | **Parcial** | Decisão explícita existe; persistência e revogação por origem serão ampliadas |
-| Moon AI | **Preview desativado** | Não há provider de IA conectado; o painel não deve ser anunciado como IA operacional |
-| Extensões Chromium | **Planejado / desativado** | Contratos existem, mas instalação segura ainda não está liberada |
-| Plugins e marketplace | **Planejado / desativado** | SDK, sandbox e cadeia de confiança ainda serão concluídos |
-| Universal Search | **Planejado** | Há fundação de busca; a experiência unificada ainda não está no shell |
-| Smart Spaces e Timeline | **Planejado / desativado** | Estruturas internas não equivalem a produto conectado |
-| VPN, sync em nuvem e auto-update | **Planejado / desativado** | Não existe provider oficial configurado; nenhuma sincronização remota é anunciada como ativa |
-| Android e iOS | **Fundação arquitetural** | Existem contratos compartilhados, não aplicativos distribuíveis |
+| Área                             | Estado na 0.5 Demo                  | Observação                                                                                                                                          |
+| -------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home, navegação e abas           | **Funcional**                       | Runtime desktop, editor direto, `.moonhome`, abas configuráveis e `Ctrl/Cmd+T` conectado ao Chromium                                                |
+| Workspaces                       | **Funcional**                       | Partições isoladas; evolução do estado continua                                                                                                     |
+| Favoritos, histórico e notas     | **Funcional**                       | Ainda há migração gradual do estado do renderer para repositories                                                                                   |
+| Downloads                        | **Funcional**                       | Eventos e progresso reais do Electron                                                                                                               |
+| AdBlock                          | **Funcional**                       | Serviço nativo conectado à interface                                                                                                                |
+| Settings V4                      | **Funcional**                       | Modos Simples/Avançado, preview, commit SQLite, recuperação, importação e exportação                                                                |
+| Temas e wallpapers               | **Funcional**                       | Biblioteca unificada, favoritos, revisões, seleção por áreas, editor de ícones, regiões semânticas, paleta local e GIF/WebP com poster/pausa segura |
+| Moon Themes `.moontheme`         | **Funcional localmente**            | Conta, catálogo remoto e OAuth dependem do serviço externo                                                                                          |
+| Perfis locais                    | **Funcional**                       | SQLite, shell, sessões, partições, downloads e preferências isolados; convidado temporário e migração do perfil Padrão cobertos por E2E             |
+| Engine de sync/E2EE              | **Preparada / produção desativada** | Contratos e fixture local cobrem merge, tombstone, conflito, retry, recuperação e ausência de plaintext; não existe provider oficial                |
+| Cofre de credenciais             | **Bloqueado com interface honesta** | Motor local e testes existem; esta build não possui backend seguro do SO, captura ou autofill                                                       |
+| Permissões de sites              | **Parcial**                         | Decisão explícita existe; persistência e revogação por origem serão ampliadas                                                                       |
+| Moon AI                          | **Preview desativado**              | Não há provider de IA conectado; o painel não deve ser anunciado como IA operacional                                                                |
+| Extensões Chromium               | **Planejado / desativado**          | Contratos existem, mas instalação segura ainda não está liberada                                                                                    |
+| Plugins e marketplace            | **Planejado / desativado**          | SDK, sandbox e cadeia de confiança ainda serão concluídos                                                                                           |
+| Universal Search                 | **Planejado**                       | Há fundação de busca; a experiência unificada ainda não está no shell                                                                               |
+| Smart Spaces e Timeline          | **Planejado / desativado**          | Estruturas internas não equivalem a produto conectado                                                                                               |
+| VPN, sync em nuvem e auto-update | **Planejado / desativado**          | Não existe provider oficial configurado; nenhuma sincronização remota é anunciada como ativa                                                        |
+| Android e iOS                    | **Fundação arquitetural**           | Existem contratos compartilhados, não aplicativos distribuíveis                                                                                     |
 
 Para a matriz técnica completa, consulte [`docs/roadmap/status.md`](docs/roadmap/status.md).
 Os limites do serviço futuro estão documentados em [`docs/product/moon-hub-contract.md`](docs/product/moon-hub-contract.md), sem domínios ou endpoints fictícios.
@@ -159,22 +159,30 @@ Os limites do serviço futuro estão documentados em [`docs/product/moon-hub-con
 
 As quatro imagens abaixo usam nomes fixos para facilitar futuras atualizações. Coloque os arquivos diretamente em `assets/`, em formato PNG, mantendo exatamente estes nomes.
 
-| Arquivo | Conteúdo recomendado | Uso no README |
-| --- | --- | --- |
-| `assets/moonpage.png` | Home principal, limpa e em alta resolução | Imagem de capa |
-| `assets/moon1.png` | Página web aberta, abas, toolbar e workspaces visíveis | Navegação real |
-| `assets/moon2.png` | Central de personalização ou `moon://settings/appearance` | Personalização |
-| `assets/moon3.png` | Sidebar, proteção, downloads, notas ou Moon Themes | Recursos do produto |
+| Arquivo               | Conteúdo recomendado                                      | Uso no README       |
+| --------------------- | --------------------------------------------------------- | ------------------- |
+| `assets/moonpage.png` | Home principal, limpa e em alta resolução                 | Imagem de capa      |
+| `assets/moon1.png`    | Página web aberta, abas, toolbar e workspaces visíveis    | Navegação real      |
+| `assets/moon2.png`    | Central de personalização ou `moon://settings/appearance` | Personalização      |
+| `assets/moon3.png`    | Sidebar, proteção, downloads, notas ou Moon Themes        | Recursos do produto |
 
 Recomendação: use capturas em proporção `16:9`, com pelo menos `1440 × 900`, sem dados pessoais, notificações, tokens ou páginas privadas.
 
-| Navegação | Personalização |
-| --- | --- |
+| Navegação                                     | Personalização                                     |
+| --------------------------------------------- | -------------------------------------------------- |
 | ![Moon Browser — navegação](assets/moon1.png) | ![Moon Browser — personalização](assets/moon2.png) |
 
-| Sidebar e produtividade |
-| --- |
+| Sidebar e produtividade                                |
+| ------------------------------------------------------ |
 | ![Moon Browser — sidebar e recursos](assets/moon3.png) |
+
+Capturas automatizadas de aceitação da Personalização V4 são geradas por `npm run screenshots:desktop`:
+
+- `assets/screenshots/personalization-v4-simple.png` e `personalization-v4-advanced.png`;
+- `assets/screenshots/personalization-v4-preview-expanded.png` e `personalization-v4-theme-library.png`;
+- `assets/screenshots/personalization-v4-theme-editor-icons.png`;
+- `assets/screenshots/personalization-v4-home-editing.png` e `personalization-v4-home-final.png`;
+- `assets/screenshots/personalization-v4-profiles.png`.
 
 <!--
 GUIA PARA ATUALIZAR AS CAPTURAS
@@ -268,14 +276,14 @@ Falhas de segurança não devem ser publicadas com dados sensíveis em issues ab
 
 O roadmap é orientativo e pode mudar conforme testes, segurança, desempenho e feedback da comunidade.
 
-| Marco | Objetivo | Entregas principais |
-| --- | --- | --- |
-| **0.5 Demo — agora** | Fundação pública verificável | Navegação, abas, workspaces, Settings V4, SQLite, sessões, AdBlock, downloads, temas, Moon Themes, CI e builds Linux |
-| **0.6 — Ergonomia e produtividade** | Tornar o uso diário mais fluido | Home Fase B, presets realmente distintos, biblioteca de wallpapers, sidebar evoluída, pesquisa de configurações e início da Universal Search |
-| **0.7 — Moon Intelligence** | IA útil com controle humano | Providers opcionais, permissões de contexto, resumo, explicação, tradução, tarefas, flashcards e comparação entre páginas |
-| **0.8 — Contextual Browser** | Organizar atividades, não apenas URLs | Smart Sessions, Smart Spaces sugeridos, Navigation Timeline e Command Center |
-| **0.9 — Moon Platform** | Abrir o ecossistema com segurança | Compatibilidade progressiva com extensões, Plugin API, widgets, automações, marketplace e sync preparado para múltiplos dispositivos |
-| **1.0 — Stable** | Navegador auditado e distribuível | Releases assinadas, auto-update seguro, acessibilidade validada, budgets de desempenho e suporte desktop consolidado |
+| Marco                               | Objetivo                              | Entregas principais                                                                                                                          |
+| ----------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0.5 Demo — agora**                | Fundação pública verificável          | Navegação, abas, workspaces, Settings V4, SQLite, sessões, AdBlock, downloads, temas, Moon Themes, CI e builds Linux                         |
+| **0.6 — Ergonomia e produtividade** | Tornar o uso diário mais fluido       | Home Fase B, presets realmente distintos, biblioteca de wallpapers, sidebar evoluída, pesquisa de configurações e início da Universal Search |
+| **0.7 — Moon Intelligence**         | IA útil com controle humano           | Providers opcionais, permissões de contexto, resumo, explicação, tradução, tarefas, flashcards e comparação entre páginas                    |
+| **0.8 — Contextual Browser**        | Organizar atividades, não apenas URLs | Smart Sessions, Smart Spaces sugeridos, Navigation Timeline e Command Center                                                                 |
+| **0.9 — Moon Platform**             | Abrir o ecossistema com segurança     | Compatibilidade progressiva com extensões, Plugin API, widgets, automações, marketplace e sync preparado para múltiplos dispositivos         |
+| **1.0 — Stable**                    | Navegador auditado e distribuível     | Releases assinadas, auto-update seguro, acessibilidade validada, budgets de desempenho e suporte desktop consolidado                         |
 
 ### Critérios antes da 1.0
 
@@ -293,16 +301,16 @@ As ideias abaixo foram consolidadas a partir do arquivo de planejamento do proje
 
 ### Prioridades de maior impacto
 
-| Ideia | Prioridade | Resultado esperado |
-| --- | ---: | --- |
-| Moon AI na sidebar | **10/10** | Perguntas e ações sobre a página com consentimento |
-| Smart Sessions | **9/10** | Retomar abas, contexto, grupos e notas de uma atividade |
-| Universal Search | **9/10** | Buscar web, abas, histórico, favoritos, notas, downloads, temas, configurações e comandos |
-| Smart Spaces | **8/10** | Sugerir agrupamentos como Estudos, Desenvolvimento e Trabalho |
-| Navigation Timeline | **8/10** | Retomar visualmente o que estava sendo feito em determinado horário |
-| Extension e Plugin API | **8/10** | Permitir módulos comunitários com capabilities explícitas |
-| Smart Home | **7/10** | Widgets de tarefas, agenda, foco, páginas frequentes e leitura em andamento |
-| Adaptive UI | **7/10** | Extrair uma paleta segura do wallpaper e adaptar acentos e contraste |
+| Ideia                  | Prioridade | Resultado esperado                                                                        |
+| ---------------------- | ---------: | ----------------------------------------------------------------------------------------- |
+| Moon AI na sidebar     |  **10/10** | Perguntas e ações sobre a página com consentimento                                        |
+| Smart Sessions         |   **9/10** | Retomar abas, contexto, grupos e notas de uma atividade                                   |
+| Universal Search       |   **9/10** | Buscar web, abas, histórico, favoritos, notas, downloads, temas, configurações e comandos |
+| Smart Spaces           |   **8/10** | Sugerir agrupamentos como Estudos, Desenvolvimento e Trabalho                             |
+| Navigation Timeline    |   **8/10** | Retomar visualmente o que estava sendo feito em determinado horário                       |
+| Extension e Plugin API |   **8/10** | Permitir módulos comunitários com capabilities explícitas                                 |
+| Smart Home             |   **7/10** | Widgets de tarefas, agenda, foco, páginas frequentes e leitura em andamento               |
+| Adaptive UI            |   **7/10** | Extrair uma paleta segura do wallpaper e adaptar acentos e contraste                      |
 
 ### Moon AI e contexto
 
@@ -351,7 +359,7 @@ moon.registerPanel({
   capabilities: ["storage"],
   render(container) {
     // Módulo executado apenas após validação e consentimento.
-  }
+  },
 });
 ```
 
@@ -411,12 +419,12 @@ npm audit --audit-level=high
 npm run build:desktop
 ```
 
-| Camada | Cobertura atual |
-| --- | ---: |
-| Testes unitários | 52 testes |
-| Integração do shell | 17 testes |
-| SQLite e serviços no Electron | 6 testes |
-| E2E Electron | 5 fluxos |
+| Camada                        | Cobertura atual |
+| ----------------------------- | --------------: |
+| Testes unitários              |       52 testes |
+| Integração do shell           |       17 testes |
+| SQLite e serviços no Electron |        6 testes |
+| E2E Electron                  |        5 fluxos |
 
 Em Linux sem sessão gráfica, execute o E2E com:
 
@@ -467,7 +475,7 @@ Distribuído sob a [Licença MIT](LICENSE). Você pode estudar, usar, modificar 
 
 **Moon Browser**
 
-*Made for users. Built with users.*
+_Made for users. Built with users._
 
 **Nexus Inc. · 2026**
 

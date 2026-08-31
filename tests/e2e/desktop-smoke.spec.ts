@@ -207,7 +207,7 @@ test("keeps the Phase A chrome readable, reachable and unclipped across target v
   try {
     const window = await shellWindow(application);
     await dismissOnboarding(window);
-    for (const [width, height] of [[909, 1026], [1280, 720], [1366, 768], [1920, 1080]] as const) {
+    for (const [width, height] of [[909, 1026], [1280, 800], [1440, 900], [1920, 1080]] as const) {
       await setViewport(application, window, width, height);
       await expect.poll(() => window.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }))).toEqual({ width, scroll: width });
       const metrics = await window.evaluate(() => {
@@ -222,15 +222,35 @@ test("keeps the Phase A chrome readable, reachable and unclipped across target v
       expect(metrics.gridLeft).toBeGreaterThanOrEqual(0);
       expect(metrics.gridRight).toBeLessThanOrEqual(width);
     }
-    await setViewport(application, window, 1280, 720); await window.getByLabel("Configurações", { exact: true }).click();
-    await window.evaluate(() => { document.documentElement.style.zoom = "2"; });
-    await expect(window.getByRole("dialog")).toBeVisible(); await expect(window.getByLabel("Aplicar personalização")).toBeVisible();
+    await setViewport(application, window, 1280, 800); await window.getByLabel("Configurações", { exact: true }).click();
+    for (const zoom of [0.8, 1, 1.25, 1.5]) {
+      await window.evaluate(value => { document.documentElement.style.zoom = String(value); }, zoom);
+      await expect(window.getByRole("dialog")).toBeVisible(); await expect(window.getByLabel("Aplicar personalização")).toBeVisible();
+      await expect.poll(() => window.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    }
     await window.emulateMedia({ reducedMotion: "reduce" });
     expect(await window.evaluate(() => Number.parseFloat(getComputedStyle(document.querySelector(".moon-settings-modal")!).animationDuration || "0"))).toBeLessThanOrEqual(.001);
   } finally {
     await application.close();
     await rm(userData, { recursive: true, force: true });
   }
+});
+
+test("pauses an animated local wallpaper and uses its static poster", async () => {
+  const userData = await mkdtemp(join(tmpdir(), "moon-e2e-animated-wallpaper-"));
+  const application = await electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData } });
+  try {
+    const window = await shellWindow(application); await dismissOnboarding(window);
+    await window.getByLabel("Configurações", { exact: true }).click(); await window.getByLabel("Avançado", { exact: true }).click(); await window.getByLabel("Aparência", { exact: true }).click();
+    await window.locator('input[type="file"][accept="image/png,image/jpeg,image/webp,image/gif"]').setInputFiles({ name: "moon-animated.gif", mimeType: "image/gif", buffer: Buffer.from("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==", "base64") });
+    await expect.poll(() => window.evaluate(() => document.querySelector<HTMLElement>(".moon-home-wallpaper")?.dataset.playback)).toBe("running");
+    await window.emulateMedia({ reducedMotion: "reduce" });
+    await expect.poll(() => window.evaluate(() => ({ playback: document.querySelector<HTMLElement>(".moon-home-wallpaper")?.dataset.playback, fallback: document.querySelector<HTMLElement>(".moon-home-wallpaper")?.dataset.fallback, image: document.querySelector<HTMLElement>(".moon-home-wallpaper")?.style.backgroundImage ?? "" }))).toMatchObject({ playback: "paused", fallback: "poster" });
+    expect(await window.evaluate(() => document.querySelector<HTMLElement>(".moon-home-wallpaper")?.style.backgroundImage)).toContain("data:image/webp");
+    await window.emulateMedia({ reducedMotion: "no-preference" }); await window.getByLabel("Aplicar personalização").click(); const omnibox = window.getByPlaceholder("Pesquise ou digite um endereço"); await omnibox.fill("https://example.com/"); await window.getByLabel("Abrir endereço").click();
+    await expect.poll(() => window.evaluate(() => document.querySelector<HTMLElement>(".moon-home-wallpaper")?.dataset.playback)).toBe("paused");
+    await window.getByLabel("Página inicial", { exact: true }).click(); await expect.poll(() => window.evaluate(() => document.querySelector<HTMLElement>(".moon-home-wallpaper")?.dataset.playback)).toBe("running");
+  } finally { await application.close(); await rm(userData, { recursive: true, force: true }); }
 });
 
 test("opens a real isolated private window and never restores it", async () => {
