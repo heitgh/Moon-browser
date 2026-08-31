@@ -92,4 +92,16 @@ describe("ElectronDownloadManager", () => {
     manager.clearFinished();
     expect(manager.list()).toEqual([]);
   });
+
+  it("never exposes or controls a download from another profile", async () => {
+    const { ElectronDownloadManager } = await import("../../apps/desktop/electron/services/download-manager.js");
+    const manager = new ElectronDownloadManager({ list: () => [] } as never);
+    const sessionA = new EventEmitter(); const sessionB = new EventEmitter(); const first = new FakeDownload(); const second = new FakeDownload();
+    manager.attach(sessionA as never, "profile-a"); manager.attach(sessionB as never, "profile-b");
+    sessionA.emit("will-download", {}, first); sessionB.emit("will-download", {}, second);
+    expect(manager.list("profile-a")).toHaveLength(1); expect(manager.list("profile-b")).toHaveLength(1);
+    const firstId = manager.list("profile-a")[0]!.id;
+    expect(() => manager.pause(firstId, "profile-b")).toThrow(/not found/i);
+    manager.pause(firstId, "profile-a"); expect(first.paused).toBe(true); expect(second.paused).toBe(false);
+  });
 });

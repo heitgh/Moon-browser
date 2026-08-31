@@ -1,9 +1,10 @@
-import { app, type Session } from "electron";
+import { app } from "electron";
 import { ElectronBlocker } from "@ghostery/adblocker-electron";
 import fetch from "cross-fetch";
 import { join } from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 import type { WindowManager } from "../main/window-manager.js";
+import type { SessionRequestPipeline } from "../security/session-request-pipeline.js";
 
 export type AdblockPhase = "loading" | "active" | "disabled" | "failed";
 export interface AdblockStatus {
@@ -14,14 +15,19 @@ export interface AdblockStatus {
 }
 
 export class ElectronAdblockService {
-  readonly #sessions = new Set<Session>();
   #blocker: ElectronBlocker | undefined;
   #enabled = true;
   #blockedCount = 0;
   #phase: AdblockPhase = "loading";
   #error: string | undefined;
 
-  constructor(readonly windows: WindowManager) {}
+  constructor(readonly windows: WindowManager, pipeline: SessionRequestPipeline) {
+    pipeline.register({
+      id: "adblock",
+      beforeRequest: details => this.#beforeRequest(details),
+      headersReceived: details => this.#headersReceived(details)
+    });
+  }
 
   async initialize(): Promise<void> {
     try {
@@ -36,7 +42,6 @@ export class ElectronAdblockService {
         this.#broadcast();
       });
       this.#phase = this.#enabled ? "active" : "disabled";
-      for (const session of this.#sessions) this.#apply(session);
     } catch (error) {
       this.#phase = "failed";
       this.#error = error instanceof Error ? error.message : String(error);
@@ -45,16 +50,9 @@ export class ElectronAdblockService {
     this.#broadcast();
   }
 
-  attach(session: Session): void {
-    if (this.#sessions.has(session)) return;
-    this.#sessions.add(session);
-    this.#apply(session);
-  }
-
   setEnabled(enabled: boolean): void {
     this.#enabled = enabled;
     if (this.#blocker) {
-      for (const session of this.#sessions) this.#apply(session);
       this.#phase = enabled ? "active" : "disabled";
     }
     this.#broadcast();
@@ -69,22 +67,14 @@ export class ElectronAdblockService {
     };
   }
 
-  #apply(session: Session): void {
-    const blocker = this.#blocker;
-    if (!blocker) return;
-    if (!this.#enabled) {
-      session.webRequest.onHeadersReceived(null);
-      session.webRequest.onBeforeRequest(null);
-      return;
-    }
-    session.webRequest.onHeadersReceived(
-      { urls: ["<all_urls>"] },
-      (details, callback) => blocker.onHeadersReceived(details, callback)
-    );
-    session.webRequest.onBeforeRequest(
-      { urls: ["<all_urls>"] },
-      (details, callback) => blocker.onBeforeRequest(details, callback)
-    );
+  #beforeRequest(details: Electron.OnBeforeRequestListenerDetails): Promise<Electron.CallbackResponse> | undefined {
+    const blocker = this.#blocker; if (!this.#enabled || !blocker) return undefined;
+    return new Promise(resolve => blocker.onBeforeRequest(details, resolve));
+  }
+
+  #headersReceived(details: Electron.OnHeadersReceivedListenerDetails): Promise<Electron.HeadersReceivedResponse> | undefined {
+    const blocker = this.#blocker; if (!this.#enabled || !blocker) return undefined;
+    return new Promise(resolve => blocker.onHeadersReceived(details, resolve));
   }
 
   #broadcast(): void {

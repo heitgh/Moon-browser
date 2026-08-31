@@ -2,6 +2,7 @@ import type { IpcMainInvokeEvent } from "electron";
 import type { BrowserApplicationApi } from "../../application/browser-application-service.js";
 import type { WindowManager } from "../main/window-manager.js";
 import type { IpcRouter } from "./ipc-router.js";
+import { parseSitePermissionKey } from "../../../../packages/ipc/site-permission-contract.js";
 
 interface TabPayload { readonly tabId: string; }
 interface NavigatePayload extends TabPayload { readonly url: string; }
@@ -11,7 +12,8 @@ interface CreateTabPayload { readonly url?: string; readonly workspaceId?: strin
 export function registerBrowserIpc(
   router: IpcRouter,
   browser: BrowserApplicationApi,
-  windows: WindowManager
+  windows: WindowManager,
+  createPrivateWindow: (profileId: string) => Promise<void>
 ): void {
   const windowIdFor = (event: IpcMainInvokeEvent): string => {
     const windowId = windows.idForWebContents(event.sender);
@@ -36,8 +38,12 @@ export function registerBrowserIpc(
     ) {
       throw new TypeError("Invalid workspace ID");
     }
-    return browser.createTab(windowIdFor(event), { url, workspaceId, active: true });
+    const windowId = windowIdFor(event);
+    const privateMode = windows.isPrivate(windowId);
+    return browser.createTab(windowId, { url, workspaceId, active: true, private: privateMode, ...(privateMode ? { sessionId: windowId } : {}) });
   });
+  router.register("browser:get-window-context", event => { const windowId = windowIdFor(event); return { private: windows.isPrivate(windowId), guest: windows.isGuest(windowId), profileId: windows.profileId(windowId) }; });
+  router.register("browser:create-private-window", async event => { const windowId = windowIdFor(event); await createPrivateWindow(windows.profileId(windowId)); });
   router.register("browser:get-tabs", event => browser.getTabs(windowIdFor(event)));
   router.register("browser:close-tab", (event, payload: TabPayload) => browser.closeTab(ownedTab(event, payload)));
   router.register("browser:activate-tab", (event, payload: TabPayload) => browser.activateTab(ownedTab(event, payload)));
@@ -75,6 +81,11 @@ export function registerBrowserIpc(
     if (!payload || typeof payload.requestId !== "string" || typeof payload.granted !== "boolean") {
       throw new TypeError("A valid permission response is required");
     }
-    browser.respondToPermission(windowIdFor(event), payload.requestId, payload.granted);
+    return browser.respondToPermission(windowIdFor(event), payload.requestId, payload.granted);
+  });
+  router.register("browser:list-site-permissions", event => { const windowId = windowIdFor(event); return windows.isPrivate(windowId) ? [] : browser.listPermissions(windowId); });
+  router.register("browser:clear-site-permission", (event, payload: unknown) => {
+    if (windows.isPrivate(windowIdFor(event))) throw new Error("Private windows cannot change persistent site permissions");
+    const key = parseSitePermissionKey(payload); const windowId = windowIdFor(event); return browser.clearPermission(windowId, key.origin, key.permission);
   });
 }

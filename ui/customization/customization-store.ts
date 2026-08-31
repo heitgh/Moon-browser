@@ -3,6 +3,8 @@ import {
   CUSTOMIZATION_STORAGE_KEY,
   CUSTOMIZATION_V2_LAST_VALID_KEY,
   CUSTOMIZATION_V2_STORAGE_KEY,
+  CUSTOMIZATION_V3_LAST_VALID_KEY,
+  CUSTOMIZATION_V3_STORAGE_KEY,
   clone,
   createDefaultCustomization,
   migrateLegacyCustomization,
@@ -15,8 +17,11 @@ import {
   type CustomizationConfig,
   type CustomizationSchemaV2,
   type SavedCustomizationTheme,
+  type SemanticIconName,
   type SettingsMode,
-  type SettingsScope
+  type SettingsScope,
+  type SettingsView,
+  type ThemeIncludeArea
 } from "./customization-schema.js";
 import type { MoonThemeTokens } from "../../packages/theme-contract/types.js";
 
@@ -30,6 +35,7 @@ export interface CustomizationChange {
 export interface CustomizationLoadResult { readonly recovered: boolean; readonly message?: string; }
 type Listener = (change: CustomizationChange) => void;
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+export type CustomizationCommitter = (document: CustomizationSchemaV2) => Promise<CustomizationSchemaV2>;
 
 export class CustomizationStore {
   readonly #listeners = new Set<Listener>();
@@ -39,29 +45,35 @@ export class CustomizationStore {
   #workspaceId: string | undefined;
   #previewSnapshot: CustomizationSchemaV2 | undefined;
   #lastError: string | undefined;
+  #committer: CustomizationCommitter | undefined;
 
-  private constructor(readonly storage: Storage, document: CustomizationSchemaV2, result: CustomizationLoadResult) {
+  private constructor(readonly storage: Storage, document: CustomizationSchemaV2, result: CustomizationLoadResult, committer?: CustomizationCommitter) {
     this.#document = document;
     this.loadResult = result;
+    this.#committer = committer;
   }
 
   readonly loadResult: CustomizationLoadResult;
 
-  static load(storage: Storage = localStorage): CustomizationStore {
-    const currentRaw = storage.getItem(CUSTOMIZATION_STORAGE_KEY); const legacyRaw = storage.getItem(CUSTOMIZATION_V2_STORAGE_KEY); const raw = currentRaw ?? legacyRaw;
+  static load(storage: Storage = localStorage, committer?: CustomizationCommitter): CustomizationStore {
+    const currentRaw = storage.getItem(CUSTOMIZATION_STORAGE_KEY);
+    const v3Raw = storage.getItem(CUSTOMIZATION_V3_STORAGE_KEY);
+    const v2Raw = storage.getItem(CUSTOMIZATION_V2_STORAGE_KEY);
+    const legacyRaw = v3Raw ?? v2Raw;
+    const raw = currentRaw ?? legacyRaw;
     if (!raw) {
       const migrated = migrateLegacyCustomization(storage);
       persist(storage, migrated);
-      return new CustomizationStore(storage, migrated, { recovered: false, message: "Preferências anteriores migradas para o Moon Settings V3." });
+      return new CustomizationStore(storage, migrated, { recovered: false, message: "Preferências anteriores migradas para o Moon Settings V4." }, committer);
     }
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
       const document = validateCustomization(parsed);
       if (!currentRaw && legacyRaw) persist(storage, document); else storage.setItem(CUSTOMIZATION_LAST_VALID_KEY, JSON.stringify(document));
-      return new CustomizationStore(storage, document, { recovered: false, ...(!currentRaw && legacyRaw ? { message: "Personalização V2 migrada para V3 sem alterar o original." } : {}) });
+      return new CustomizationStore(storage, document, { recovered: false, ...(!currentRaw && legacyRaw ? { message: `Personalização ${v3Raw ? "V3" : "V2"} migrada para V4 sem alterar o original.` } : {}) }, committer);
     } catch (error) {
-      const backup = storage.getItem(CUSTOMIZATION_LAST_VALID_KEY) ?? storage.getItem(CUSTOMIZATION_V2_LAST_VALID_KEY);
+      const backup = storage.getItem(CUSTOMIZATION_LAST_VALID_KEY) ?? storage.getItem(CUSTOMIZATION_V3_LAST_VALID_KEY) ?? storage.getItem(CUSTOMIZATION_V2_LAST_VALID_KEY);
       let fallback = createDefaultCustomization();
       if (backup) {
         try { fallback = validateCustomization(JSON.parse(backup)); } catch { /* use defaults */ }
@@ -71,13 +83,25 @@ export class CustomizationStore {
           const recovered = recoverCustomization(parsed, fallback);
           persist(storage, recovered.document);
           const detail = recovered.recoveredSections.join(", ") || "campos inválidos";
-          return new CustomizationStore(storage, recovered.document, { recovered: true, message: `Configuração recuperada parcialmente. Restaurado: ${detail}.` });
+          return new CustomizationStore(storage, recovered.document, { recovered: true, message: `Configuração recuperada parcialmente. Restaurado: ${detail}.` }, committer);
         } catch { /* unsupported or structurally unreadable document */ }
       }
       persist(storage, fallback);
       const detail = error instanceof Error ? error.message : String(error);
-      return new CustomizationStore(storage, fallback, { recovered: true, message: backup ? `Configuração inválida (${detail}). O último estado válido foi restaurado.` : `Configuração inválida (${detail}). Os padrões seguros foram restaurados.` });
+      return new CustomizationStore(storage, fallback, { recovered: true, message: backup ? `Configuração inválida (${detail}). O último estado válido foi restaurado.` : `Configuração inválida (${detail}). Os padrões seguros foram restaurados.` }, committer);
     }
+  }
+
+  useCanonical(document: unknown, committer?: CustomizationCommitter): void {
+    const canonical = validateCustomization(document);
+    persist(this.storage, canonical);
+    this.#document = canonical;
+    this.#previewSnapshot = undefined;
+    this.#undo.length = 0;
+    this.#redo.length = 0;
+    this.#lastError = undefined;
+    if (committer) this.#committer = committer;
+    this.#emit("boot");
   }
 
   get document(): CustomizationSchemaV2 { return clone(this.#document); }
@@ -87,6 +111,7 @@ export class CustomizationStore {
   get canRedo(): boolean { return this.#redo.length > 0; }
   get lastError(): string | undefined { return this.#lastError; }
   get previewing(): boolean { return this.#previewSnapshot !== undefined; }
+  get dirty(): boolean { return Boolean(this.#previewSnapshot && JSON.stringify(this.#previewSnapshot) !== JSON.stringify(this.#document)); }
 
   subscribe(listener: Listener): () => void {
     this.#listeners.add(listener);
@@ -104,9 +129,9 @@ export class CustomizationStore {
     this.#mutate(document => { (document as { scope: SettingsScope }).scope = scope; if (scope === "workspace" && this.#workspaceId && !document.workspaces[this.#workspaceId]) (document.workspaces as Record<string, CustomizationConfig>)[this.#workspaceId] = clone(document.global); }, "scope");
   }
 
-  setExperience(mode: SettingsMode, lastSection = this.#document.experience.lastSection): void {
-    if (this.#document.experience.mode === mode && this.#document.experience.lastSection === lastSection) return;
-    const update = (document: CustomizationSchemaV2): CustomizationSchemaV2 => validateCustomization({ ...document, experience: { mode, lastSection }, updatedAt: Date.now() });
+  setExperience(mode: SettingsMode, lastSection = this.#document.experience.lastSection, view: SettingsView = this.#document.experience.view): void {
+    if (this.#document.experience.mode === mode && this.#document.experience.lastSection === lastSection && this.#document.experience.view === view) return;
+    const update = (document: CustomizationSchemaV2): CustomizationSchemaV2 => validateCustomization({ ...document, experience: { mode, view, lastSection }, updatedAt: Date.now() });
     const nextDocument = update(this.#document);
     const nextConfirmed = this.#previewSnapshot ? update(this.#previewSnapshot) : nextDocument;
     try {
@@ -142,10 +167,12 @@ export class CustomizationStore {
     if (!this.#previewSnapshot) this.#previewSnapshot = this.document;
   }
 
-  applyPreview(): boolean {
+  async applyPreview(): Promise<boolean> {
     if (!this.#previewSnapshot) return true;
     try {
-      persist(this.storage, this.#document);
+      const canonical = this.#committer ? validateCustomization(await this.#committer(this.document)) : this.#document;
+      persist(this.storage, canonical);
+      this.#document = canonical;
       this.#previewSnapshot = undefined;
       this.#undo.length = 0;
       this.#redo.length = 0;
@@ -209,7 +236,7 @@ export class CustomizationStore {
   }
 
   restoreLastKnownGood(): boolean {
-    const raw = this.storage.getItem(CUSTOMIZATION_LAST_VALID_KEY) ?? this.storage.getItem(CUSTOMIZATION_V2_LAST_VALID_KEY); if (!raw) return false;
+    const raw = this.storage.getItem(CUSTOMIZATION_LAST_VALID_KEY) ?? this.storage.getItem(CUSTOMIZATION_V3_LAST_VALID_KEY) ?? this.storage.getItem(CUSTOMIZATION_V2_LAST_VALID_KEY); if (!raw) return false;
     try { this.#replace(validateCustomization(JSON.parse(raw)), "reset"); return true; }
     catch (error) { this.#lastError = error instanceof Error ? error.message : String(error); return false; }
   }
@@ -218,23 +245,29 @@ export class CustomizationStore {
     return JSON.stringify({ format: "moon-settings-diagnostic", version: 1, generatedAt: new Date().toISOString(), schemaVersion: this.#document.version, revision: this.#document.revision, scope: this.#document.scope, workspaceOverrides: Object.keys(this.#document.workspaces).length, savedThemes: this.#document.themes.length, recoveredOnLoad: this.loadResult.recovered, recoveryMessage: this.loadResult.message, previewing: this.previewing, lastError: this.#lastError }, null, 2);
   }
 
-  saveTheme(name: string): SavedCustomizationTheme {
-    const cleanName = name.trim(); if (!cleanName || cleanName.length > 100) throw new Error("Dê ao tema um nome de até 100 caracteres.");
-    const theme: SavedCustomizationTheme = { id: crypto.randomUUID(), name: cleanName, createdAt: Date.now(), config: this.config };
+  saveTheme(value: string | { readonly name: string; readonly description?: string; readonly includes?: readonly ThemeIncludeArea[] }): SavedCustomizationTheme {
+    const options = typeof value === "string" ? { name: value } : value; const cleanName = options.name.trim(); if (!cleanName || cleanName.length > 100) throw new Error("Dê ao tema um nome de até 100 caracteres."); const now = Date.now();
+    const theme: SavedCustomizationTheme = { id: crypto.randomUUID(), name: cleanName, ...(options.description?.trim() ? { description: options.description.trim() } : {}), createdAt: now, updatedAt: now, version: 1, favorite: false, useCount: 0, includes: options.includes ? [...options.includes] : ["colors", "wallpaper", "effects", "typography", "icons", "layout", "home"], history: [], config: this.config };
     this.#mutate(document => { (document.themes as SavedCustomizationTheme[]).push(theme); }, "theme");
     return theme;
   }
 
   duplicateTheme(id: string): SavedCustomizationTheme {
     const source = this.#document.themes.find(theme => theme.id === id); if (!source) throw new Error("Tema não encontrado.");
-    const copy = { ...clone(source), id: crypto.randomUUID(), name: `${source.name} — cópia`, createdAt: Date.now() };
+    const now = Date.now(); const copy = { ...clone(source), id: crypto.randomUUID(), name: `${source.name} — cópia`, createdAt: now, updatedAt: now, version: 1, favorite: false, useCount: 0, history: [] };
     this.#mutate(document => { (document.themes as SavedCustomizationTheme[]).push(copy); }, "theme"); return copy;
   }
 
   renameTheme(id: string, name: string): void {
     const cleanName = name.trim(); if (!cleanName || cleanName.length > 100) throw new Error("Nome de tema inválido.");
-    this.#mutate(document => { const index = document.themes.findIndex(theme => theme.id === id); if (index < 0) throw new Error("Tema não encontrado."); (document.themes as SavedCustomizationTheme[])[index] = { ...document.themes[index]!, name: cleanName }; }, "theme");
+    this.#mutate(document => { const index = document.themes.findIndex(theme => theme.id === id); if (index < 0) throw new Error("Tema não encontrado."); (document.themes as SavedCustomizationTheme[])[index] = { ...document.themes[index]!, name: cleanName, updatedAt: Date.now() }; }, "theme");
   }
+
+  toggleThemeFavorite(id: string): void { this.#mutate(document => { const index = document.themes.findIndex(theme => theme.id === id); if (index < 0) throw new Error("Tema não encontrado."); const theme = document.themes[index]!; (document.themes as SavedCustomizationTheme[])[index] = { ...theme, favorite: !theme.favorite, updatedAt: Date.now() }; }, "theme"); }
+
+  updateTheme(id: string, value: { readonly name: string; readonly description?: string; readonly includes: readonly ThemeIncludeArea[] }): SavedCustomizationTheme { let result: SavedCustomizationTheme | undefined; this.#mutate(document => { const index = document.themes.findIndex(theme => theme.id === id); if (index < 0) throw new Error("Tema não encontrado."); const current = document.themes[index]!; const now = Date.now(); result = { ...current, name: value.name.trim(), ...(value.description?.trim() ? { description: value.description.trim() } : { description: undefined }), updatedAt: now, version: current.version + 1, includes: [...value.includes], history: [...current.history, { version: current.version, updatedAt: current.updatedAt, config: clone(current.config) }].slice(-10), config: this.config }; (document.themes as SavedCustomizationTheme[])[index] = result; }, "theme"); return result!; }
+
+  restoreThemeRevision(id: string): void { this.#mutate(document => { const index = document.themes.findIndex(theme => theme.id === id); if (index < 0) throw new Error("Tema não encontrado."); const current = document.themes[index]!; const previous = current.history.at(-1); if (!previous) throw new Error("Este tema ainda não possui uma versão anterior."); (document.themes as SavedCustomizationTheme[])[index] = { ...current, updatedAt: Date.now(), version: current.version + 1, config: clone(previous.config), history: current.history.slice(0, -1) }; }, "theme"); }
 
   deleteTheme(id: string): void {
     this.#mutate(document => { (document as { themes: readonly SavedCustomizationTheme[] }).themes = document.themes.filter(theme => theme.id !== id); }, "theme");
@@ -242,10 +275,10 @@ export class CustomizationStore {
 
   applyTheme(id: string): void {
     const theme = this.#document.themes.find(candidate => candidate.id === id); if (!theme) throw new Error("Tema não encontrado.");
-    this.#mutate(document => setResolved(document, this.#workspaceId, clone(theme.config)), "theme");
+    this.#mutate(document => { const target = clone(resolveCustomization(document, this.#workspaceId)); const source = theme.config; if (theme.includes.includes("colors")) { (target.appearance as Mutable<typeof target.appearance>).mode = source.appearance.mode; (target.appearance as Mutable<typeof target.appearance>).schedule = clone(source.appearance.schedule); (target.appearance as Mutable<typeof target.appearance>).colors = clone(source.appearance.colors); (target.appearance as Mutable<typeof target.appearance>).regions = clone(source.appearance.regions); } if (theme.includes.includes("wallpaper")) (target.appearance as Mutable<typeof target.appearance>).wallpaper = clone(source.appearance.wallpaper); if (theme.includes.includes("effects")) { (target.appearance as Mutable<typeof target.appearance>).glass = clone(source.appearance.glass); (target.appearance as Mutable<typeof target.appearance>).opacity = clone(source.appearance.opacity); (target.appearance as Mutable<typeof target.appearance>).shape = clone(source.appearance.shape); (target.appearance as Mutable<typeof target.appearance>).motion = clone(source.appearance.motion); } if (theme.includes.includes("typography")) (target as Mutable<typeof target>).typography = clone(source.typography); if (theme.includes.includes("icons")) (target as Mutable<typeof target>).icons = clone(source.icons); if (theme.includes.includes("layout")) { (target as Mutable<typeof target>).layout = clone(source.layout); (target as Mutable<typeof target>).workspaceDisplay = clone(source.workspaceDisplay); } if (theme.includes.includes("home")) (target as Mutable<typeof target>).home = clone(source.home); setResolved(document, this.#workspaceId, target); const index = document.themes.findIndex(candidate => candidate.id === id); const now = Date.now(); (document.themes as SavedCustomizationTheme[])[index] = { ...document.themes[index]!, useCount: theme.useCount + 1, lastUsedAt: now }; }, "theme");
   }
 
-  applyMoonTheme(tokens: MoonThemeTokens, wallpaperData?: string): boolean {
+  applyMoonTheme(tokens: MoonThemeTokens, wallpaperData?: string, fallbackData?: string, iconOverrides?: Readonly<Partial<Record<SemanticIconName, string>>>): boolean {
     const families = { system: "Inter, ui-sans-serif, system-ui, sans-serif", serif: "ui-serif, Georgia, serif", mono: "ui-monospace, SFMono-Regular, Consolas, monospace" } as const;
     const scales = { compact: 0.92, default: 1, large: 1.12 } as const;
     return this.update(config => {
@@ -259,6 +292,13 @@ export class CustomizationStore {
         if (tokens.colors.textMuted) colors.textMuted = tokens.colors.textMuted;
         if (tokens.colors.accent) colors.accent = tokens.colors.accent;
         if (tokens.colors.border) colors.border = tokens.colors.border;
+        const regions = appearance.regions as Mutable<typeof appearance.regions>;
+        if (tokens.colors.toolbar) regions.toolbar = tokens.colors.toolbar;
+        if (tokens.colors.tabs) regions.tabs = tokens.colors.tabs;
+        if (tokens.colors.sidebar) regions.sidebar = tokens.colors.sidebar;
+        if (tokens.colors.home) regions.home = tokens.colors.home;
+        if (tokens.colors.content) regions.content = tokens.colors.content;
+        if (tokens.colors.selection) regions.selection = tokens.colors.selection;
       }
       if (tokens.shape?.radius !== undefined) (appearance.shape as Mutable<typeof appearance.shape>).radius = tokens.shape.radius;
       if (tokens.shape?.borderWidth !== undefined) (appearance.shape as Mutable<typeof appearance.shape>).borderWidth = tokens.shape.borderWidth;
@@ -271,7 +311,7 @@ export class CustomizationStore {
       if (tokens.glass?.intensity !== undefined) (appearance.glass as Mutable<typeof appearance.glass>).intensity = tokens.glass.intensity;
       if (tokens.glass?.opacity !== undefined) (appearance.opacity as Mutable<typeof appearance.opacity>).cards = tokens.glass.opacity;
       if (tokens.wallpaper && wallpaperData) {
-        const wallpaper = appearance.wallpaper as Mutable<typeof appearance.wallpaper>; wallpaper.type = "local"; wallpaper.source = wallpaperData; wallpaper.cachedData = undefined;
+        const wallpaper = appearance.wallpaper as Mutable<typeof appearance.wallpaper>; wallpaper.type = tokens.wallpaper.kind === "animated" ? "animated" : "local"; wallpaper.source = wallpaperData; wallpaper.cachedData = undefined; wallpaper.fallbackData = tokens.wallpaper.kind === "animated" ? fallbackData : undefined; wallpaper.animate = true;
         if (tokens.wallpaper.dim !== undefined) wallpaper.dim = tokens.wallpaper.dim;
         if (tokens.wallpaper.blur !== undefined) wallpaper.blur = tokens.wallpaper.blur;
         if (tokens.wallpaper.fit !== undefined) wallpaper.fit = tokens.wallpaper.fit;
@@ -283,10 +323,14 @@ export class CustomizationStore {
         if (tokens.wallpaper.saturation !== undefined) wallpaper.saturation = tokens.wallpaper.saturation;
         if (tokens.wallpaper.hue !== undefined) wallpaper.hue = tokens.wallpaper.hue;
       }
+      if (tokens.icons) (config.icons as Mutable<typeof config.icons>).overrides = { ...(iconOverrides ?? {}) };
       if (tokens.typography?.family) (config.typography as Mutable<typeof config.typography>).family = families[tokens.typography.family];
       if (tokens.typography?.scale) (config.typography as Mutable<typeof config.typography>).scale = scales[tokens.typography.scale];
       if (tokens.layout?.sidebar) (config.layout.sidebar as Mutable<typeof config.layout.sidebar>).position = tokens.layout.sidebar;
       if (tokens.layout?.tabStyle) (config.layout as Mutable<typeof config.layout>).density = tokens.layout.tabStyle;
+      if (tokens.home) Object.assign(config.home as Mutable<typeof config.home>, tokens.home);
+      if (tokens.motion?.enabled !== undefined) (appearance.motion as Mutable<typeof appearance.motion>).enabled = tokens.motion.enabled;
+      if (tokens.motion?.speed !== undefined) (appearance.motion as Mutable<typeof appearance.motion>).speed = tokens.motion.speed;
     });
   }
 

@@ -14,6 +14,10 @@ import { ThemeRepository, type ThemeRecord } from "../../../../packages/storage/
 import { WallpaperRepository } from "../../../../packages/storage/repositories/wallpaper-repository.js";
 import { WorkspaceRepository } from "../../../../packages/storage/repositories/workspace-repository.js";
 import { normalizeMoonInternalUrl } from "../../../../packages/navigation/internal-routes.js";
+import type { ProfileDataMutation, ProfileDataSnapshot } from "../../../../packages/ipc/profile-data-contract.js";
+import { parseSitePermissionRecords, type SitePermissionRecord } from "../../../../packages/ipc/site-permission-contract.js";
+import type { ImportedProfileData, ImportResult } from "../../../../packages/ipc/browser-import-contract.js";
+import { createDefaultCustomization, validateCustomization, type CustomizationSchemaV4 } from "../../../../ui/customization/customization-schema.js";
 
 export interface RestorableBrowserTab {
   readonly id: string;
@@ -28,6 +32,10 @@ interface BrowserSessionRecord {
   readonly savedAt: number;
   readonly tabs: readonly RestorableBrowserTab[];
 }
+
+const CUSTOMIZATION_SETTING = "customization:v4";
+const CUSTOMIZATION_LAST_GOOD_SETTING = "customization:last-known-good:v4";
+const CUSTOMIZATION_V3_BACKUP_SETTING = "customization:backup:v3";
 
 export class ProfileStorage {
   readonly #connection: BetterSqliteConnection;
@@ -60,6 +68,49 @@ export class ProfileStorage {
 
   async close(): Promise<void> {
     await this.#database.close();
+  }
+
+  async loadCustomization(legacyDocument?: unknown): Promise<CustomizationSchemaV4> {
+    const stored = await this.#settings.getValue<unknown>(CUSTOMIZATION_SETTING);
+    if (stored !== undefined) {
+      try { return validateCustomization(stored); }
+      catch {
+        const lastKnownGood = await this.#settings.getValue<unknown>(CUSTOMIZATION_LAST_GOOD_SETTING);
+        if (lastKnownGood !== undefined) return validateCustomization(lastKnownGood);
+        throw new Error("A personalização canônica e seu último estado válido estão corrompidos.");
+      }
+    }
+
+    let source: unknown = createDefaultCustomization();
+    if (legacyDocument !== undefined) {
+      try { source = legacyDocument; }
+      catch { source = createDefaultCustomization(); }
+    }
+    const canonical = validateCustomization(source);
+    const sourceVersion = isRecord(legacyDocument) ? legacyDocument.version : undefined;
+    await this.#database.transaction(async () => {
+      if (sourceVersion === 2 || sourceVersion === 3) await this.#settings.setValue(CUSTOMIZATION_V3_BACKUP_SETTING, legacyDocument);
+      await this.#settings.setValue(CUSTOMIZATION_SETTING, canonical);
+      await this.#settings.setValue(CUSTOMIZATION_LAST_GOOD_SETTING, canonical);
+      for (const theme of canonical.themes) {
+        await this.#themes.save({ id: theme.id, name: theme.name, tokens: JSON.stringify(theme.config), builtin: false, source: "legacy", createdAt: theme.createdAt, updatedAt: canonical.updatedAt, active: false });
+      }
+    });
+    return canonical;
+  }
+
+  async commitCustomization(document: unknown): Promise<CustomizationSchemaV4> {
+    const canonical = validateCustomization(document);
+    const currentValue = await this.#settings.getValue<unknown>(CUSTOMIZATION_SETTING);
+    if (currentValue !== undefined) {
+      const current = validateCustomization(currentValue);
+      if (canonical.revision < current.revision) throw new Error("A personalização foi alterada em outra janela. Reabra as configurações e tente novamente.");
+    }
+    await this.#database.transaction(async () => {
+      await this.#settings.setValue(CUSTOMIZATION_SETTING, canonical);
+      await this.#settings.setValue(CUSTOMIZATION_LAST_GOOD_SETTING, canonical);
+    });
+    return canonical;
   }
 
   async migrateLegacyProfile(content: string): Promise<{ readonly migrated: boolean; readonly version: number }> {
@@ -130,6 +181,71 @@ export class ProfileStorage {
     return tabs;
   }
 
+  async loadProfileData(): Promise<ProfileDataSnapshot> {
+    const [bookmarks, history, notes, workspaces] = await Promise.all([
+      this.#bookmarks.list(),
+      this.#history.recent(500),
+      this.#notes.list(undefined, true),
+      this.#workspaces.list()
+    ]);
+    const scratchpad = notes.find(note => note.id === "moon-scratchpad") ?? notes.find(note => note.id === "legacy-notes") ?? notes[0];
+    return {
+      bookmarks: bookmarks.map(item => ({ id: item.id, title: item.title, url: item.url, time: item.createdAt })),
+      history: history.map(item => ({ id: item.id, title: item.title, url: item.url, time: item.lastVisitedAt })),
+      notes: scratchpad?.content ?? "",
+      workspaces: workspaces.map(item => ({ id: item.id, name: item.name, position: item.position }))
+    };
+  }
+
+  async applyProfileMutation(mutation: ProfileDataMutation): Promise<void> {
+    const now = Date.now();
+    switch (mutation.type) {
+      case "bookmark:save": {
+        const existing = await this.#bookmarks.get(mutation.value.id);
+        await this.#bookmarks.save({ id: mutation.value.id, title: mutation.value.title, url: mutation.value.url, tags: existing?.tags ?? [], createdAt: existing?.createdAt ?? mutation.value.time, updatedAt: now });
+        return;
+      }
+      case "bookmark:delete": await this.#bookmarks.delete(mutation.id); return;
+      case "history:record":
+        await this.#history.save({ id: mutation.value.id, title: mutation.value.title, url: mutation.value.url, transition: "link", visitCount: 1, typedCount: 0, firstVisitedAt: mutation.value.time, lastVisitedAt: mutation.value.time });
+        return;
+      case "history:clear": await this.#history.clear(); return;
+      case "notes:save": {
+        const existing = await this.#notes.get("moon-scratchpad");
+        await this.#notes.save({ id: "moon-scratchpad", title: "Bloco de notas", content: mutation.content, format: "plain-text", pinned: false, archived: false, tags: [], createdAt: existing?.createdAt ?? now, updatedAt: now });
+        return;
+      }
+      case "workspace:save": {
+        const existing = await this.#workspaces.get(mutation.value.id);
+        const current = existing ?? (await this.#workspaces.list())[0];
+        await this.#workspaces.save({ id: mutation.value.id, name: mutation.value.name, position: mutation.value.position, layout: existing?.layout ?? "standard", appearance: existing?.appearance ?? {}, default: existing?.default ?? !current, archived: false, createdAt: existing?.createdAt ?? now, updatedAt: now, lastAccessedAt: now });
+        return;
+      }
+      case "workspace:delete": await this.#workspaces.delete(mutation.id); return;
+    }
+  }
+
+  async importExternalProfile(sourceId: string, data: ImportedProfileData): Promise<ImportResult> {
+    const existingBookmarks = new Set((await this.#bookmarks.list()).map(item => item.url));
+    const existingHistory = new Set((await this.#history.all()).map(item => item.url));
+    const bookmarks = data.bookmarks.filter(item => { if (existingBookmarks.has(item.url)) return false; existingBookmarks.add(item.url); return true; });
+    const history = data.history.filter(item => { if (existingHistory.has(item.url)) return false; existingHistory.add(item.url); return true; });
+    await this.#database.transaction(async () => {
+      for (const item of bookmarks) await this.#bookmarks.save({ id: item.id, title: item.title, url: item.url, tags: ["imported"], createdAt: item.time, updatedAt: Date.now() });
+      for (const item of history) await this.#history.save({ id: item.id, title: item.title, url: item.url, transition: "link", visitCount: 1, typedCount: 0, firstVisitedAt: item.time, lastVisitedAt: item.time });
+      await this.#settings.setValue(`import-report:${sourceId}`, { importedAt: Date.now(), imported: { bookmarks: bookmarks.length, history: history.length }, skipped: { bookmarks: data.bookmarks.length - bookmarks.length, history: data.history.length - history.length } });
+    });
+    return { sourceId, imported: { bookmarks: bookmarks.length, history: history.length }, skipped: { bookmarks: data.bookmarks.length - bookmarks.length, history: data.history.length - history.length } };
+  }
+
+  async loadSitePermissions(): Promise<readonly SitePermissionRecord[]> {
+    return parseSitePermissionRecords(await this.#settings.getValue<unknown>("site-permissions"));
+  }
+
+  async saveSitePermissions(records: readonly SitePermissionRecord[]): Promise<void> {
+    await this.#settings.setValue("site-permissions", parseSitePermissionRecords(records));
+  }
+
   listThemes(): Promise<readonly ThemeRecord[]> { return this.#themes.list(); }
   getTheme(id: string): Promise<ThemeRecord | undefined> { return this.#themes.get(id); }
   saveTheme(theme: ThemeRecord): Promise<void> { return this.#themes.save(theme); }
@@ -140,4 +256,8 @@ export class ProfileStorage {
     const value = Number(row?.value ?? 0);
     return Number.isSafeInteger(value) && value >= 0 ? value : 0;
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

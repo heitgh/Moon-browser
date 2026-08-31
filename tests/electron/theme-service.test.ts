@@ -12,6 +12,13 @@ afterEach(async () => { for (const directory of directories.splice(0)) await rm(
 async function profile(): Promise<ProfileStorage> { const directory = await mkdtemp(join(tmpdir(), "moon-theme-service-")); directories.push(directory); const storage = new ProfileStorage(directory); await storage.open(); return storage; }
 
 describe("MoonThemeService", () => {
+  it("returns only validated SVG icon data from an installed V2 package", async () => {
+    const storage = await profile(); const service = new MoonThemeService(storage, "0.1.0"); const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><path d="M4 12h16"/></svg>');
+    const preview = await service.stage(moonThemeFixture({ schemaVersion: 2, capabilities: ["appearance", "icons"], assets: { "assets/logo.svg": { bytes: svg, mime: "image/svg+xml" } }, theme: { colors: { accent: "#7c5cff" }, icons: { logo: "assets/logo.svg" } } }));
+    const installed = await service.confirm(preview.intentId); const payload = await service.apply(installed.id);
+    expect(payload.iconData?.logo).toMatch(/^data:image\/svg\+xml;base64,/); await storage.close();
+  });
+
   it("cancels quarantine and persists install, apply, rollback and safe removal", async () => {
     const storage = await profile(); const service = new MoonThemeService(storage, "0.1.0");
     const cancelled = await service.stage(moonThemeFixture()); await service.cancel(cancelled.intentId); expect(await service.list()).toEqual([]);

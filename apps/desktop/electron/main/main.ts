@@ -1,4 +1,5 @@
 import { app } from "electron";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { ElectronBrowserManager } from "../browser/browser-manager.js";
 import { registerBrowserIpc } from "../ipc/browser-ipc.js";
@@ -9,29 +10,51 @@ import { installApplicationMenu } from "./application-menu.js";
 import { WindowManager } from "./window-manager.js";
 import { ElectronAdblockService } from "../services/adblock-service.js";
 import { ElectronDownloadManager } from "../services/download-manager.js";
-import { ProfileStorage } from "../services/profile-storage.js";
 import { BrowserApplicationService } from "../../application/browser-application-service.js";
-import { MoonThemeService } from "../services/moon-theme-service.js";
+import { SessionRequestPipeline } from "../security/session-request-pipeline.js";
+import { SitePermissionService } from "../security/site-permission-service.js";
+import { LocalProfileManager } from "../services/local-profile-manager.js";
 
 const windows = new WindowManager();
 const downloads = new ElectronDownloadManager(windows);
-const adblock = new ElectronAdblockService(windows);
-const browser = new ElectronBrowserManager(windows, downloads, adblock);
+const requestPipeline = new SessionRequestPipeline();
+const permissions = new Map<string, SitePermissionService>();
+const adblock = new ElectronAdblockService(windows, requestPipeline);
+const browser = new ElectronBrowserManager(windows, downloads, adblock, requestPipeline, windowId => permissions.get(windows.profileId(windowId)));
 const ipc = new IpcRouter();
-let profile: ProfileStorage | undefined;
+let profiles: LocalProfileManager | undefined;
 let application: BrowserApplicationService | undefined;
+let defaultProfileId = "default";
 
-async function createMainWindow(): Promise<void> {
+async function ensureProfilePermissions(profileId: string): Promise<void> {
+  if (permissions.has(profileId)) return;
+  if (!profiles) throw new Error("Profile manager is not ready");
+  const service = new SitePermissionService();
+  await service.hydrate(await profiles.storage(profileId));
+  permissions.set(profileId, service);
+}
+
+async function createMainWindow(privateMode = false, profileId = defaultProfileId): Promise<void> {
+  if (!profiles) throw new Error("Profile manager is not ready");
+  const localProfile = profiles.require(profileId);
+  await ensureProfilePermissions(profileId);
   const appRoot = app.getAppPath();
   const id = windows.create({
+    title: privateMode ? `Moon Browser — Janela anônima · ${localProfile.name}` : `Moon Browser — ${localProfile.name}`,
+    backgroundColor: privateMode ? "#11101a" : "#090a10",
     webPreferences: {
       preload: join(appRoot, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      webviewTag: false
+      webviewTag: false,
+      partition: privateMode
+        ? `moon-shell-private:${randomUUID()}`
+        : localProfile.kind === "guest"
+          ? `moon-shell:${profileId}`
+          : `persist:moon-shell:${profileId}`
     }
-  });
+  }, { private: privateMode, guest: localProfile.kind === "guest", profileId });
   const window = windows.require(id);
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -40,21 +63,28 @@ async function createMainWindow(): Promise<void> {
   });
   window.once("close", () => {
     if (application?.shuttingDown) return;
-    void application?.flushWindow(id).finally(() => { void browser.closeTabsForWindow(id); });
+    void application?.closeWindow(id).catch(error => console.error("Window profile flush failed", error));
   });
-  await application?.restoreWindow(id);
+  window.once("closed", () => {
+    if (localProfile.kind === "guest" && !windows.hasProfileWindows(profileId)) {
+      permissions.delete(profileId);
+      void profiles?.releaseGuest(profileId).catch(error => console.error("Guest profile cleanup failed", error));
+    }
+  });
+  if (!privateMode) await application?.restoreWindow(id);
   await window.loadFile(join(appRoot, "index.html"));
 }
 
 app.whenReady().then(async () => {
   const testProfileDirectory = process.env.NODE_ENV === "test" ? process.env.MOON_TEST_PROFILE_DIR : undefined;
-  profile = new ProfileStorage(testProfileDirectory ?? join(app.getPath("userData"), "profile"));
-  await profile.open();
-  const themes = new MoonThemeService(profile, app.getVersion());
-  application = new BrowserApplicationService(browser, profile);
-  installApplicationMenu();
-  registerBrowserIpc(ipc, application, windows);
-  registerProductIpc(ipc, downloads, adblock, profile, themes);
+  const defaultDirectory = testProfileDirectory ?? join(app.getPath("userData"), "profile");
+  const profilesDirectory = testProfileDirectory ? join(testProfileDirectory, "profiles") : join(app.getPath("userData"), "profiles");
+  profiles = new LocalProfileManager(profilesDirectory, defaultDirectory);
+  defaultProfileId = (await profiles.initialize()).id;
+  application = new BrowserApplicationService(browser, windowId => profiles!.storage(windows.profileId(windowId)));
+  installApplicationMenu(() => { void createMainWindow(true, defaultProfileId); });
+  registerBrowserIpc(ipc, application, windows, profileId => createMainWindow(true, profileId));
+  registerProductIpc(ipc, downloads, adblock, profiles, windows, app.getPath("home"), app.getVersion(), profileId => createMainWindow(false, profileId));
   registerApplicationLifecycle(windows, createMainWindow);
   await createMainWindow();
   void adblock.initialize();
@@ -78,7 +108,8 @@ app.on("before-quit", event => {
   }
   void application.shutdown()
     .catch(error => console.error("Moon shutdown failed", error))
-    .finally(() => {
+    .finally(async () => {
+      await profiles?.close().catch(error => console.error("Profile shutdown failed", error));
       shutdownComplete = true;
       app.quit();
     });

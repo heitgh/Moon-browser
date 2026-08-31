@@ -30,12 +30,22 @@ export interface ManagedDownload { readonly id: string; readonly url: string; re
 export interface AdblockStatus { readonly phase: "loading" | "active" | "disabled" | "failed"; readonly enabled: boolean; readonly blockedCount: number; readonly error?: string; }
 export interface PermissionRequest { readonly id: string; readonly origin: string; readonly permission: string; }
 export interface MoonThemeSummary { readonly id: string; readonly packageId: string; readonly name: string; readonly version: string; readonly author: string; readonly trust: "official" | "local"; readonly active: boolean; readonly installedAt: number; }
-export interface MoonThemePayload { readonly summary: MoonThemeSummary; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; }
-export interface MoonThemePreview extends MoonThemeSummary { readonly intentId: string; readonly description?: string; readonly changes: readonly string[]; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; }
-export type Drawer = "workspaces" | "bookmarks" | "downloads" | "history" | "translate" | "notes" | "extensions" | "ai" | "security";
+export interface MoonThemePayload { readonly summary: MoonThemeSummary; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; readonly iconData?: Readonly<Partial<Record<"logo" | "newTab" | "privateTab", string>>>; }
+export interface MoonThemePreview extends MoonThemeSummary { readonly intentId: string; readonly description?: string; readonly changes: readonly string[]; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; readonly iconData?: Readonly<Partial<Record<"logo" | "newTab" | "privateTab", string>>>; }
+export type Drawer = "profiles" | "workspaces" | "bookmarks" | "downloads" | "history" | "translate" | "notes" | "focus" | "extensions" | "ai" | "security";
+export type { ProfileDataMutation, ProfileDataSnapshot } from "../../packages/ipc/profile-data-contract.js";
+import type { ProfileDataMutation, ProfileDataSnapshot } from "../../packages/ipc/profile-data-contract.js";
+import type { SitePermissionRecord } from "../../packages/ipc/site-permission-contract.js";
+export type { SitePermissionRecord } from "../../packages/ipc/site-permission-contract.js";
+import type { ImportResult, ImportSelection, ImportSourceSummary } from "../../packages/ipc/browser-import-contract.js";
+import type { CustomizationSchemaV4 } from "../customization/customization-schema.js";
+export type { LocalProfileAvatar, LocalProfileSummary } from "../../packages/ipc/local-profile-contract.js";
+import type { CreateLocalProfileRequest, DeleteLocalProfileRequest, LocalProfileSummary, UpdateLocalProfileRequest } from "../../packages/ipc/local-profile-contract.js";
 
 export interface MoonBrowserBridge {
   createTab(url?: string, workspaceId?: string): Promise<Tab>;
+  getWindowContext(): Promise<{ readonly private: boolean; readonly guest: boolean; readonly profileId: string }>;
+  createPrivateWindow(): Promise<void>;
   getTabs(): Promise<readonly Tab[]>;
   closeTab(tabId: string): Promise<void>;
   activateTab(tabId: string): Promise<void>;
@@ -50,6 +60,8 @@ export interface MoonBrowserBridge {
   setContentVisible(visible: boolean): Promise<void>;
   setSearchTemplate(template: string): Promise<void>;
   respondToPermission(requestId: string, granted: boolean): Promise<void>;
+  listSitePermissions(): Promise<readonly SitePermissionRecord[]>;
+  clearSitePermission(origin: string, permission: string): Promise<void>;
   getDownloads(): Promise<readonly ManagedDownload[]>;
   pauseDownload(id: string): Promise<void>;
   resumeDownload(id: string): Promise<void>;
@@ -64,9 +76,25 @@ export interface MoonBrowserBridge {
   exportCustomization(content: string): Promise<boolean>;
   exportSettingsDiagnostic(content: string): Promise<boolean>;
   importCustomization(): Promise<string | null>;
+  exportMoonHome(content: string): Promise<boolean>;
+  importMoonHome(): Promise<string | null>;
   fetchWallpaper(url: string): Promise<string>;
   fetchFavicon(url: string): Promise<string>;
   migrateLegacyProfile(content: string): Promise<{ readonly migrated: boolean; readonly version: number }>;
+  loadCustomization(legacy?: unknown): Promise<CustomizationSchemaV4>;
+  commitCustomization(document: CustomizationSchemaV4): Promise<CustomizationSchemaV4>;
+  getProfileData(): Promise<ProfileDataSnapshot>;
+  mutateProfileData(mutation: ProfileDataMutation): Promise<void>;
+  listLocalProfiles(): Promise<readonly LocalProfileSummary[]>;
+  createLocalProfile(profile: CreateLocalProfileRequest): Promise<LocalProfileSummary>;
+  updateLocalProfile(profile: UpdateLocalProfileRequest): Promise<LocalProfileSummary>;
+  openLocalProfile(id: string): Promise<LocalProfileSummary>;
+  createGuestProfile(): Promise<LocalProfileSummary>;
+  getLocalProfileDeletionSummary(id: string): Promise<{ readonly profile: LocalProfileSummary; readonly directoryName: string; readonly includes: readonly string[] }>;
+  deleteLocalProfile(request: DeleteLocalProfileRequest): Promise<{ readonly id: string; readonly backupPath?: string }>;
+  discoverImportSources(): Promise<readonly ImportSourceSummary[]>;
+  importBrowserProfile(selection: ImportSelection): Promise<ImportResult>;
+  importBookmarksHtml(): Promise<ImportResult | null>;
   importMoonTheme(): Promise<MoonThemePreview | null>;
   confirmMoonTheme(intentId: string): Promise<MoonThemeSummary>;
   cancelMoonTheme(intentId: string): Promise<void>;

@@ -148,6 +148,19 @@ export class TabManager {
     });
   }
 
+  async forgetWindow(windowId: string, reason: "window" | "session" | "system" = "window"): Promise<void> {
+    const removed = this.list(windowId);
+    if (!removed.length) return;
+    for (const tab of removed) this.#tabs.delete(tab.id);
+    await this.#persist();
+    for (const tab of removed) {
+      await this.eventBus.publish("tab:closed", { tab, reason }, {
+        context: { windowId, tabId: tab.id },
+        source: { type: "core", id: "tab-manager" }
+      });
+    }
+  }
+
   async reconcile(
     windowId: string,
     platformTab: BrowserTab,

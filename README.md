@@ -17,9 +17,9 @@ O Moon é um navegador desktop open source da **Nexus Inc.**, construído sobre 
 
 <br>
 
-<img src="assets/moonpage.png" alt="Moon Browser 0.5 Demo — tela principal" width="920">
+<img src="assets/screenshots/personalization-v4-home-final.png" alt="Moon Browser 0.5 Demo — Home principal" width="920">
 
-<sub>Substitua esta captura pelo arquivo <code>assets/moonpage.png</code>. O guia completo das imagens está na seção <a href="#capturas-do-projeto">Capturas do projeto</a>.</sub>
+<sub>Home real do Moon Browser 0.5 Demo, capturada automaticamente no Electron.</sub>
 
 </div>
 
@@ -28,12 +28,14 @@ O Moon é um navegador desktop open source da **Nexus Inc.**, construído sobre 
 
 ## Download rápido
 
-| Sistema | Formato | Download direto |
-| --- | --- | --- |
-| Windows 10/11 x64 | Instalador | [Baixar `.exe`](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Windows-x64-Setup.exe) |
-| Windows 10/11 x64 | Portátil | [Baixar `.exe` portátil](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Windows-x64-Portable.exe) |
-| Linux x64 | AppImage | [Baixar `.AppImage`](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Linux-x64.AppImage) |
-| Debian, Ubuntu e derivados x64 | Pacote Debian | [Baixar `.deb`](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Linux-x64.deb) |
+| Sistema                        | Formato       | Download direto                                                                                                                 |
+| ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Windows 10/11 x64              | Instalador    | [Baixar `.exe`](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Windows-x64-Setup.exe)             |
+| Windows 10/11 x64              | Portátil      | [Baixar `.exe` portátil](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Windows-x64-Portable.exe) |
+| Linux x64                      | AppImage      | [Baixar `.AppImage`](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Linux-x64.AppImage)           |
+| Debian, Ubuntu e derivados x64 | Pacote Debian | [Baixar `.deb`](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Linux-x64.deb)                     |
+| Fedora, RHEL e openSUSE x64    | Pacote RPM    | [Baixar `.rpm`](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Linux-x64.rpm)                     |
+| Arch, Manjaro e EndeavourOS    | Pacote Pacman | [Baixar `.pacman`](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Linux-x64.pacman)               |
 
 Os arquivos são gerados em ambientes limpos pelo GitHub Actions e publicados em [Releases](https://github.com/heitgh/Moon-browser/releases). Confira também os arquivos `SHA256SUMS` da release. Como a versão Demo ainda não possui assinatura comercial de código, o Windows SmartScreen pode exibir um aviso antes da instalação.
 
@@ -72,7 +74,7 @@ O objetivo não é apenas colocar um chatbot na lateral. A visão de longo prazo
 
 ## Moon Browser 0.5 Demo
 
-`0.5.0-demo.1` representa a primeira demo pública da arquitetura reconstruída e testável do Moon no repositório oficial.
+`0.5.0-demo.2` reúne a arquitetura reconstruída e testável do Moon com Personalização V4, Home editável, perfis locais isolados e distribuição automatizada para Windows e Linux.
 
 O desenvolvimento dessa base aconteceu em [`heitgh/Moon-tests-1`](https://github.com/heitgh/Moon-tests-1), usado como ambiente de experimentação. A versão consolidada foi transferida para este repositório preservando tanto o histórico do projeto original quanto o histórico técnico da reconstrução.
 
@@ -81,15 +83,15 @@ O desenvolvimento dessa base aconteceu em [`heitgh/Moon-tests-1`](https://github
 
 ### O que mudou em relação ao protótipo
 
-| Protótipo inicial | Arquitetura 0.5 Demo |
-| --- | --- |
-| Interface concentrada em HTML/JS | Aplicação modular em TypeScript |
-| Conteúdo web por estrutura legada | `WebContentsView` gerenciado no processo principal |
-| Estado principalmente em `localStorage` | Perfil local, SQLite, migrations e repositories |
-| Poucos testes automatizados | Unitários, integração, Electron e E2E |
-| Configurações acopladas à tela | Settings V3 versionado, recuperável e com preview |
-| Recursos futuros misturados à interface | Feature flags e documentação de disponibilidade |
-| Build manual e pouco verificável | CI, instaladores Windows/Linux e quality gates |
+| Protótipo inicial                       | Arquitetura 0.5 Demo                                                    |
+| --------------------------------------- | ----------------------------------------------------------------------- |
+| Interface concentrada em HTML/JS        | Aplicação modular em TypeScript                                         |
+| Conteúdo web por estrutura legada       | `WebContentsView` gerenciado no processo principal                      |
+| Estado principalmente em `localStorage` | Perfil local, SQLite, migrations e repositories                         |
+| Poucos testes automatizados             | Unitários, integração, Electron e E2E                                   |
+| Configurações acopladas à tela          | Settings V4 versionado, SQLite canônico, migração recuperável e preview |
+| Recursos futuros misturados à interface | Feature flags e documentação de disponibilidade                         |
+| Build manual e pouco verificável        | CI, instaladores Windows/Linux e quality gates                          |
 
 ## O que já funciona
 
@@ -109,7 +111,7 @@ O desenvolvimento dessa base aconteceu em [`heitgh/Moon-tests-1`](https://github
 - Home nativa e configurável;
 - sidebar modular e recuperável por teclado;
 - configurações em modal e como página interna `moon://settings/*`;
-- modos Essencial, Todas e Avançado, com pesquisa por intenção;
+- modos Simples e Avançado, com “Ver tudo” explícito e pesquisa por intenção;
 - personalização de aparência, layout, Home, tipografia, busca e workspace;
 - preview ao vivo, aplicar, cancelar, desfazer, refazer e reset granular;
 - largura e comportamento da sidebar, visibilidade dos workspaces e ordem da toolbar;
@@ -135,54 +137,66 @@ O desenvolvimento dessa base aconteceu em [`heitgh/Moon-tests-1`](https://github
 - prompts explícitos para permissões de sites;
 - CSP local sem carregamento remoto automático de scripts;
 - telemetria desativada por padrão;
-- formato `.moontheme` v1 com hashes, assinatura Ed25519, quarentena, preview e rollback;
+- formato `.moontheme` V2 retrocompatível com V1, com hashes, assinatura Ed25519, quarentena, preview/thumbnail, Home, animação e rollback;
 - bloqueio de traversal, arquivos executáveis, ZIP bombs, MIME falso e SVG ativo em pacotes de tema.
 
 ## Estado honesto das funcionalidades
 
 O Moon diferencia recurso funcional, entrega parcial, preview e plano. Código de arquitetura ou uma tela demonstrativa, sozinhos, não significam que uma funcionalidade esteja pronta.
 
-| Área | Estado na 0.5 Demo | Observação |
-| --- | --- | --- |
-| Home, navegação e abas | **Funcional** | Runtime desktop conectado ao Chromium |
-| Workspaces | **Funcional** | Partições isoladas; evolução do estado continua |
-| Favoritos, histórico e notas | **Funcional** | Ainda há migração gradual do estado do renderer para repositories |
-| Downloads | **Funcional** | Eventos e progresso reais do Electron |
-| AdBlock | **Funcional** | Serviço nativo conectado à interface |
-| Settings V3 | **Funcional** | Preview, recuperação, importação e exportação |
-| Temas e wallpapers | **Funcional / parcial** | Biblioteca avançada, favoritos e deduplicação ainda estão no backlog |
-| Moon Themes `.moontheme` | **Funcional localmente** | Conta, catálogo remoto e OAuth dependem do serviço externo |
-| Permissões de sites | **Parcial** | Decisão explícita existe; persistência e revogação por origem serão ampliadas |
-| Moon AI | **Preview desativado** | Não há provider de IA conectado; o painel não deve ser anunciado como IA operacional |
-| Extensões Chromium | **Planejado / desativado** | Contratos existem, mas instalação segura ainda não está liberada |
-| Plugins e marketplace | **Planejado / desativado** | SDK, sandbox e cadeia de confiança ainda serão concluídos |
-| Universal Search | **Planejado** | Há fundação de busca; a experiência unificada ainda não está no shell |
-| Smart Spaces e Timeline | **Planejado / desativado** | Estruturas internas não equivalem a produto conectado |
-| VPN, sync e auto-update | **Planejado / desativado** | Nenhum desses recursos é anunciado como proteção ativa |
-| Android e iOS | **Fundação arquitetural** | Existem contratos compartilhados, não aplicativos distribuíveis |
+| Área                             | Estado na 0.5 Demo                  | Observação                                                                                                                                          |
+| -------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home, navegação e abas           | **Funcional**                       | Runtime desktop, editor direto, `.moonhome`, abas configuráveis e `Ctrl/Cmd+T` conectado ao Chromium                                                |
+| Workspaces                       | **Funcional**                       | Partições isoladas; evolução do estado continua                                                                                                     |
+| Favoritos, histórico e notas     | **Funcional**                       | Ainda há migração gradual do estado do renderer para repositories                                                                                   |
+| Downloads                        | **Funcional**                       | Eventos e progresso reais do Electron                                                                                                               |
+| AdBlock                          | **Funcional**                       | Serviço nativo conectado à interface                                                                                                                |
+| Settings V4                      | **Funcional**                       | Modos Simples/Avançado, preview, commit SQLite, recuperação, importação e exportação                                                                |
+| Temas e wallpapers               | **Funcional**                       | Biblioteca unificada, favoritos, revisões, seleção por áreas, editor de ícones, regiões semânticas, paleta local e GIF/WebP com poster/pausa segura |
+| Moon Themes `.moontheme`         | **Funcional localmente**            | Conta, catálogo remoto e OAuth dependem do serviço externo                                                                                          |
+| Perfis locais                    | **Funcional**                       | SQLite, shell, sessões, partições, downloads e preferências isolados; convidado temporário e migração do perfil Padrão cobertos por E2E             |
+| Engine de sync/E2EE              | **Preparada / produção desativada** | Contratos e fixture local cobrem merge, tombstone, conflito, retry, recuperação e ausência de plaintext; não existe provider oficial                |
+| Cofre de credenciais             | **Bloqueado com interface honesta** | Motor local e testes existem; esta build não possui backend seguro do SO, captura ou autofill                                                       |
+| Permissões de sites              | **Parcial**                         | Decisão explícita existe; persistência e revogação por origem serão ampliadas                                                                       |
+| Moon AI                          | **Preview desativado**              | Não há provider de IA conectado; o painel não deve ser anunciado como IA operacional                                                                |
+| Extensões Chromium               | **Planejado / desativado**          | Contratos existem, mas instalação segura ainda não está liberada                                                                                    |
+| Plugins e marketplace            | **Planejado / desativado**          | SDK, sandbox e cadeia de confiança ainda serão concluídos                                                                                           |
+| Universal Search                 | **Planejado**                       | Há fundação de busca; a experiência unificada ainda não está no shell                                                                               |
+| Smart Spaces e Timeline          | **Planejado / desativado**          | Estruturas internas não equivalem a produto conectado                                                                                               |
+| VPN, sync em nuvem e auto-update | **Planejado / desativado**          | Não existe provider oficial configurado; nenhuma sincronização remota é anunciada como ativa                                                        |
+| Android e iOS                    | **Fundação arquitetural**           | Existem contratos compartilhados, não aplicativos distribuíveis                                                                                     |
 
 Para a matriz técnica completa, consulte [`docs/roadmap/status.md`](docs/roadmap/status.md).
+Os limites do serviço futuro estão documentados em [`docs/product/moon-hub-contract.md`](docs/product/moon-hub-contract.md), sem domínios ou endpoints fictícios.
 
 ## Capturas do projeto
 
 As quatro imagens abaixo usam nomes fixos para facilitar futuras atualizações. Coloque os arquivos diretamente em `assets/`, em formato PNG, mantendo exatamente estes nomes.
 
-| Arquivo | Conteúdo recomendado | Uso no README |
-| --- | --- | --- |
-| `assets/moonpage.png` | Home principal, limpa e em alta resolução | Imagem de capa |
-| `assets/moon1.png` | Página web aberta, abas, toolbar e workspaces visíveis | Navegação real |
-| `assets/moon2.png` | Central de personalização ou `moon://settings/appearance` | Personalização |
-| `assets/moon3.png` | Sidebar, proteção, downloads, notas ou Moon Themes | Recursos do produto |
+| Arquivo               | Conteúdo recomendado                                      | Uso no README       |
+| --------------------- | --------------------------------------------------------- | ------------------- |
+| `assets/moonpage.png` | Home principal, limpa e em alta resolução                 | Imagem de capa      |
+| `assets/moon1.png`    | Página web aberta, abas, toolbar e workspaces visíveis    | Navegação real      |
+| `assets/moon2.png`    | Central de personalização ou `moon://settings/appearance` | Personalização      |
+| `assets/moon3.png`    | Sidebar, proteção, downloads, notas ou Moon Themes        | Recursos do produto |
 
 Recomendação: use capturas em proporção `16:9`, com pelo menos `1440 × 900`, sem dados pessoais, notificações, tokens ou páginas privadas.
 
-| Navegação | Personalização |
-| --- | --- |
+| Navegação                                     | Personalização                                     |
+| --------------------------------------------- | -------------------------------------------------- |
 | ![Moon Browser — navegação](assets/moon1.png) | ![Moon Browser — personalização](assets/moon2.png) |
 
-| Sidebar e produtividade |
-| --- |
+| Sidebar e produtividade                                |
+| ------------------------------------------------------ |
 | ![Moon Browser — sidebar e recursos](assets/moon3.png) |
+
+Capturas automatizadas de aceitação da Personalização V4 são geradas por `npm run screenshots:desktop`:
+
+- `assets/screenshots/personalization-v4-simple.png` e `personalization-v4-advanced.png`;
+- `assets/screenshots/personalization-v4-preview-expanded.png` e `personalization-v4-theme-library.png`;
+- `assets/screenshots/personalization-v4-theme-editor-icons.png`;
+- `assets/screenshots/personalization-v4-home-editing.png` e `personalization-v4-home-final.png`;
+- `assets/screenshots/personalization-v4-profiles.png`.
 
 <!--
 GUIA PARA ATUALIZAR AS CAPTURAS
@@ -218,7 +232,7 @@ preload.cjs
   └─ window.moonBrowser — bridge explícita e limitada
 
 index.html
-  └─ ui/browser-shell.ts — shell, Home, painéis e Settings V3
+  └─ ui/browser-shell.ts — shell, Home, painéis e Settings V4
 ```
 
 ### Estrutura do repositório
@@ -276,14 +290,14 @@ Falhas de segurança não devem ser publicadas com dados sensíveis em issues ab
 
 O roadmap é orientativo e pode mudar conforme testes, segurança, desempenho e feedback da comunidade.
 
-| Marco | Objetivo | Entregas principais |
-| --- | --- | --- |
-| **0.5 Demo — agora** | Fundação pública verificável | Navegação, abas, workspaces, Settings V3, SQLite, sessões, AdBlock, downloads, temas, Moon Themes, CI e builds Windows/Linux |
-| **0.6 — Ergonomia e produtividade** | Tornar o uso diário mais fluido | Home Fase B, presets realmente distintos, biblioteca de wallpapers, sidebar evoluída, pesquisa de configurações e início da Universal Search |
-| **0.7 — Moon Intelligence** | IA útil com controle humano | Providers opcionais, permissões de contexto, resumo, explicação, tradução, tarefas, flashcards e comparação entre páginas |
-| **0.8 — Contextual Browser** | Organizar atividades, não apenas URLs | Smart Sessions, Smart Spaces sugeridos, Navigation Timeline e Command Center |
-| **0.9 — Moon Platform** | Abrir o ecossistema com segurança | Compatibilidade progressiva com extensões, Plugin API, widgets, automações, marketplace e sync preparado para múltiplos dispositivos |
-| **1.0 — Stable** | Navegador auditado e distribuível | Releases assinadas, auto-update seguro, acessibilidade validada, budgets de desempenho e suporte desktop consolidado |
+| Marco                               | Objetivo                              | Entregas principais                                                                                                                          |
+| ----------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0.5 Demo — agora**                | Fundação pública verificável          | Navegação, abas, workspaces, Settings V4, SQLite, sessões, AdBlock, downloads, temas, Moon Themes, CI e builds Windows/Linux                 |
+| **0.6 — Ergonomia e produtividade** | Tornar o uso diário mais fluido       | Home Fase B, presets realmente distintos, biblioteca de wallpapers, sidebar evoluída, pesquisa de configurações e início da Universal Search |
+| **0.7 — Moon Intelligence**         | IA útil com controle humano           | Providers opcionais, permissões de contexto, resumo, explicação, tradução, tarefas, flashcards e comparação entre páginas                    |
+| **0.8 — Contextual Browser**        | Organizar atividades, não apenas URLs | Smart Sessions, Smart Spaces sugeridos, Navigation Timeline e Command Center                                                                 |
+| **0.9 — Moon Platform**             | Abrir o ecossistema com segurança     | Compatibilidade progressiva com extensões, Plugin API, widgets, automações, marketplace e sync preparado para múltiplos dispositivos         |
+| **1.0 — Stable**                    | Navegador auditado e distribuível     | Releases assinadas, auto-update seguro, acessibilidade validada, budgets de desempenho e suporte desktop consolidado                         |
 
 ### Critérios antes da 1.0
 
@@ -301,16 +315,16 @@ As ideias abaixo foram consolidadas a partir do arquivo de planejamento do proje
 
 ### Prioridades de maior impacto
 
-| Ideia | Prioridade | Resultado esperado |
-| --- | ---: | --- |
-| Moon AI na sidebar | **10/10** | Perguntas e ações sobre a página com consentimento |
-| Smart Sessions | **9/10** | Retomar abas, contexto, grupos e notas de uma atividade |
-| Universal Search | **9/10** | Buscar web, abas, histórico, favoritos, notas, downloads, temas, configurações e comandos |
-| Smart Spaces | **8/10** | Sugerir agrupamentos como Estudos, Desenvolvimento e Trabalho |
-| Navigation Timeline | **8/10** | Retomar visualmente o que estava sendo feito em determinado horário |
-| Extension e Plugin API | **8/10** | Permitir módulos comunitários com capabilities explícitas |
-| Smart Home | **7/10** | Widgets de tarefas, agenda, foco, páginas frequentes e leitura em andamento |
-| Adaptive UI | **7/10** | Extrair uma paleta segura do wallpaper e adaptar acentos e contraste |
+| Ideia                  | Prioridade | Resultado esperado                                                                        |
+| ---------------------- | ---------: | ----------------------------------------------------------------------------------------- |
+| Moon AI na sidebar     |  **10/10** | Perguntas e ações sobre a página com consentimento                                        |
+| Smart Sessions         |   **9/10** | Retomar abas, contexto, grupos e notas de uma atividade                                   |
+| Universal Search       |   **9/10** | Buscar web, abas, histórico, favoritos, notas, downloads, temas, configurações e comandos |
+| Smart Spaces           |   **8/10** | Sugerir agrupamentos como Estudos, Desenvolvimento e Trabalho                             |
+| Navigation Timeline    |   **8/10** | Retomar visualmente o que estava sendo feito em determinado horário                       |
+| Extension e Plugin API |   **8/10** | Permitir módulos comunitários com capabilities explícitas                                 |
+| Smart Home             |   **7/10** | Widgets de tarefas, agenda, foco, páginas frequentes e leitura em andamento               |
+| Adaptive UI            |   **7/10** | Extrair uma paleta segura do wallpaper e adaptar acentos e contraste                      |
 
 ### Moon AI e contexto
 
@@ -359,7 +373,7 @@ moon.registerPanel({
   capabilities: ["storage"],
   render(container) {
     // Módulo executado apenas após validação e consentimento.
-  }
+  },
 });
 ```
 
@@ -401,9 +415,12 @@ npm run build:desktop
 Os artefatos são gravados em `release/`. O alvo gerado depende do sistema operacional em que o comando é executado:
 
 - Windows x64: `Moon-Browser-Windows-x64-Setup.exe` e `Moon-Browser-Windows-x64-Portable.exe`;
-- Linux x64: `Moon-Browser-Linux-x64.AppImage` e `Moon-Browser-Linux-x64.deb`.
+- Linux universal x64: `Moon-Browser-Linux-x64.AppImage`;
+- Debian/Ubuntu x64: `Moon-Browser-Linux-x64.deb`;
+- Fedora/RHEL/openSUSE x64: `Moon-Browser-Linux-x64.rpm`;
+- Arch/Manjaro/EndeavourOS x64: `Moon-Browser-Linux-x64.pacman`.
 
-O workflow [`release-desktop.yml`](.github/workflows/release-desktop.yml) compila Windows e Linux separadamente. Uma tag `v*` publica os quatro arquivos em GitHub Releases; a execução manual do workflow também permite informar a tag e decidir se a release será publicada.
+O workflow [`release-desktop.yml`](.github/workflows/release-desktop.yml) compila Windows e Linux em runners nativos separados. Uma tag `v*` publica os seis arquivos, release notes e checksums SHA-256 em GitHub Releases; a execução manual também permite validar os builds sem publicar.
 
 ## Testes e qualidade
 
@@ -419,12 +436,12 @@ npm audit --audit-level=high
 npm run build:desktop
 ```
 
-| Camada | Cobertura atual |
-| --- | ---: |
-| Testes unitários | 52 testes |
-| Integração do shell | 17 testes |
-| SQLite e serviços no Electron | 6 testes |
-| E2E Electron | 5 fluxos |
+| Camada                        | Cobertura atual |
+| ----------------------------- | --------------: |
+| Testes unitários              |       52 testes |
+| Integração do shell           |       17 testes |
+| SQLite e serviços no Electron |        6 testes |
+| E2E Electron                  |        5 fluxos |
 
 Em Linux sem sessão gráfica, execute o E2E com:
 
@@ -475,7 +492,7 @@ Distribuído sob a [Licença MIT](LICENSE). Você pode estudar, usar, modificar 
 
 **Moon Browser**
 
-*Made for users. Built with users.*
+_Made for users. Built with users._
 
 **Nexus Inc. · 2026**
 

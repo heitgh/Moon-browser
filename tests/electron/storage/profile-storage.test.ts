@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import { ProfileStorage } from "../../../apps/desktop/electron/services/profile-storage.js";
 import { createMoonProfileBackup } from "../../../packages/storage/backup/profile-backup.js";
+import { createDefaultCustomization } from "../../../ui/customization/customization-schema.js";
 
 const temporaryDirectories: string[] = [];
 const backup = createMoonProfileBackup({
@@ -29,6 +30,31 @@ async function profile(): Promise<{ directory: string; storage: ProfileStorage }
 }
 
 describe("ProfileStorage", () => {
+  it("migrates V3 customization to canonical V4 exactly once", async () => {
+    const { storage } = await profile();
+    const legacy = { ...createDefaultCustomization(100), version: 3, experience: { mode: "customize", lastSection: "layout" } };
+    const migrated = await storage.loadCustomization(legacy);
+    expect(migrated).toMatchObject({ version: 4, updatedAt: 100, experience: { mode: "advanced", view: "all", lastSection: "layout" } });
+    const competingLegacy = createDefaultCustomization(200);
+    (competingLegacy.global.appearance.colors as { accent: string }).accent = "#38bdf8";
+    expect((await storage.loadCustomization(competingLegacy)).updatedAt).toBe(100);
+    expect((await storage.loadCustomization()).global.appearance.colors.accent).toBe(migrated.global.appearance.colors.accent);
+    await storage.close();
+  });
+
+  it("commits customization atomically and rejects stale revisions", async () => {
+    const { storage } = await profile();
+    const initial = await storage.loadCustomization(createDefaultCustomization(100));
+    const next = structuredClone(initial);
+    (next as { revision: number; updatedAt: number }).revision = initial.revision + 2;
+    (next as { revision: number; updatedAt: number }).updatedAt = 200;
+    (next.global.appearance.colors as { accent: string }).accent = "#38bdf8";
+    expect((await storage.commitCustomization(next)).global.appearance.colors.accent).toBe("#38bdf8");
+    await expect(storage.commitCustomization(initial)).rejects.toThrow(/outra janela/i);
+    expect((await storage.loadCustomization()).global.appearance.colors.accent).toBe("#38bdf8");
+    await storage.close();
+  });
+
   it("backs up and migrates the legacy profile exactly once", async () => {
     const { directory, storage } = await profile();
     expect(await storage.migrateLegacyProfile(JSON.stringify(backup))).toEqual({ migrated: true, version: 1 });
@@ -60,6 +86,48 @@ describe("ProfileStorage", () => {
     expect(await storage.loadBrowserSession()).toEqual([
       { id: "legacy-home", url: "moon://newtab", active: true, workspaceId: undefined, sessionId: undefined }
     ]);
+    await storage.close();
+  });
+
+  it("uses repositories as the canonical profile data source", async () => {
+    const { storage } = await profile();
+    await storage.migrateLegacyProfile(JSON.stringify(backup));
+    await storage.applyProfileMutation({ type: "bookmark:save", value: { id: "bookmark-2", title: "Nexus", url: "https://nexus.test/", time: 20 } });
+    await storage.applyProfileMutation({ type: "notes:save", content: "Estado canônico no SQLite" });
+    await storage.applyProfileMutation({ type: "workspace:save", value: { id: "workspace-product", name: "Produto", position: 1 } });
+    const snapshot = await storage.loadProfileData();
+    expect(snapshot.bookmarks.map(item => item.id)).toContain("bookmark-2");
+    expect(snapshot.notes).toBe("Estado canônico no SQLite");
+    expect(snapshot.workspaces).toContainEqual({ id: "workspace-product", name: "Produto", position: 1 });
+    await storage.applyProfileMutation({ type: "bookmark:delete", id: "bookmark-2" });
+    expect((await storage.loadProfileData()).bookmarks.map(item => item.id)).not.toContain("bookmark-2");
+    await storage.close();
+  });
+
+  it("persists validated site permission decisions in profile settings", async () => {
+    const { storage } = await profile();
+    const records = [{ origin: "https://meet.example", permission: "media", decision: "allow" as const, updatedAt: 10 }];
+    await storage.saveSitePermissions(records);
+    expect(await storage.loadSitePermissions()).toEqual(records);
+    await storage.close();
+  });
+
+  it("imports profile data atomically and deduplicates existing and repeated URLs", async () => {
+    const { storage } = await profile();
+    await storage.applyProfileMutation({ type: "bookmark:save", value: { id: "existing", title: "Existing", url: "https://existing.test/", time: 1 } });
+    const result = await storage.importExternalProfile("source-12345678", {
+      bookmarks: [
+        { id: "duplicate-existing", title: "Existing twice", url: "https://existing.test/", time: 2 },
+        { id: "new-one", title: "New", url: "https://new.test/", time: 3 },
+        { id: "new-two", title: "New twice", url: "https://new.test/", time: 4 }
+      ],
+      history: [
+        { id: "history-one", title: "History", url: "https://history.test/", time: 5 },
+        { id: "history-two", title: "History twice", url: "https://history.test/", time: 6 }
+      ]
+    });
+    expect(result).toEqual({ sourceId: "source-12345678", imported: { bookmarks: 1, history: 1 }, skipped: { bookmarks: 2, history: 1 } });
+    const snapshot = await storage.loadProfileData(); expect(snapshot.bookmarks.filter(item => item.url === "https://new.test/")).toHaveLength(1); expect(snapshot.history.filter(item => item.url === "https://history.test/")).toHaveLength(1);
     await storage.close();
   });
 });

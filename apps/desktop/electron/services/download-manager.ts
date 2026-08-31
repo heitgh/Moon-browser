@@ -25,60 +25,65 @@ export interface ManagedDownload {
 
 export class ElectronDownloadManager {
   readonly #attachedSessions = new WeakSet<Session>();
+  readonly #sessionProfiles = new WeakMap<Session, string>();
   readonly #nativeItems = new Map<string, DownloadItem>();
   readonly #items = new Map<string, ManagedDownload>();
+  readonly #itemProfiles = new Map<string, string>();
 
   constructor(readonly windows: WindowManager) {}
 
-  attach(session: Session): void {
+  attach(session: Session, profileId = "default"): void {
     if (this.#attachedSessions.has(session)) return;
     this.#attachedSessions.add(session);
-    session.on("will-download", (_event, item) => this.#track(item));
+    this.#sessionProfiles.set(session, profileId);
+    session.on("will-download", (_event, item) => this.#track(item, this.#sessionProfiles.get(session) ?? profileId));
   }
 
-  list(): readonly ManagedDownload[] {
-    return [...this.#items.values()].sort((left, right) => right.startedAt - left.startedAt);
+  list(profileId?: string): readonly ManagedDownload[] {
+    return [...this.#items.entries()].filter(([id]) => profileId === undefined || this.#itemProfiles.get(id) === profileId).map(([, item]) => item).sort((left, right) => right.startedAt - left.startedAt);
   }
 
-  pause(id: string): void {
-    const item = this.#requireNative(id);
+  pause(id: string, profileId?: string): void {
+    const item = this.#requireNative(id, profileId);
     item.pause();
     this.#update(id, { state: "paused" });
   }
 
-  resume(id: string): void {
-    const item = this.#requireNative(id);
+  resume(id: string, profileId?: string): void {
+    const item = this.#requireNative(id, profileId);
     if (!item.canResume()) throw new Error("This download cannot be resumed");
     item.resume();
     this.#update(id, { state: "in-progress" });
   }
 
-  cancel(id: string): void {
-    this.#requireNative(id).cancel();
+  cancel(id: string, profileId?: string): void {
+    this.#requireNative(id, profileId).cancel();
   }
 
-  async open(id: string): Promise<void> {
-    const item = this.#require(id);
+  async open(id: string, profileId?: string): Promise<void> {
+    const item = this.#require(id, profileId);
     if (item.state !== "completed") throw new Error("Download is not complete");
     const error = await shell.openPath(item.savePath);
     if (error) throw new Error(error);
   }
 
-  showInFolder(id: string): void {
-    shell.showItemInFolder(this.#require(id).savePath);
+  showInFolder(id: string, profileId?: string): void {
+    shell.showItemInFolder(this.#require(id, profileId).savePath);
   }
 
-  clearFinished(): void {
+  clearFinished(profileId?: string): void {
     for (const [id, item] of this.#items) {
+      if (profileId !== undefined && this.#itemProfiles.get(id) !== profileId) continue;
       if (["completed", "cancelled", "failed"].includes(item.state)) {
         this.#items.delete(id);
         this.#nativeItems.delete(id);
+        this.#itemProfiles.delete(id);
       }
     }
     this.#broadcast();
   }
 
-  #track(item: DownloadItem): void {
+  #track(item: DownloadItem, profileId: string): void {
     const id = randomUUID();
     const totalBytes = Math.max(0, item.getTotalBytes());
     const download: ManagedDownload = {
@@ -94,6 +99,7 @@ export class ElectronDownloadManager {
       startedAt: Date.now()
     };
     this.#items.set(id, download);
+    this.#itemProfiles.set(id, profileId);
     this.#nativeItems.set(id, item);
     this.#broadcast();
 
@@ -121,7 +127,7 @@ export class ElectronDownloadManager {
         receivedBytes: item.getReceivedBytes(),
         totalBytes: Math.max(0, item.getTotalBytes()),
         speedBytesPerSecond: 0,
-        percentage: state === "completed" ? 100 : this.#require(id).percentage,
+        percentage: state === "completed" ? 100 : this.#require(id, profileId).percentage,
         completedAt: Date.now()
       });
     });
@@ -133,23 +139,23 @@ export class ElectronDownloadManager {
   }
 
   #broadcast(): void {
-    const downloads = this.list();
     for (const window of this.windows.list()) {
       if (!window.webContents.isDestroyed()) {
-        window.webContents.send("download:updated", downloads);
+        const windowId = this.windows.idForWebContents(window.webContents);
+        if (windowId) window.webContents.send("download:updated", this.list(this.windows.profileId(windowId)));
       }
     }
   }
 
-  #require(id: string): ManagedDownload {
+  #require(id: string, profileId?: string): ManagedDownload {
     const item = this.#items.get(id);
-    if (!item) throw new Error(`Download not found: ${id}`);
+    if (!item || (profileId !== undefined && this.#itemProfiles.get(id) !== profileId)) throw new Error(`Download not found: ${id}`);
     return item;
   }
 
-  #requireNative(id: string): DownloadItem {
+  #requireNative(id: string, profileId?: string): DownloadItem {
     const item = this.#nativeItems.get(id);
-    if (!item) throw new Error(`Active download not found: ${id}`);
+    if (!item || (profileId !== undefined && this.#itemProfiles.get(id) !== profileId)) throw new Error(`Active download not found: ${id}`);
     return item;
   }
 }

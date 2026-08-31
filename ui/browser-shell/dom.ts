@@ -1,3 +1,6 @@
+import { IconRegistry } from "./icon-registry.js";
+import type { SemanticIconName } from "../customization/customization-schema.js";
+
 const ICONS = {
   moon: '<path d="M20.7 13.1A8.5 8.5 0 0 1 10.9 3.3 9 9 0 1 0 20.7 13.1Z"/>',
   home: '<path d="m3 10 9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M9 20v-6h6v6"/>',
@@ -19,9 +22,10 @@ const ICONS = {
   translate: '<path d="M4 5h9M8.5 3v2M6 8c1 3 3 5 6 6M12 8c-1 3-3 5-6 6"/><path d="m14 21 4-10 4 10M15.5 17h5"/>',
   plugin: '<path d="M8 3h3a2 2 0 1 0 4 0h3v5a2 2 0 1 1 0 4v5h-5a2 2 0 1 1-4 0H4v-5a2 2 0 1 0 0-4V3Z"/>',
   pause: '<path d="M9 5v14M15 5v14"/>', play: '<path d="m8 5 11 7-11 7Z"/>', folder: '<path d="M3 6h7l2 2h9v11H3Z"/>'
-} as const;
+} as const satisfies Readonly<Record<SemanticIconName, string>>;
 
-export type IconName = keyof typeof ICONS;
+export type IconName = SemanticIconName;
+const ICON_REGISTRY = new IconRegistry<IconName>(ICONS);
 
 export const element = <K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text?: string): HTMLElementTagNameMap[K] => {
   const node = document.createElement(tag);
@@ -31,13 +35,15 @@ export const element = <K extends keyof HTMLElementTagNameMap>(tag: K, className
 };
 
 export const icon = (name: IconName, className = "moon-icon"): SVGSVGElement => {
-  const node = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  node.setAttribute("viewBox", "0 0 24 24");
-  node.setAttribute("aria-hidden", "true");
-  node.classList.add(...className.split(" "));
-  node.innerHTML = ICONS[name];
-  return node;
+  return ICON_REGISTRY.create(name, className);
 };
+
+export const builtinIcon = (name: IconName, className = "moon-icon"): SVGSVGElement => {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", "svg"); node.setAttribute("viewBox", "0 0 24 24"); node.setAttribute("aria-hidden", "true"); node.classList.add(...className.split(" ")); node.innerHTML = ICONS[name]; return node;
+};
+
+export function installIconOverrides(overrides: Readonly<Partial<Record<IconName, string>>>): void { ICON_REGISTRY.install(overrides); }
+export function clearIconOverrides(names?: readonly IconName[]): void { ICON_REGISTRY.clear(names); }
 
 export const button = (className: string, label: string, name?: IconName): HTMLButtonElement => {
   const node = element("button", className);

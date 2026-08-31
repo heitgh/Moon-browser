@@ -27,4 +27,5 @@ jobs:
       - run: npm run test:electron-storage
       - run: xvfb-run -a npm run test:e2e
       - run: npm audit --audit-level=high
+      - run: sudo apt-get update && sudo apt-get install --no-install-recommends -y rpm libarchive-tools
       - run: npm run build:desktop

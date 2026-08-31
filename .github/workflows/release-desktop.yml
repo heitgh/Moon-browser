@@ -26,9 +26,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag da release (ex.: v0.5.0-demo.1)"
+        description: "Tag da release (ex.: v0.5.0-demo.2)"
         required: true
-        default: "v0.5.0-demo.1"
+        default: "v0.5.0-demo.2"
         type: string
       publish_release:
         description: "Publicar os instaladores em GitHub Releases"
@@ -64,16 +64,20 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install Linux packaging toolchain
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y rpm libarchive-tools
 
       - name: Typecheck
         run: npm run typecheck
@@ -100,7 +104,13 @@ jobs:
         shell: bash
         run: |
           cd release
-          sha256sum *.AppImage *.deb > SHA256SUMS-linux.txt
+          shopt -s nullglob
+          files=( *.AppImage *.deb *.rpm *.pacman )
+          if (( ${#files[@]} == 0 )); then
+            echo "Nenhum pacote Linux foi gerado." >&2
+            exit 1
+          fi
+          sha256sum "${files[@]}" > SHA256SUMS-linux.txt
 
       - name: Upload Windows installers
         if: runner.os == 'Windows'
@@ -121,6 +131,8 @@ jobs:
           path: |
             release/*.AppImage
             release/*.deb
+            release/*.rpm
+            release/*.pacman
             release/SHA256SUMS-linux.txt
           if-no-files-found: error
           retention-days: 14
@@ -137,7 +149,7 @@ jobs:
 
     steps:
       - name: Checkout release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Resolve release tag
         id: release
@@ -166,14 +178,28 @@ jobs:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         shell: bash
         run: |
+          notes_file="docs/releases/${RELEASE_TAG}.md"
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" release/* --clobber --repo "$GITHUB_REPOSITORY"
-            gh release edit "$RELEASE_TAG" --latest --repo "$GITHUB_REPOSITORY"
+            if [[ -f "$notes_file" ]]; then
+              gh release edit "$RELEASE_TAG" --latest --notes-file "$notes_file" --repo "$GITHUB_REPOSITORY"
+            else
+              gh release edit "$RELEASE_TAG" --latest --repo "$GITHUB_REPOSITORY"
+            fi
           else
-            gh release create "$RELEASE_TAG" release/* \
-              --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" \
-              --title "Moon Browser $RELEASE_TAG" \
-              --generate-notes \
-              --latest
+            if [[ -f "$notes_file" ]]; then
+              gh release create "$RELEASE_TAG" release/* \
+                --repo "$GITHUB_REPOSITORY" \
+                --target "$GITHUB_SHA" \
+                --title "Moon Browser $RELEASE_TAG" \
+                --notes-file "$notes_file" \
+                --latest
+            else
+              gh release create "$RELEASE_TAG" release/* \
+                --repo "$GITHUB_REPOSITORY" \
+                --target "$GITHUB_SHA" \
+                --title "Moon Browser $RELEASE_TAG" \
+                --generate-notes \
+                --latest
+            fi
           fi
