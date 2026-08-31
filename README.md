@@ -17,9 +17,9 @@ O Moon é um navegador desktop open source da **Nexus Inc.**, construído sobre 
 
 <br>
 
-<img src="assets/moonpage.png" alt="Moon Browser 0.5 Demo — tela principal" width="920">
+<img src="assets/screenshots/personalization-v4-home-final.png" alt="Moon Browser 0.5 Demo — Home principal" width="920">
 
-<sub>Substitua esta captura pelo arquivo <code>assets/moonpage.png</code>. O guia completo das imagens está na seção <a href="#capturas-do-projeto">Capturas do projeto</a>.</sub>
+<sub>Home real do Moon Browser 0.5 Demo, capturada automaticamente no Electron.</sub>
 
 </div>
 
@@ -34,6 +34,8 @@ O Moon é um navegador desktop open source da **Nexus Inc.**, construído sobre 
 | Windows 10/11 x64              | Portátil      | [Baixar `.exe` portátil](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Windows-x64-Portable.exe) |
 | Linux x64                      | AppImage      | [Baixar `.AppImage`](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Linux-x64.AppImage)           |
 | Debian, Ubuntu e derivados x64 | Pacote Debian | [Baixar `.deb`](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Linux-x64.deb)                     |
+| Fedora, RHEL e openSUSE x64    | Pacote RPM    | [Baixar `.rpm`](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Linux-x64.rpm)                     |
+| Arch, Manjaro e EndeavourOS    | Pacote Pacman | [Baixar `.pacman`](https://github.com/heitgh/Moon-browser/releases/latest/download/Moon-Browser-Linux-x64.pacman)               |
 
 Os arquivos são gerados em ambientes limpos pelo GitHub Actions e publicados em [Releases](https://github.com/heitgh/Moon-browser/releases). Confira também os arquivos `SHA256SUMS` da release. Como a versão Demo ainda não possui assinatura comercial de código, o Windows SmartScreen pode exibir um aviso antes da instalação.
 
@@ -72,7 +74,7 @@ O objetivo não é apenas colocar um chatbot na lateral. A visão de longo prazo
 
 ## Moon Browser 0.5 Demo
 
-`0.5.0-demo.1` representa a primeira demo pública da arquitetura reconstruída e testável do Moon no repositório oficial.
+`0.5.0-demo.2` reúne a arquitetura reconstruída e testável do Moon com Personalização V4, Home editável, perfis locais isolados e distribuição automatizada para Windows e Linux.
 
 O desenvolvimento dessa base aconteceu em [`heitgh/Moon-tests-1`](https://github.com/heitgh/Moon-tests-1), usado como ambiente de experimentação. A versão consolidada foi transferida para este repositório preservando tanto o histórico do projeto original quanto o histórico técnico da reconstrução.
 
@@ -413,9 +415,12 @@ npm run build:desktop
 Os artefatos são gravados em `release/`. O alvo gerado depende do sistema operacional em que o comando é executado:
 
 - Windows x64: `Moon-Browser-Windows-x64-Setup.exe` e `Moon-Browser-Windows-x64-Portable.exe`;
-- Linux x64: `Moon-Browser-Linux-x64.AppImage` e `Moon-Browser-Linux-x64.deb`.
+- Linux universal x64: `Moon-Browser-Linux-x64.AppImage`;
+- Debian/Ubuntu x64: `Moon-Browser-Linux-x64.deb`;
+- Fedora/RHEL/openSUSE x64: `Moon-Browser-Linux-x64.rpm`;
+- Arch/Manjaro/EndeavourOS x64: `Moon-Browser-Linux-x64.pacman`.
 
-O workflow [`release-desktop.yml`](.github/workflows/release-desktop.yml) compila Windows e Linux separadamente. Uma tag `v*` publica os quatro arquivos em GitHub Releases; a execução manual do workflow também permite informar a tag e decidir se a release será publicada.
+O workflow [`release-desktop.yml`](.github/workflows/release-desktop.yml) compila Windows e Linux em runners nativos separados. Uma tag `v*` publica os seis arquivos, release notes e checksums SHA-256 em GitHub Releases; a execução manual também permite validar os builds sem publicar.
 
 ## Testes e qualidade
 

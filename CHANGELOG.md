@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — Final Update, produto e ergonomia (2026-08-28)
+## 0.5.0-demo.2 — Personalization Studio V4 (2026-08-30)
 
 ### Adicionado
 
