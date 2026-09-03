@@ -60,9 +60,9 @@
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "^2.11.3",
-    "better-sqlite3": "^12.4.1",
+    "better-sqlite3": "^13.0.3",
     "cross-fetch": "^4.1.0",
-    "electron-store": "^10.1.0"
+    "electron-store": "^11.0.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
