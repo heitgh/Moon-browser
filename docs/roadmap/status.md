@@ -1,4 +1,10 @@
-# Moon Browser 0.5 Demo — status de reconstrução
+# Moon Browser — estado atual e histórico
+
+Atualização local **0.6.0-alpha.1**, 8 de setembro de 2026: Research por extração local, memória opt-in e sessões por URLs implementados. IA generativa, distribuição estável e migração oficial continuam bloqueadas. Consulte [o relatório verificável](../update/RELATORIO.md), que distingue execução real, cobertura parcial e pendências.
+
+O conteúdo abaixo registra a base de 30 de agosto. Não é prova de homologação integral desta alpha.
+
+## Histórico: Moon Browser 0.5 Demo — status de reconstrução
 
 Atualizado em 30 de agosto de 2026. Este documento descreve somente capacidades conectadas ao runtime ativo.
 
