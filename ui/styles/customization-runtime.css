@@ -245,8 +245,18 @@ body { background: var(--moon-bg); color: var(--moon-text); font-family: var(--m
 .moon-settings-footer button { margin: 0; width: auto; }
 .moon-import-source-list { display: grid; gap: 10px; margin-top: 14px; }
 .moon-import-source { align-items: center; background: color-mix(in srgb, var(--moon-surface-raised) 60%, transparent); border: var(--moon-border-width) solid var(--moon-border); border-radius: var(--moon-radius); display: grid; gap: 12px; grid-template-columns: minmax(160px, 1fr) minmax(190px, auto) auto; padding: 12px; }
+.moon-import-path { color: var(--moon-text-muted); display: block; font-family: var(--moon-font-mono); font-size: 11px; margin-top: 3px; max-width: min(44vw, 520px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .moon-import-categories { display: flex; flex-wrap: wrap; gap: 10px; }
 .moon-import-category { align-items: center; color: var(--moon-text-muted); display: flex; font-size: var(--moon-font-caption); gap: 5px; }
+.moon-wallpaper-library { border: var(--moon-border-width) solid var(--moon-border); border-radius: var(--moon-radius); display: grid; gap: 12px; padding: 14px; }
+.moon-wallpaper-library-controls { align-items: center; display: grid; gap: 8px; grid-template-columns: minmax(160px, 1fr) auto auto; }
+.moon-wallpaper-library-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.moon-wallpaper-library-card { background: color-mix(in srgb, var(--moon-surface-raised) 66%, transparent); border: var(--moon-border-width) solid var(--moon-border); border-radius: var(--moon-radius); display: grid; gap: 9px; min-width: 0; overflow: hidden; padding: 8px; }
+.moon-wallpaper-library-preview { align-items: end; background-color: var(--moon-background); background-position: center; background-repeat: no-repeat; background-size: cover; border: 0; border-radius: calc(var(--moon-radius) - 4px); cursor: pointer; display: flex; min-height: 110px; overflow: hidden; padding: 8px; }
+.moon-wallpaper-library-preview span { background: color-mix(in srgb, #05060a 76%, transparent); border-radius: 999px; color: #fff; font-size: 11px; padding: 4px 8px; }
+.moon-wallpaper-library-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.moon-wallpaper-library-actions .moon-icon-button[data-active="true"] { color: var(--moon-accent); }
+@media (max-width: 760px) { .moon-wallpaper-library-controls { grid-template-columns: 1fr; } }
 .moon-danger-button { align-items: center; background: color-mix(in srgb, var(--moon-danger) 16%, transparent); border: 1px solid color-mix(in srgb, var(--moon-danger) 28%, transparent); border-radius: var(--moon-radius-sm); color: var(--moon-danger); display: flex; font-size: var(--moon-font-ui); gap: var(--moon-space-2); min-height: var(--moon-control-height); padding: var(--moon-space-2) var(--moon-space-3); }
 .moon-settings-no-results { color: var(--moon-text-muted); padding: 50px; text-align: center; }
 .moon-recovery-note { color: var(--moon-text-muted); font-size: var(--moon-font-caption); }

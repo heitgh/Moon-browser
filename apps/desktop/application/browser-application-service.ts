@@ -112,6 +112,7 @@ export class BrowserApplicationService {
 
   async #handleTabUpdate(windowId: string, update: BrowserTabUpdate): Promise<void> {
     await this.tabs.reconcile(windowId, update.tab, update.navigation);
+    if (update.historyEntry && !update.tab.private) await (await this.#profileForWindow(windowId)).recordHistoryEntry(update.historyEntry);
     if (!update.tab.private && !this.#restoringWindows.has(windowId)) this.#schedulePersistence(windowId);
   }
 

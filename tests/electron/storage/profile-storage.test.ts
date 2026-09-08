@@ -104,11 +104,53 @@ describe("ProfileStorage", () => {
     await storage.close();
   });
 
+  it("persists versioned timeline visits and deletes items or ranges exactly", async () => {
+    const { storage } = await profile();
+    const visit = (id: string, startedAt: number, url: string) => ({ schemaVersion: 2 as const, id, title: id, url, time: startedAt, startedAt, endedAt: startedAt + 50, durationMs: 50, profileId: "default", workspaceId: "research", sessionId: "session-1", tabId: "tab-1", source: "navigation" as const, navigationType: "typed" as const });
+    await storage.recordHistoryEntry(visit("visit-older", 100, "https://older.test/"));
+    await storage.recordHistoryEntry(visit("visit-newer", 200, "https://newer.test/"));
+    expect((await storage.loadProfileData()).history.map(item => item.id)).toEqual(["visit-newer", "visit-older"]);
+    await storage.applyProfileMutation({ type: "history:delete", id: "visit-newer" });
+    expect((await storage.loadProfileData()).history.map(item => item.id)).toEqual(["visit-older"]);
+    await storage.applyProfileMutation({ type: "history:delete-range", from: 90, to: 150 });
+    expect((await storage.loadProfileData()).history).toEqual([]);
+    await storage.close();
+  });
+
   it("persists validated site permission decisions in profile settings", async () => {
     const { storage } = await profile();
     const records = [{ origin: "https://meet.example", permission: "media", decision: "allow" as const, updatedAt: 10 }];
     await storage.saveSitePermissions(records);
     expect(await storage.loadSitePermissions()).toEqual(records);
+    await storage.close();
+  });
+
+  it("persists managed wallpaper assets independently from themes", async () => {
+    const { storage } = await profile();
+    const record = { id: "wallpaper-1234567890abcdef", name: "Aurora local", source: "data:image/png;base64,iVBORw0KGgo=", type: "image" as const, thumbnailData: "data:image/png;base64,iVBORw0KGgo=", mimeType: "image/png" as const, bytes: 8, hash: "1234567890abcdef", favorite: true, tags: ["noite"], fit: "cover" as const, position: "center", repeat: false, createdAt: 10, updatedAt: 20 };
+    await storage.saveWallpaper(record);
+    expect(await storage.getWallpaper(record.id)).toEqual(record);
+    expect(await storage.listWallpapers()).toEqual([record]);
+    expect(await storage.removeWallpaper(record.id)).toBe(true);
+    expect(await storage.getWallpaper(record.id)).toBeUndefined();
+    await storage.close();
+  });
+
+  it("stores Moon Notes with folders, safe backlink renames, revisions and recoverable trash", async () => {
+    const { storage } = await profile();
+    const input = (id: string, title: string, content: string, parentId?: string) => ({ id, kind: "note" as const, ...(parentId ? { parentId } : {}), title, content, format: "markdown" as const, pinned: false, favorite: false, tags: ["produto"] });
+    await storage.applyProfileMutation({ type: "note:save", expectedRevision: 0, value: { ...input("folder-one", "Produto", ""), kind: "folder", content: "" } });
+    await storage.applyProfileMutation({ type: "note:save", expectedRevision: 0, value: input("note-source", "Origem", "Veja [[Destino]]", "folder-one") });
+    await storage.applyProfileMutation({ type: "note:save", expectedRevision: 0, value: input("note-target", "Destino", "Conteúdo") });
+    await storage.applyProfileMutation({ type: "note:save", expectedRevision: 1, value: input("note-target", "Destino novo", "Conteúdo atualizado") });
+    let snapshot = await storage.loadProfileData();
+    expect(snapshot.noteDocuments.find(note => note.id === "note-source")?.content).toBe("Veja [[Destino novo]]");
+    expect(snapshot.noteDocuments.find(note => note.id === "note-target")?.versions).toHaveLength(1);
+    await expect(storage.applyProfileMutation({ type: "note:save", expectedRevision: 1, value: input("note-target", "Conflito", "x") })).rejects.toThrow(/outra janela/i);
+    await storage.applyProfileMutation({ type: "note:delete", id: "folder-one" }); snapshot = await storage.loadProfileData();
+    expect(snapshot.noteDocuments.find(note => note.id === "note-source")?.deletedAt).toBeTypeOf("number");
+    await storage.applyProfileMutation({ type: "note:restore", id: "note-source" }); expect((await storage.loadProfileData()).noteDocuments.find(note => note.id === "note-source")?.deletedAt).toBeUndefined();
+    await storage.applyProfileMutation({ type: "note:purge", id: "note-source" }); expect((await storage.loadProfileData()).noteDocuments.some(note => note.id === "note-source")).toBe(false);
     await storage.close();
   });
 

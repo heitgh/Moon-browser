@@ -20,6 +20,7 @@ import { LiveBrowserPreview } from "./live-browser-preview.js";
 import { searchSettings, type SettingsSection } from "./settings-catalog.js";
 import type { SettingsMode, SettingsView } from "./customization-schema.js";
 import type { ImportCategory, ImportResult, ImportSourceSummary } from "../../packages/ipc/browser-import-contract.js";
+import type { WallpaperLibraryItem, WallpaperLibrarySummary, WallpaperLibraryUpdate } from "../../packages/ipc/wallpaper-library-contract.js";
 import { applyHomePreset } from "./home-presets.js";
 import { buildThemeCatalog, type ThemeCatalogEntry } from "./theme-catalog.js";
 import { extractPalette } from "./palette-extractor.js";
@@ -49,8 +50,16 @@ export interface CustomizationCenterOptions {
   readonly onAddShortcut: (shortcut: Omit<Shortcut, "id">) => void;
   readonly onRemoveShortcut: (id: string) => void;
   readonly onDiscoverImportSources: () => Promise<readonly ImportSourceSummary[]>;
+  readonly onSelectManualImportSource: () => Promise<readonly ImportSourceSummary[]>;
   readonly onImportBrowserProfile: (sourceId: string, categories: readonly ImportCategory[]) => Promise<ImportResult>;
   readonly onImportBookmarksHtml: () => Promise<ImportResult | null>;
+  readonly onListWallpapers: () => Promise<readonly WallpaperLibrarySummary[]>;
+  readonly onGetWallpaper: (id: string) => Promise<WallpaperLibraryItem>;
+  readonly onImportWallpaper: () => Promise<WallpaperLibraryItem | null>;
+  readonly onReplaceWallpaper: (id: string) => Promise<WallpaperLibraryItem | null>;
+  readonly onUpdateWallpaper: (update: WallpaperLibraryUpdate) => Promise<WallpaperLibrarySummary>;
+  readonly onRemoveWallpaper: (id: string) => Promise<boolean>;
+  readonly onExportWallpaper: (id: string) => Promise<boolean>;
 }
 
 type SectionId = "appearance" | "layout" | "home" | "typography" | "search" | "data";
@@ -120,6 +129,9 @@ export class CustomizationCenter {
   #paletteMode: "accent" | "chrome" | "full" = "accent";
   #previewCollapsed = false;
   #importSources: readonly ImportSourceSummary[] = [];
+  #wallpapers: readonly WallpaperLibrarySummary[] = [];
+  #wallpaperQuery = "";
+  #wallpaperSort: "recent" | "name" | "favorites" = "recent";
 
   constructor(readonly options: CustomizationCenterOptions) {
     this.#active = options.initialSection ?? options.store.document.experience.lastSection as SectionId;
@@ -132,6 +144,7 @@ export class CustomizationCenter {
     this.#build();
     this.#render();
     void this.#loadMoonThemes();
+    void this.#loadWallpapers();
     requestAnimationFrame(() => this.#search.focus());
   }
 
@@ -250,7 +263,7 @@ export class CustomizationCenter {
     const wallpaper = this.#group("Wallpaper e filtros", "Arquivo local, URL HTTPS, cor ou gradiente, sem serviços externos ocultos.", "wallpaper local url gradiente contain cover fill opacidade blur brilho contraste saturação hue escurecimento");
     const gallery = element("div", "moon-wallpaper-grid");
     for (const preset of WALLPAPER_PRESETS) { const card = button(`moon-wallpaper${preset.source === config.appearance.wallpaper.source ? " is-active" : ""}`, `Usar ${preset.name}`); card.style.backgroundImage = `url(${JSON.stringify(preset.source)})`; card.append(element("span", "", preset.name)); card.addEventListener("click", () => { this.options.store.update(next => { const value = next.appearance.wallpaper as Mutable<typeof next.appearance.wallpaper>; value.type = "local"; value.source = preset.source; }); this.#render(); }); gallery.append(card); }
-    wallpaper.append(gallery, this.#select("Origem", config.appearance.wallpaper.type, [["local", "Local / Moon"], ["animated", "Animado local"], ["https", "URL HTTPS"], ["color", "Cor sólida"], ["gradient", "Gradiente CSS"]], value => this.#wallpaperType(value)), this.#input("Fonte", config.appearance.wallpaper.source, "text", value => { if (config.appearance.wallpaper.type === "https") void this.#wallpaperSource(value); else return this.#set("appearance.wallpaper.source", value); }, "URL, #cor ou linear-gradient(…)"), this.#file(), this.#select("Ajuste", config.appearance.wallpaper.fit, [["cover", "Cobrir"], ["contain", "Conter"], ["fill", "Preencher"]], value => this.#set("appearance.wallpaper.fit", value)), this.#input("Posição", config.appearance.wallpaper.position, "text", value => this.#set("appearance.wallpaper.position", value)), this.#toggle("Repetir", config.appearance.wallpaper.repeat, value => this.#set("appearance.wallpaper.repeat", value)), this.#rangeGrid([
+    wallpaper.append(this.#wallpaperLibrary(config), gallery, this.#select("Origem", config.appearance.wallpaper.type, [["local", "Local / Moon"], ["animated", "Animado local"], ["https", "URL HTTPS"], ["color", "Cor sólida"], ["gradient", "Gradiente CSS"]], value => this.#wallpaperType(value)), this.#input("Fonte", config.appearance.wallpaper.source, "text", value => { if (config.appearance.wallpaper.type === "https") void this.#wallpaperSource(value); else return this.#set("appearance.wallpaper.source", value); }, "URL, #cor ou linear-gradient(…)"), this.#file(), this.#select("Ajuste", config.appearance.wallpaper.fit, [["cover", "Cobrir"], ["contain", "Conter"], ["fill", "Preencher"]], value => this.#set("appearance.wallpaper.fit", value)), this.#input("Posição", config.appearance.wallpaper.position, "text", value => this.#set("appearance.wallpaper.position", value)), this.#toggle("Repetir", config.appearance.wallpaper.repeat, value => this.#set("appearance.wallpaper.repeat", value)), this.#rangeGrid([
       ["Opacidade", "appearance.wallpaper.opacity", config.appearance.wallpaper.opacity, 0, 1, .01], ["Desfoque", "appearance.wallpaper.blur", config.appearance.wallpaper.blur, 0, 40, 1],
       ["Brilho", "appearance.wallpaper.brightness", config.appearance.wallpaper.brightness, .2, 2, .05], ["Contraste", "appearance.wallpaper.contrast", config.appearance.wallpaper.contrast, .2, 2, .05],
       ["Saturação", "appearance.wallpaper.saturation", config.appearance.wallpaper.saturation, 0, 2, .05], ["Matiz", "appearance.wallpaper.hue", config.appearance.wallpaper.hue, -180, 180, 1], ["Escurecimento", "appearance.wallpaper.dim", config.appearance.wallpaper.dim, 0, .9, .01]
@@ -367,12 +380,13 @@ export class CustomizationCenter {
     const group = this.#group("Importação segura", "Detecta perfis compatíveis sem modificá-los. Cookies, sessões, carteiras, extensões e senhas não são copiados.", "importar chrome chromium brave vivaldi edge firefox favoritos histórico bookmarks html staging rollback");
     const actions = element("div", "moon-settings-actions");
     const scan = button("moon-primary-button", "Detectar perfis instalados", "search"); scan.append(element("span", "", "Detectar perfis")); scan.addEventListener("click", () => { void this.#discoverImportSources(); });
-    const html = button("moon-secondary-button", "Importar favoritos de arquivo HTML", "download"); html.append(element("span", "", "Bookmarks HTML")); html.addEventListener("click", () => { void this.#importBookmarksHtml(); }); actions.append(scan, html); group.append(actions);
+    const manual = button("moon-secondary-button", "Selecionar pasta de perfil manualmente", "folder"); manual.append(element("span", "", "Selecionar pasta")); manual.addEventListener("click", () => { void this.#selectManualImportSource(); });
+    const html = button("moon-secondary-button", "Importar favoritos de arquivo HTML", "download"); html.append(element("span", "", "Bookmarks HTML")); html.addEventListener("click", () => { void this.#importBookmarksHtml(); }); actions.append(scan, manual, html); group.append(actions);
     if (!this.#importSources.length) { group.append(element("p", "moon-widget-empty", "Nenhum perfil analisado nesta sessão. A detecção é local e somente leitura.")); return group; }
     const list = element("div", "moon-import-source-list");
     for (const source of this.#importSources) {
       const row = element("article", "moon-import-source"); const copy = element("span", "moon-list-copy");
-      copy.append(element("strong", "", source.name), element("small", "", `Atualizado ${new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(source.modifiedAt)}`));
+      copy.append(element("strong", "", source.name), element("small", "", `Atualizado ${new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(source.modifiedAt)}`), element("code", "moon-import-path", source.detectedPath));
       const categories = element("div", "moon-import-categories"); const selected = new Map<ImportCategory, HTMLInputElement>();
       for (const category of ["bookmarks", "history"] as const) { const count = source.categories[category]; const label = element("label", "moon-import-category"); const input = element("input"); input.type = "checkbox"; input.checked = count > 0; input.disabled = count === 0; selected.set(category, input); label.append(input, element("span", "", `${category === "bookmarks" ? "Favoritos" : "Histórico"} (${count})`)); categories.append(label); }
       const run = button("moon-primary-button", `Importar de ${source.name}`, "download"); run.append(element("span", "", "Importar seleção")); run.addEventListener("click", () => { const values = [...selected].filter(([, input]) => input.checked).map(([category]) => category); if (!values.length) return this.#error("Selecione ao menos uma categoria."); void this.#runBrowserImport(source.id, values); });
@@ -380,6 +394,41 @@ export class CustomizationCenter {
     }
     group.append(list); return group;
   }
+
+  #wallpaperLibrary(_config: CustomizationConfig): HTMLElement {
+    const library = element("section", "moon-wallpaper-library");
+    const heading = element("div", "moon-list-copy"); heading.append(element("strong", "", "Biblioteca independente"), element("small", "", "PNG, JPEG, WebP ou GIF até 10 MB. A cópia gerenciada continua disponível mesmo se o arquivo original mudar."));
+    const controls = element("div", "moon-wallpaper-library-controls");
+    const search = element("input", "moon-settings-input"); search.type = "search"; search.placeholder = "Buscar wallpaper ou tag"; search.value = this.#wallpaperQuery; search.setAttribute("aria-label", "Buscar na biblioteca de wallpapers"); search.addEventListener("input", () => { this.#wallpaperQuery = search.value; this.#render(); });
+    const sort = element("select", "moon-select"); sort.setAttribute("aria-label", "Ordenar wallpapers"); for (const [value, label] of [["recent", "Mais recentes"], ["name", "Nome"], ["favorites", "Favoritos primeiro"]] as const) sort.append(option(value, label)); sort.value = this.#wallpaperSort; sort.addEventListener("change", () => { this.#wallpaperSort = sort.value as "recent" | "name" | "favorites"; this.#render(); });
+    const add = button("moon-primary-button", "Importar imagem para a biblioteca", "download"); add.append(element("span", "", "Importar imagem")); add.addEventListener("click", () => void this.#importWallpaper()); controls.append(search, sort, add); library.append(heading, controls);
+    const query = this.#wallpaperQuery.trim().toLocaleLowerCase("pt-BR");
+    const items = this.#wallpapers.filter(item => !query || `${item.name} ${item.tags.join(" ")}`.toLocaleLowerCase("pt-BR").includes(query)).sort((left, right) => this.#wallpaperSort === "name" ? left.name.localeCompare(right.name) : this.#wallpaperSort === "favorites" ? Number(right.favorite) - Number(left.favorite) || right.updatedAt - left.updatedAt : right.updatedAt - left.updatedAt);
+    if (!items.length) { library.append(element("p", "moon-widget-empty", this.#wallpapers.length ? "Nenhum wallpaper corresponde à busca." : "Sua biblioteca ainda está vazia.")); return library; }
+    const gallery = element("div", "moon-wallpaper-library-grid");
+    for (const item of items) {
+      const card = element("article", "moon-wallpaper-library-card");
+      const preview = button("moon-wallpaper-library-preview", `Aplicar wallpaper ${item.name}`); preview.style.backgroundImage = `url(${JSON.stringify(item.thumbnailData)})`; preview.append(element("span", "", "Aplicar")); preview.addEventListener("click", () => void this.#applyLibraryWallpaper(item.id));
+      const copy = element("div", "moon-list-copy"); copy.append(element("strong", "", item.name), element("small", "", `${Math.max(1, Math.round(item.bytes / 1024))} KB · ${item.mimeType.replace("image/", "").toUpperCase()}${item.tags.length ? ` · ${item.tags.join(", ")}` : ""}`));
+      const actions = element("div", "moon-wallpaper-library-actions");
+      const favorite = button("moon-icon-button", item.favorite ? `Remover ${item.name} dos favoritos` : `Favoritar ${item.name}`, "star"); favorite.dataset.active = String(item.favorite); favorite.addEventListener("click", () => void this.#updateWallpaper({ id: item.id, favorite: !item.favorite }));
+      const rename = button("moon-icon-button", `Renomear ${item.name}`, "note"); rename.addEventListener("click", () => { const name = window.prompt("Novo nome do wallpaper", item.name)?.trim(); if (name && name !== item.name) void this.#updateWallpaper({ id: item.id, name }); });
+      const tags = button("moon-icon-button", `Editar tags de ${item.name}`, "grid"); tags.addEventListener("click", () => { const value = window.prompt("Tags separadas por vírgula", item.tags.join(", ")); if (value !== null) void this.#updateWallpaper({ id: item.id, tags: value.split(",").map(tag => tag.trim()).filter(Boolean) }); });
+      const replace = button("moon-icon-button", `Substituir imagem de ${item.name}`, "reload"); replace.addEventListener("click", () => void this.#replaceWallpaper(item.id));
+      const exportItem = button("moon-icon-button", `Exportar ${item.name}`, "download"); exportItem.addEventListener("click", () => void this.#exportWallpaper(item.id));
+      const remove = button("moon-icon-button", `Excluir ${item.name}`, "trash"); remove.addEventListener("click", () => { if (window.confirm(`Excluir “${item.name}” da biblioteca? O arquivo original não será alterado.`)) void this.#removeWallpaper(item.id); });
+      actions.append(favorite, rename, tags, replace, exportItem, remove); card.append(preview, copy, actions); gallery.append(card);
+    }
+    library.append(gallery); return library;
+  }
+
+  async #loadWallpapers(): Promise<void> { try { this.#wallpapers = await this.options.onListWallpapers(); this.#render(); } catch (error) { this.#error(error); } }
+  async #importWallpaper(): Promise<void> { try { const imported = await this.options.onImportWallpaper(); if (!imported) return this.#say("Importação de wallpaper cancelada."); await this.#loadWallpapers(); this.#say(`“${imported.name}” foi salvo na biblioteca gerenciada.`); } catch (error) { this.#error(error); } }
+  async #applyLibraryWallpaper(id: string): Promise<void> { try { const item = await this.options.onGetWallpaper(id); const accepted = this.options.store.update(next => { const wallpaper = next.appearance.wallpaper as Mutable<typeof next.appearance.wallpaper>; wallpaper.type = item.mimeType === "image/gif" ? "animated" : "local"; wallpaper.source = item.data; wallpaper.fit = item.fit === "cover" ? "cover" : "contain"; wallpaper.position = item.position; wallpaper.repeat = item.repeat || item.fit === "repeat"; wallpaper.animate = item.mimeType === "image/gif"; delete wallpaper.cachedData; delete wallpaper.fallbackData; }); this.#result(accepted); if (accepted) { this.#say(`Wallpaper “${item.name}” aplicado ao preview.`); this.#render(); } } catch (error) { this.#error(error); } }
+  async #updateWallpaper(update: WallpaperLibraryUpdate): Promise<void> { try { const saved = await this.options.onUpdateWallpaper(update); this.#wallpapers = this.#wallpapers.map(item => item.id === saved.id ? saved : item); this.#say("Biblioteca atualizada."); this.#render(); } catch (error) { this.#error(error); } }
+  async #replaceWallpaper(id: string): Promise<void> { try { const replaced = await this.options.onReplaceWallpaper(id); if (!replaced) return this.#say("Substituição cancelada."); await this.#loadWallpapers(); this.#say(`“${replaced.name}” foi substituído sem depender do arquivo original.`); } catch (error) { this.#error(error); } }
+  async #exportWallpaper(id: string): Promise<void> { try { this.#say(await this.options.onExportWallpaper(id) ? "Wallpaper exportado." : "Exportação cancelada."); } catch (error) { this.#error(error); } }
+  async #removeWallpaper(id: string): Promise<void> { try { if (await this.options.onRemoveWallpaper(id)) { this.#wallpapers = this.#wallpapers.filter(item => item.id !== id); this.#say("Wallpaper removido da biblioteca; o preview atual permanece intacto."); this.#render(); } } catch (error) { this.#error(error); } }
 
   #intro(title: string, description: string): void { const intro = element("header", "moon-settings-page-intro"); intro.append(element("h1", "", title), element("p", "", description), element("span", "moon-scope-badge", this.options.store.document.scope === "global" ? "Global" : this.options.workspaceName)); this.#content.append(intro); }
   #group(title: string, description: string, terms: string): HTMLElement { const group = element("section", "moon-setting-group"); group.dataset.search = `${title} ${description} ${terms}`.toLocaleLowerCase("pt-BR"); const header = element("header", "moon-setting-group-header"); const copy = element("div"); copy.append(element("h3", "", title), element("p", "", description)); const reset = button("moon-group-reset", `Restaurar ${title}`, "reload"); reset.append(element("span", "", "Resetar grupo")); if (this.#canResetGroup(title)) reset.addEventListener("click", () => { this.#resetGroup(title); this.#say(`${title} restaurado.`); this.#render(); }); else reset.hidden = true; header.append(copy, reset); group.append(header); return group; }
@@ -429,6 +478,7 @@ export class CustomizationCenter {
   async #exportDiagnostic(): Promise<void> { try { const saved = await this.options.onExportDiagnostic(this.options.store.diagnostic()); this.#say(saved ? "Diagnóstico sanitizado exportado." : "Exportação cancelada."); } catch (error) { this.#error(error); } }
   async #import(): Promise<void> { try { const content = await this.options.onImport(); if (!content) return; if (!confirm("Importar esta personalização? Você ainda pode cancelar o preview.")) return; this.options.store.import(content); this.#say("Importação validada e aplicada ao preview."); this.#render(); } catch (error) { this.#error(error); } }
   async #discoverImportSources(): Promise<void> { try { this.#say("Analisando perfis locais em modo somente leitura…"); this.#importSources = await this.options.onDiscoverImportSources(); this.#say(this.#importSources.length ? `${this.#importSources.length} perfil(is) compatível(is) encontrado(s).` : "Nenhum perfil compatível com dados importáveis foi encontrado."); this.#render(); } catch (error) { this.#error(error); } }
+  async #selectManualImportSource(): Promise<void> { try { const selected = await this.options.onSelectManualImportSource(); if (!selected.length) return this.#say("Seleção manual cancelada."); const sources = new Map(this.#importSources.map(source => [source.id, source])); selected.forEach(source => sources.set(source.id, source)); this.#importSources = [...sources.values()]; this.#say(`${selected.length} perfil(is) válido(s) adicionado(s) manualmente.`); this.#render(); } catch (error) { this.#error(error); } }
   async #runBrowserImport(sourceId: string, categories: readonly ImportCategory[]): Promise<void> { try { this.#say("Importando a partir de staging validado…"); const result = await this.options.onImportBrowserProfile(sourceId, categories); this.#say(`Importação concluída: ${result.imported.bookmarks} favoritos e ${result.imported.history} itens de histórico; ${result.skipped.bookmarks + result.skipped.history} duplicados ignorados.`); } catch (error) { this.#error(error); } }
   async #importBookmarksHtml(): Promise<void> { try { const result = await this.options.onImportBookmarksHtml(); if (!result) return this.#say("Importação HTML cancelada."); this.#say(`HTML importado: ${result.imported.bookmarks} favoritos; ${result.skipped.bookmarks} duplicados ignorados.`); } catch (error) { this.#error(error); } }
   #filteredThemes(catalog: readonly ThemeCatalogEntry[]): readonly ThemeCatalogEntry[] { const query = this.#themeQuery.trim().toLocaleLowerCase("pt-BR"); const filtered = catalog.filter(theme => (!query || `${theme.name} ${theme.author}`.toLocaleLowerCase("pt-BR").includes(query)) && (this.#themeFilter === "all" || this.#themeFilter === "moon" && theme.source === "builtin" || this.#themeFilter === "mine" && theme.source === "user" || this.#themeFilter === "imported" && theme.source === "moontheme" || this.#themeFilter === "animated" && theme.capabilities.includes("animation") || this.#themeFilter === "icons" && theme.capabilities.includes("icons") || this.#themeFilter === "favorites" && theme.favorite)); return [...filtered].sort((left, right) => Number(right.active) - Number(left.active) || (this.#themeSort === "name" ? left.name.localeCompare(right.name) : this.#themeSort === "usage" ? right.useCount - left.useCount : right.modifiedAt - left.modifiedAt)); }

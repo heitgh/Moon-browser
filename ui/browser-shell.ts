@@ -10,6 +10,8 @@ import {
   type LocalProfileSummary,
   type ProfileDataMutation,
   type ProfileDataSnapshot,
+  type ProfileHistoryEntry,
+  type ProfileNoteDocument,
   type SavedLink,
   type SavedTheme,
   type SitePermissionRecord,
@@ -51,6 +53,7 @@ import { OnboardingFlow, shouldShowOnboarding } from "./onboarding/onboarding-fl
 import { FocusSessionController } from "./focus/focus-session-controller.js";
 import { FocusPanel } from "./focus/focus-panel.js";
 import { CommandCenter, type CommandCenterItem } from "./command-center/command-center.js";
+import { MoonNotesPanel } from "./notes/moon-notes-panel.js";
 
 const AI_ENABLED = featureEnabled(DEFAULT_FEATURE_FLAGS, "ai");
 const MODULES_ENABLED = featureEnabled(DEFAULT_FEATURE_FLAGS, "extensions") || featureEnabled(DEFAULT_FEATURE_FLAGS, "plugins");
@@ -123,9 +126,11 @@ class BrowserShell {
   readonly #rail = new Map<string, HTMLButtonElement>();
   #workspaces = load<Workspace[]>(KEYS.workspaces, [...WORKSPACES]);
   #bookmarks = load<SavedLink[]>(KEYS.bookmarks, []);
-  #history = load<SavedLink[]>(KEYS.history, []);
+  #history: ProfileHistoryEntry[] = load<SavedLink[]>(KEYS.history, []).map(item => ({ ...item, schemaVersion: 2, startedAt: item.time, source: "legacy", navigationType: "other" }));
+  #historyView: "classic" | "timeline" = "timeline";
   #downloads: readonly ManagedDownload[] = [];
   #notes = load<string>(KEYS.notes, "");
+  #noteDocuments: ProfileNoteDocument[] = [];
   #shortcuts = load<Shortcut[]>(KEYS.shortcuts, []);
   #themes = load<SavedTheme[]>(KEYS.themes, []);
   #adblock: AdblockStatus = { phase: "loading", enabled: true, blockedCount: 0 };
@@ -148,11 +153,12 @@ class BrowserShell {
   #commandCenter: CommandCenter | undefined;
   #commandReturnFocus: HTMLElement | undefined;
   readonly #permissionController: PermissionPromptController | undefined;
-  #notesSaveTimer: number | undefined;
+  readonly #notesPanel: MoonNotesPanel;
   #resizeObserver: ResizeObserver | undefined;
 
   constructor(readonly container: HTMLElement) {
     this.#permissionController = this.#bridge ? new PermissionPromptController({ container, bridge: this.#bridge, onError: error => this.#showError(error), onPermissionsChanged: records => { this.#sitePermissions = records; this.#renderDrawer(); }, onIdle: async () => { if (!this.#settings) await this.#bridge!.setContentVisible(true); } }) : undefined;
+    this.#notesPanel = new MoonNotesPanel({ mutate: mutation => this.#mutateProfileData(mutation), refresh: () => this.#reloadProfileData(), onScratchChanged: content => { this.#notes = content; this.#refreshHomeData(); }, activeContext: () => { const tab = this.#activeTabId ? this.#tabs.get(this.#activeTabId) : undefined; return { ...(tab && this.#isWeb(tab.url) ? { url: tab.url } : {}), ...(tab ? { tabId: tab.id } : {}), workspaceId: this.#workspaceId }; }, importMarkdown: () => this.#bridge?.importMarkdownNote() ?? Promise.resolve(null), exportMarkdown: id => this.#bridge?.exportMarkdownNote(id) ?? Promise.resolve(false) });
   }
 
   async start(): Promise<void> {
@@ -161,6 +167,7 @@ class BrowserShell {
     if (!this.#bridge) { this.#status.textContent = "Prévia da interface — use npm run dev:desktop para navegar."; return; }
     this.#bridge.onTabUpdated(update => this.#applyUpdate(update));
     this.#bridge.onTabClosed(({ tabId }) => { void this.#handleClosed(tabId); });
+    this.#bridge.onFullscreenChanged?.(state => { document.documentElement.dataset.moonHtmlFullscreen = state.active ? "true" : "false"; });
     this.#bridge.onDownloadsUpdated(downloads => { this.#downloads = downloads; this.#renderDrawer(); this.#refreshHomeData(); });
     this.#bridge.onAdblockStatus(status => { this.#adblock = status; this.#renderAdblock(); this.#renderDrawer(); });
     this.#bridge.onPermissionRequested(request => this.#permissionController?.enqueue(request));
@@ -235,9 +242,9 @@ class BrowserShell {
   async #refresh(): Promise<void> { if (!this.#bridge || !this.#activeTabId) return; try { if (this.#tabs.get(this.#activeTabId)?.loading) await this.#bridge.stop(this.#activeTabId); else await this.#bridge.reload(this.#activeTabId); } catch (error) { this.#showError(error); } }
 
   #applyUpdate(update: TabUpdate): void {
-    const previous = this.#tabs.get(update.tab.id); this.#tabs.set(update.tab.id, update.tab); this.#navigation.set(update.tab.id, update.navigation);
+    this.#tabs.set(update.tab.id, update.tab); this.#navigation.set(update.tab.id, update.navigation);
     if (update.tab.active) { this.#activeTabId = update.tab.id; const workspaceId = update.tab.workspaceId ?? this.#workspaceId; if (workspaceId !== this.#workspaceId) { this.#workspaceId = workspaceId; this.#customization.setWorkspace(workspaceId); } }
-    if (previous?.loading && !update.tab.loading && !update.tab.private && this.#isWeb(update.tab.url)) this.#recordHistory(update.tab);
+    if (update.historyEntry && !update.tab.private && !this.#history.some(item => item.id === update.historyEntry!.id)) { this.#history = [update.historyEntry, ...this.#history].sort((left, right) => right.startedAt - left.startedAt || right.id.localeCompare(left.id)).slice(0, 500); save(KEYS.history, this.#history); }
     if (update.error) this.#status.textContent = `Não foi possível abrir a página: ${update.error}`; void this.#hydrateFavicon(update.tab); this.#render(); this.#renderDrawer();
   }
 
@@ -272,8 +279,6 @@ class BrowserShell {
     else { const value = { id: crypto.randomUUID(), title: tab.title || tab.url, url: tab.url, time: Date.now() }; this.#bookmarks = [value, ...this.#bookmarks]; if (await this.#mutateProfileData({ type: "bookmark:save", value })) this.#flash("Adicionado aos favoritos."); }
     this.#render(); this.#renderDrawer();
   }
-  #recordHistory(tab: Tab): void { const latest = this.#history[0]; if (latest?.url === tab.url && Date.now() - latest.time < 30_000) return; const value = { id: crypto.randomUUID(), title: tab.title || tab.url, url: tab.url, time: Date.now() }; this.#history = [value, ...this.#history].slice(0, 500); void this.#mutateProfileData({ type: "history:record", value }); }
-
   #toggleDrawer(name: Drawer): void { if (this.#openDrawer === name) return this.#closeDrawer(); this.#openDrawer = name; this.#drawer.classList.add("is-open"); this.#renderDrawer(); requestAnimationFrame(() => this.#syncBounds()); }
   #closeDrawer(): void { this.#openDrawer = undefined; this.#drawer.classList.remove("is-open"); this.#rail.forEach(item => item.classList.remove("is-active")); this.#render(); requestAnimationFrame(() => this.#syncBounds()); }
   #renderDrawer(): void {
@@ -346,8 +351,21 @@ class BrowserShell {
     if (!this.#bookmarks.length) return this.#empty("star", "Nenhum favorito", "Use a estrela na barra de endereço para salvar um site."); const list = el("div", "moon-panel-list"); this.#bookmarks.forEach(item => list.append(this.#linkRow(item, () => { void this.#removeBookmark(item.id); }))); this.#drawerBody.append(list);
   }
   #historyDrawer(): void {
-    const summary = el("div", "moon-panel-summary"); summary.append(el("span", "", `${this.#history.length} páginas`)); const clear = btn("moon-text-button is-danger", "Limpar histórico", "trash"); clear.append(el("span", "", "Limpar")); clear.disabled = !this.#history.length; clear.addEventListener("click", () => { void this.#clearHistory(); }); summary.append(clear); this.#drawerBody.append(summary);
-    if (!this.#history.length) return this.#empty("history", "Histórico vazio", "As páginas visitadas aparecerão aqui."); const list = el("div", "moon-panel-list"); this.#history.slice(0, 100).forEach(item => list.append(this.#linkRow(item, undefined, new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(item.time)))); this.#drawerBody.append(list);
+    const summary = el("div", "moon-panel-summary"); summary.append(el("span", "", `${this.#history.length} visitas`));
+    const today = btn("moon-text-button", "Excluir histórico de hoje", "trash"); today.append(el("span", "", "Hoje")); today.disabled = !this.#history.length; today.addEventListener("click", () => { const start = new Date(); start.setHours(0, 0, 0, 0); void this.#deleteHistoryRange(start.getTime(), Date.now()); });
+    const clear = btn("moon-text-button is-danger", "Limpar todo o histórico", "trash"); clear.append(el("span", "", "Tudo")); clear.disabled = !this.#history.length; clear.addEventListener("click", () => { void this.#clearHistory(); }); summary.append(today, clear); this.#drawerBody.append(summary);
+    if (!this.#history.length) return this.#empty("history", "Histórico vazio", "As páginas visitadas aparecerão aqui.");
+    const controls = el("div", "moon-history-controls"); const classic = btn(`moon-secondary-button${this.#historyView === "classic" ? " is-active" : ""}`, "Usar visão clássica"); classic.append(el("span", "", "Clássica")); classic.addEventListener("click", () => { this.#historyView = "classic"; this.#renderDrawer(); }); const timeline = btn(`moon-secondary-button${this.#historyView === "timeline" ? " is-active" : ""}`, "Usar visão de linha do tempo"); timeline.append(el("span", "", "Linha do tempo")); timeline.addEventListener("click", () => { this.#historyView = "timeline"; this.#renderDrawer(); }); const search = el("input", "moon-settings-input"); search.type = "search"; search.placeholder = "Buscar no histórico"; search.setAttribute("aria-label", "Buscar no histórico"); controls.append(classic, timeline, search); this.#drawerBody.append(controls);
+    const content = el("div", `moon-history-view is-${this.#historyView}`); this.#renderHistoryEntries(content, this.#history);
+    search.addEventListener("input", () => { const term = search.value.trim().toLocaleLowerCase("pt-BR"); const filtered = term ? this.#history.filter(item => `${item.title} ${item.url}`.toLocaleLowerCase("pt-BR").includes(term)) : this.#history; this.#renderHistoryEntries(content, filtered); });
+    this.#drawerBody.append(content);
+  }
+  #renderHistoryEntries(container: HTMLElement, entries: readonly ProfileHistoryEntry[]): void {
+    container.replaceChildren(); if (!entries.length) { container.append(el("p", "moon-drawer-description", "Nenhuma visita corresponde à busca.")); return; }
+    const date = new Intl.DateTimeFormat("pt-BR", { dateStyle: "full" }); const time = new Intl.DateTimeFormat("pt-BR", { timeStyle: "short" });
+    if (this.#historyView === "classic") { const list = el("div", "moon-panel-list"); entries.slice(0, 200).forEach(item => list.append(this.#linkRow(item, () => { void this.#removeHistory(item.id); }, `${date.format(item.startedAt)} · ${time.format(item.startedAt)}`))); container.append(list); return; }
+    const groups = new Map<string, ProfileHistoryEntry[]>(); for (const item of entries.slice(0, 300)) { const key = new Date(item.startedAt).toDateString(); groups.set(key, [...(groups.get(key) ?? []), item]); }
+    for (const group of groups.values()) { const section = el("section", "moon-timeline-group"); section.append(el("h3", "moon-timeline-date", date.format(group[0]!.startedAt))); const list = el("div", "moon-panel-list"); for (const item of group) { const context = [time.format(item.startedAt), item.workspaceId ? `workspace ${item.workspaceId}` : undefined, item.sessionId ? `sessão ${item.sessionId}` : undefined].filter(Boolean).join(" · "); list.append(this.#linkRow(item, () => { void this.#removeHistory(item.id); }, context)); } section.append(list); container.append(section); }
   }
   #downloadsDrawer(): void {
     const summary = el("div", "moon-panel-summary");
@@ -389,12 +407,7 @@ class BrowserShell {
     this.#drawerBody.append(title, el("p", "moon-drawer-description", "A página será aberta pelo Google Translate no idioma escolhido."), language, translate);
   }
   #notesDrawer(): void {
-    const title = el("div", "moon-tool-hero"); title.append(svg("note"), el("strong", "", "Anotações rápidas"));
-    const textarea = el("textarea", "moon-notes-input"); textarea.value = this.#notes; textarea.placeholder = "Suas anotações ficam salvas localmente neste perfil do Moon."; textarea.rows = 14;
-    const status = el("span", "moon-notes-status", this.#windowPrivate ? "Desativado nesta janela" : "Salvo no perfil");
-    textarea.disabled = this.#windowPrivate; if (this.#windowPrivate) textarea.placeholder = "Notas persistentes ficam desativadas em janelas anônimas.";
-    textarea.addEventListener("input", () => { this.#notes = textarea.value; this.#refreshHomeData(); status.textContent = "Salvando…"; if (this.#notesSaveTimer !== undefined) window.clearTimeout(this.#notesSaveTimer); this.#notesSaveTimer = window.setTimeout(() => { void this.#saveNotes(status); }, 250); });
-    this.#drawerBody.append(title, textarea, status);
+    this.#notesPanel.update(this.#noteDocuments, this.#notes, this.#windowPrivate); this.#notesPanel.render(this.#drawerBody);
   }
   #renderFocusIndicator(): void { const state = this.#focus?.state; this.#zenExit.hidden = !state; const countdown = this.#zenExit.querySelector("span"); if (countdown) countdown.textContent = this.#focusPanel.indicatorText(); this.#focusPanel.updateLive(); }
   #extensionsDrawer(): void {
@@ -461,8 +474,16 @@ class BrowserShell {
       onAddShortcut: shortcut => { this.#shortcuts = [...this.#shortcuts, { ...shortcut, id: crypto.randomUUID() }]; save(KEYS.shortcuts, this.#shortcuts); this.#refreshHomeData(); },
       onRemoveShortcut: id => { this.#shortcuts = this.#shortcuts.filter(shortcut => shortcut.id !== id); save(KEYS.shortcuts, this.#shortcuts); this.#refreshHomeData(); },
       onDiscoverImportSources: () => this.#bridge?.discoverImportSources() ?? Promise.resolve([]),
+      onSelectManualImportSource: () => this.#bridge?.selectManualImportSource() ?? Promise.resolve([]),
       onImportBrowserProfile: async (sourceId, categories) => { if (!this.#bridge) throw new Error("Importação exige o aplicativo desktop."); const result = await this.#bridge.importBrowserProfile({ sourceId, categories }); await this.#reloadProfileData(); return result; },
       onImportBookmarksHtml: async () => { if (!this.#bridge) throw new Error("Importação exige o aplicativo desktop."); const result = await this.#bridge.importBookmarksHtml(); if (result) await this.#reloadProfileData(); return result; },
+      onListWallpapers: () => this.#bridge?.listWallpapers() ?? Promise.resolve([]),
+      onGetWallpaper: id => this.#bridge?.getWallpaper(id) ?? Promise.reject(new Error("Biblioteca de wallpapers exige o aplicativo desktop.")),
+      onImportWallpaper: () => this.#bridge?.importWallpaper() ?? Promise.reject(new Error("Biblioteca de wallpapers exige o aplicativo desktop.")),
+      onReplaceWallpaper: id => this.#bridge?.replaceWallpaper(id) ?? Promise.reject(new Error("Biblioteca de wallpapers exige o aplicativo desktop.")),
+      onUpdateWallpaper: update => this.#bridge?.updateWallpaper(update) ?? Promise.reject(new Error("Biblioteca de wallpapers exige o aplicativo desktop.")),
+      onRemoveWallpaper: id => this.#bridge?.removeWallpaper(id) ?? Promise.reject(new Error("Biblioteca de wallpapers exige o aplicativo desktop.")),
+      onExportWallpaper: id => this.#bridge?.exportWallpaper(id) ?? Promise.reject(new Error("Biblioteca de wallpapers exige o aplicativo desktop.")),
       onOpenPage: section => this.#showSettingsPage(section),
       onNavigateSection: (section, mode) => { if (center.presentation === "page") return this.#navigateSettingsSection(section, mode); },
       onClose: async applied => {
@@ -491,6 +512,7 @@ class BrowserShell {
     const flow = new OnboardingFlow({
       store: this.#customization,
       onDiscoverImportSources: () => this.#bridge!.discoverImportSources(),
+      onSelectManualImportSource: () => this.#bridge!.selectManualImportSource(),
       onImportBrowserProfile: async (sourceId, categories) => { const result = await this.#bridge!.importBrowserProfile({ sourceId, categories }); await this.#reloadProfileData(); return result; },
       onImportBookmarksHtml: async () => { const result = await this.#bridge!.importBookmarksHtml(); if (result) await this.#reloadProfileData(); return result; },
       onClose: async completed => { this.#onboarding = undefined; await this.#bridge!.setContentVisible(true); if (completed) { await this.#showHome(); requestAnimationFrame(() => this.#omnibox.focus()); } requestAnimationFrame(() => this.#syncBounds()); }
@@ -574,6 +596,7 @@ class BrowserShell {
     this.#bookmarks = [...snapshot.bookmarks];
     this.#history = [...snapshot.history];
     this.#notes = snapshot.notes;
+    this.#noteDocuments = [...(snapshot.noteDocuments ?? [])];
     if (snapshot.workspaces.length > 0) this.#workspaces = snapshot.workspaces.map(({ id, name }) => ({ id, name }));
     if (!this.#workspaces.some(workspace => workspace.id === this.#workspaceId)) this.#workspaceId = this.#workspaces[0]?.id ?? "research";
     this.#render(); this.#renderDrawer();
@@ -616,15 +639,22 @@ class BrowserShell {
     await this.#mutateProfileData({ type: "bookmark:delete", id });
     this.#renderDrawer(); this.#render();
   }
+  async #removeHistory(id: string): Promise<void> {
+    this.#history = this.#history.filter(item => item.id !== id);
+    await this.#mutateProfileData({ type: "history:delete", id });
+    this.#renderDrawer(); this.#refreshHomeData();
+  }
+  async #deleteHistoryRange(from: number, to: number): Promise<void> {
+    if (!confirm("Excluir permanentemente o histórico deste intervalo?")) return;
+    this.#history = this.#history.filter(item => item.startedAt < from || item.startedAt > to);
+    await this.#mutateProfileData({ type: "history:delete-range", from, to });
+    this.#renderDrawer(); this.#refreshHomeData();
+  }
   async #clearHistory(): Promise<void> {
+    if (!confirm("Limpar permanentemente todo o histórico deste perfil?")) return;
     this.#history = [];
     await this.#mutateProfileData({ type: "history:clear" });
     this.#renderDrawer(); this.#refreshHomeData();
-  }
-  async #saveNotes(status: HTMLElement): Promise<void> {
-    this.#notesSaveTimer = undefined;
-    const saved = await this.#mutateProfileData({ type: "notes:save", content: this.#notes });
-    status.textContent = saved ? "Salvo no perfil" : "Falha ao salvar";
   }
   async #migrateLegacyProfile(): Promise<void> {
     if (!this.#bridge) return;
@@ -667,7 +697,7 @@ class BrowserShell {
   #rememberFavicon(tab: Tab, data: string): void { this.#favicons.set(tab.id, data); if (!tab.private) { try { this.#siteFavicons.set(new URL(tab.url).origin, data); } catch { /* internal tab */ } } this.#renderTabs(); this.#refreshHomeData(); this.#renderDrawer(); }
   #faviconForUrl(url: string): string | undefined { try { return this.#siteFavicons.get(new URL(url).origin); } catch { return undefined; } }
   #refreshHomeData(): void {
-    this.#homeView.updateData({ shortcuts: this.#shortcuts, bookmarks: this.#bookmarks, tabs: [...this.#tabs.values()], workspaces: this.#workspaces, downloads: this.#downloads, notes: this.#notes, favicons: Object.fromEntries(this.#siteFavicons) });
+    this.#homeView.updateData({ shortcuts: this.#shortcuts, bookmarks: this.#bookmarks, history: this.#history, tabs: [...this.#tabs.values()], workspaces: this.#workspaces, downloads: this.#downloads, notes: this.#notes, favicons: Object.fromEntries(this.#siteFavicons) });
   }
   #placeNewTabButton(position: CustomizationConfig["layout"]["tabs"]["newTabButton"]): void {
     this.#addTab.hidden = position === "hidden"; this.#addTab.classList.toggle("is-end", position === "end-bar");

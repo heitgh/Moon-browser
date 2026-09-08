@@ -71,7 +71,8 @@ async function createMainWindow(privateMode = false, profileId = defaultProfileI
       void profiles?.releaseGuest(profileId).catch(error => console.error("Guest profile cleanup failed", error));
     }
   });
-  if (!privateMode) await application?.restoreWindow(id);
+  if (privateMode) await application?.createTab(id, { active: true, private: true, sessionId: id });
+  else await application?.restoreWindow(id);
   await window.loadFile(join(appRoot, "index.html"));
 }
 

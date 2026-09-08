@@ -17,6 +17,8 @@ import { isMoonSettingsUrl, MoonInternalHistory, normalizeMoonInternalUrl } from
 import type { SessionRequestPipeline } from "../security/session-request-pipeline.js";
 import type { SitePermissionService } from "../security/site-permission-service.js";
 import type { SitePermissionRecord } from "../../../../packages/ipc/site-permission-contract.js";
+import { decideWindowOpen, isSafeWebPopupUrl } from "./window-open-policy.js";
+import type { ProfileHistoryEntry, ProfileHistoryNavigationType } from "../../../../packages/ipc/profile-data-contract.js";
 
 export interface BrowserNavigationState {
   readonly canGoBack: boolean;
@@ -27,6 +29,7 @@ export interface BrowserTabUpdate {
   readonly tab: BrowserTab;
   readonly navigation: BrowserNavigationState;
   readonly error?: string;
+  readonly historyEntry?: ProfileHistoryEntry;
 }
 
 export interface BrowserPermissionRequest {
@@ -46,6 +49,11 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
   readonly #contentVisible = new Map<string, boolean>();
   readonly #searchTemplates = new Map<string, string>();
   readonly #permissionSessions = new WeakSet<Session>();
+  readonly #htmlFullscreenTabs = new Map<string, string>();
+  readonly #fullscreenWindowCleanup = new Map<string, () => void>();
+  readonly #auxiliaryWindows = new Map<number, { readonly tabId: string; readonly window: Electron.BrowserWindow }>();
+  readonly #historyCandidates = new Map<string, { readonly startedAt: number; readonly navigationType: ProfileHistoryNavigationType }>();
+  readonly #nextNavigationTypes = new Map<string, ProfileHistoryNavigationType>();
   readonly #permissionRequests = new Map<string, {
     readonly windowId: string;
     readonly origin: string;
@@ -95,6 +103,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
+        disableHtmlFullscreenWindowResize: true,
         partition: options.private
           ? `private:${profileId}:${sessionId}`
           : guest
@@ -126,6 +135,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     this.#tabWindows.set(id, windowId);
     if (isHome) { this.#homeTabs.add(id); this.#internalHistory.set(id, new MoonInternalHistory(internalUrl!)); }
     this.#attachWebContentsEvents(id, windowId, surface);
+    this.#installFullscreenWindowListener(windowId);
 
     const bounds = this.#bounds.get(windowId);
     if (bounds) surface.setBounds(bounds);
@@ -133,6 +143,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     let initialNavigationError: string | undefined;
     if (!isHome) {
       try {
+        this.#nextNavigationTypes.set(id, "generated");
         await new NavigationController(surface.view.webContents).navigate(requestedUrl);
       } catch (error) {
         initialNavigationError = error instanceof Error ? error.message : String(error);
@@ -149,6 +160,8 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
 
   async closeTab(id: string): Promise<void> {
     const windowId = this.#requireWindowId(id);
+    if (this.#htmlFullscreenTabs.get(windowId) === id) this.#leaveHtmlFullscreen(id, windowId);
+    this.#closeAuxiliaryWindows(id);
     const wasActive = this.#activeTabs.get(windowId) === id;
     const remaining = [...this.#tabs.keys()].filter(
       tabId => tabId !== id && this.#tabWindows.get(tabId) === windowId
@@ -160,6 +173,8 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     this.#tabWindows.delete(id);
     this.#homeTabs.delete(id);
     this.#internalHistory.delete(id);
+    this.#historyCandidates.delete(id);
+    this.#nextNavigationTypes.delete(id);
     if (wasActive) this.#activeTabs.delete(windowId);
 
     const host = this.windows.get(windowId);
@@ -172,6 +187,8 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
 
   async activateTab(id: string): Promise<void> {
     const windowId = this.#requireWindowId(id);
+    const fullscreenTabId = this.#htmlFullscreenTabs.get(windowId);
+    if (fullscreenTabId && fullscreenTabId !== id) await this.#exitHtmlFullscreen(fullscreenTabId, windowId);
     this.#activeTabs.set(windowId, id);
 
     for (const [tabId, surface] of this.#surfaces) {
@@ -194,6 +211,9 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
   }
 
   async showInternalPage(id: string, input: string, push = true): Promise<void> {
+    const windowId = this.#requireWindowId(id);
+    if (this.#htmlFullscreenTabs.get(windowId) === id) await this.#exitHtmlFullscreen(id, windowId);
+    this.#historyCandidates.delete(id); this.#nextNavigationTypes.delete(id);
     const url = normalizeMoonInternalUrl(input); if (!url) throw new TypeError("Rota interna do Moon inválida.");
     this.#homeTabs.add(id); this.#replaceTab(id, { url, title: this.#internalTitle(url), loading: false, faviconUrl: "" }); this.#requireSurface(id).setVisible(false);
     const history = this.#internalHistory.get(id) ?? new MoonInternalHistory();
@@ -203,8 +223,11 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
 
   async navigate(id: string, url: string, _options?: BrowserNavigationOptions): Promise<void> {
     if (normalizeMoonInternalUrl(url)) return this.showInternalPage(id, url);
+    const windowId = this.#requireWindowId(id);
+    if (this.#htmlFullscreenTabs.get(windowId) === id) await this.#exitHtmlFullscreen(id, windowId);
     this.#homeTabs.delete(id);
     this.#internalHistory.delete(id);
+    this.#nextNavigationTypes.set(id, "typed");
     this.#replaceTab(id, { url, title: "Carregando…", loading: true, faviconUrl: "" });
     if (
       this.#requireTab(id).active &&
@@ -218,16 +241,17 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
 
   async goBack(id: string): Promise<void> {
     const internal = this.#internalHistory.get(id); const target = this.#homeTabs.has(id) ? internal?.back() : undefined; if (target) { await this.showInternalPage(id, target, false); return; }
-    new NavigationController(this.#requireSurface(id).view.webContents).back();
+    this.#nextNavigationTypes.set(id, "history"); new NavigationController(this.#requireSurface(id).view.webContents).back();
   }
 
   async goForward(id: string): Promise<void> {
     const internal = this.#internalHistory.get(id); const target = this.#homeTabs.has(id) ? internal?.forward() : undefined; if (target) { await this.showInternalPage(id, target, false); return; }
-    new NavigationController(this.#requireSurface(id).view.webContents).forward();
+    this.#nextNavigationTypes.set(id, "history"); new NavigationController(this.#requireSurface(id).view.webContents).forward();
   }
 
   async reload(id: string, bypassCache?: boolean): Promise<void> {
     if (this.#homeTabs.has(id)) return;
+    this.#nextNavigationTypes.set(id, "reload");
     new NavigationController(this.#requireSurface(id).view.webContents).reload(bypassCache);
   }
 
@@ -248,6 +272,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
   }
 
   setBounds(windowId: string, bounds: Electron.Rectangle): void {
+    if (this.#htmlFullscreenTabs.has(windowId)) return;
     const window = this.windows.require(windowId);
     const content = window.getContentBounds();
     const safeBounds = {
@@ -263,6 +288,10 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
   }
 
   setContentVisible(windowId: string, visible: boolean): void {
+    if (!visible) {
+      const fullscreenTabId = this.#htmlFullscreenTabs.get(windowId);
+      if (fullscreenTabId) void this.#exitHtmlFullscreen(fullscreenTabId, windowId);
+    }
     this.#contentVisible.set(windowId, visible);
     const activeTabId = this.#activeTabs.get(windowId);
     for (const [tabId, surface] of this.#surfaces) {
@@ -308,6 +337,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     const ids = [...this.#tabs.keys()].filter(id => this.#tabWindows.get(id) === windowId);
     const privateSessions = new Set<Session>();
     for (const id of ids) {
+      this.#closeAuxiliaryWindows(id);
       const surface = this.#surfaces.get(id);
       if (surface && this.#tabs.get(id)?.private) privateSessions.add(surface.view.webContents.session);
       surface?.destroy();
@@ -316,11 +346,16 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       this.#tabWindows.delete(id);
       this.#homeTabs.delete(id);
       this.#internalHistory.delete(id);
+      this.#historyCandidates.delete(id);
+      this.#nextNavigationTypes.delete(id);
     }
     this.#activeTabs.delete(windowId);
     this.#bounds.delete(windowId);
     this.#contentVisible.delete(windowId);
     this.#searchTemplates.delete(windowId);
+    this.#htmlFullscreenTabs.delete(windowId);
+    this.#fullscreenWindowCleanup.get(windowId)?.();
+    this.#fullscreenWindowCleanup.delete(windowId);
     for (const [requestId, request] of this.#permissionRequests) {
       if (request.windowId !== windowId) continue;
       clearTimeout(request.timeout);
@@ -356,19 +391,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
   ): void {
     const contents = surface.view.webContents;
 
-    contents.setWindowOpenHandler(({ url }) => {
-      const source = this.#requireTab(id);
-      void this.createTab(windowId, {
-        url,
-        active: true,
-        workspaceId: source.workspaceId,
-        sessionId: source.sessionId,
-        private: source.private
-      }).catch(error => {
-        console.error("Failed to open tab", error);
-      });
-      return { action: "deny" };
-    });
+    this.#installWindowOpenHandler(id, windowId, contents);
     contents.on("context-menu", (_event, params) => {
       const tab = this.#requireTab(id); const window = this.windows.get(windowId); if (!window || contents.isDestroyed()) return;
       openElectronContextMenu({ windowId, window, contents, params, tab: { id, workspaceId: tab.workspaceId, sessionId: tab.sessionId, private: tab.private }, searchUrl: selection => (this.#searchTemplates.get(windowId) ?? "https://duckduckgo.com/?q={query}").replace("{query}", encodeURIComponent(selection)), createTab: (url, source) => this.createTab(windowId, { url, active: true, workspaceId: source.workspaceId, sessionId: source.sessionId, private: source.private }), navigate: (tabId, url) => this.navigate(tabId, url) });
@@ -384,10 +407,12 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     });
     contents.on("did-stop-loading", () => {
       this.#replaceTab(id, { loading: false });
-      this.#syncFromContents(id);
+      this.#syncFromContents(id, this.#completeHistoryEntry(id, windowId));
     });
     contents.on("did-navigate", (_event, url) => {
       if (!this.#homeTabs.has(id)) this.#replaceTab(id, { url });
+      if (!this.#requireTab(id).private && /^https?:\/\//i.test(url)) this.#historyCandidates.set(id, { startedAt: Date.now(), navigationType: this.#nextNavigationTypes.get(id) ?? "link" });
+      this.#nextNavigationTypes.delete(id);
       this.#emitUpdate(id);
     });
     contents.on("did-navigate-in-page", (_event, url) => {
@@ -404,13 +429,97 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     });
     contents.on("did-fail-load", (_event, errorCode, errorDescription, validatedUrl) => {
       if (errorCode === -3) return;
+      this.#historyCandidates.delete(id);
       this.#replaceTab(id, { loading: false, url: validatedUrl || this.#requireTab(id).url });
       this.#emitUpdate(id, errorDescription);
     });
     contents.on("render-process-gone", (_event, details) => {
+      if (this.#htmlFullscreenTabs.get(windowId) === id) this.#leaveHtmlFullscreen(id, windowId);
       this.#replaceTab(id, { loading: false });
       this.#emitUpdate(id, `A página foi encerrada (${details.reason}).`);
     });
+    contents.on("enter-html-full-screen", () => this.#enterHtmlFullscreen(id, windowId));
+    contents.on("leave-html-full-screen", () => this.#leaveHtmlFullscreen(id, windowId));
+  }
+
+  #installWindowOpenHandler(id: string, windowId: string, contents: Electron.WebContents): void {
+    contents.setWindowOpenHandler(details => {
+      const decision = decideWindowOpen(details.url, details.disposition);
+      if (decision.action === "deny") return { action: "deny" };
+      if (decision.action === "tab") {
+        const source = this.#tabs.get(id); if (!source) return { action: "deny" };
+        void this.createTab(windowId, { url: details.url, active: decision.active, workspaceId: source.workspaceId, sessionId: source.sessionId, private: source.private }).catch(() => undefined);
+        return { action: "deny" };
+      }
+      const parent = this.windows.get(windowId); if (!parent) return { action: "deny" };
+      return {
+        action: "allow",
+        outlivesOpener: false,
+        overrideBrowserWindowOptions: {
+          parent, width: 520, height: 720, minWidth: 360, minHeight: 480, show: false, autoHideMenuBar: true,
+          title: "Autenticação — Moon Browser", backgroundColor: "#090a10",
+          webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, session: contents.session }
+        }
+      };
+    });
+    contents.on("did-create-window", popup => {
+      this.#auxiliaryWindows.set(popup.id, { tabId: id, window: popup });
+      popup.setMenuBarVisibility(false);
+      this.downloads?.attach(popup.webContents.session, this.windows.profileId(windowId));
+      this.requestPipeline?.attach(popup.webContents.session);
+      this.#installPermissionHandler(popup.webContents.session);
+      this.#installWindowOpenHandler(id, windowId, popup.webContents);
+      popup.webContents.on("will-navigate", event => { if (!isSafeWebPopupUrl(event.url)) event.preventDefault(); });
+      popup.once("ready-to-show", () => { if (!popup.isDestroyed()) popup.show(); });
+      popup.once("closed", () => { this.#auxiliaryWindows.delete(popup.id); });
+    });
+  }
+
+  #closeAuxiliaryWindows(tabId: string): void {
+    for (const [id, auxiliary] of this.#auxiliaryWindows) {
+      if (auxiliary.tabId !== tabId) continue;
+      this.#auxiliaryWindows.delete(id);
+      if (!auxiliary.window.isDestroyed()) auxiliary.window.close();
+    }
+  }
+
+  #installFullscreenWindowListener(windowId: string): void {
+    if (this.#fullscreenWindowCleanup.has(windowId)) return;
+    const window = this.windows.require(windowId);
+    const resize = (): void => { const tabId = this.#htmlFullscreenTabs.get(windowId); if (tabId) this.#applyFullscreenBounds(tabId, windowId); };
+    window.on("resize", resize);
+    const cleanup = (): void => { window.removeListener("resize", resize); };
+    this.#fullscreenWindowCleanup.set(windowId, cleanup);
+    window.once("closed", () => { cleanup(); this.#fullscreenWindowCleanup.delete(windowId); this.#htmlFullscreenTabs.delete(windowId); });
+  }
+
+  #enterHtmlFullscreen(id: string, windowId: string): void {
+    if (this.#activeTabs.get(windowId) !== id) { void this.#exitHtmlFullscreen(id, windowId); return; }
+    const previous = this.#htmlFullscreenTabs.get(windowId); if (previous && previous !== id) void this.#exitHtmlFullscreen(previous, windowId);
+    this.#htmlFullscreenTabs.set(windowId, id); this.#applyFullscreenBounds(id, windowId); this.#sendFullscreenState(windowId, id, true);
+  }
+
+  #leaveHtmlFullscreen(id: string, windowId: string): void {
+    if (this.#htmlFullscreenTabs.get(windowId) !== id) return;
+    this.#htmlFullscreenTabs.delete(windowId);
+    const surface = this.#surfaces.get(id); const bounds = this.#bounds.get(windowId); if (surface && bounds) surface.setBounds(bounds);
+    this.#sendFullscreenState(windowId, id, false);
+  }
+
+  async #exitHtmlFullscreen(id: string, windowId: string): Promise<void> {
+    this.#leaveHtmlFullscreen(id, windowId);
+    const contents = this.#surfaces.get(id)?.view.webContents; if (!contents || contents.isDestroyed()) return;
+    await contents.executeJavaScript("document.fullscreenElement ? document.exitFullscreen() : undefined", true).catch(() => undefined);
+  }
+
+  #applyFullscreenBounds(id: string, windowId: string): void {
+    const window = this.windows.get(windowId); const surface = this.#surfaces.get(id); if (!window || !surface) return;
+    const [width, height] = window.getContentSize(); surface.setBounds({ x: 0, y: 0, width: Math.max(1, width), height: Math.max(1, height) }); surface.setVisible(true); surface.focus();
+  }
+
+  #sendFullscreenState(windowId: string, tabId: string, active: boolean): void {
+    const host = this.windows.get(windowId); if (!host || host.webContents.isDestroyed()) return;
+    host.webContents.send("browser:fullscreen-changed", { tabId, active });
   }
 
   #installPermissionHandler(session: Session): void {
@@ -453,7 +562,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
   #permissionOrigin(value: string | undefined): string | undefined { try { const url = new URL(value ?? ""); return ["http:", "https:"].includes(url.protocol) ? url.origin : undefined; } catch { return undefined; } }
   #permissionKey(origin: string, permission: string): string { return `${origin}\0${permission}`; }
 
-  #syncFromContents(id: string): void {
+  #syncFromContents(id: string, historyEntry?: ProfileHistoryEntry): void {
     const contents = this.#requireSurface(id).view.webContents;
     if (this.#homeTabs.has(id)) {
       const url = this.#requireTab(id).url; this.#replaceTab(id, { url, title: this.#internalTitle(url), loading: false });
@@ -465,10 +574,16 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       title: contents.getTitle().trim() || this.#requireTab(id).title,
       loading: contents.isLoading()
     });
-    this.#emitUpdate(id);
+    this.#emitUpdate(id, undefined, historyEntry);
   }
 
-  #emitUpdate(id: string, error?: string): void {
+  #completeHistoryEntry(id: string, windowId: string): ProfileHistoryEntry | undefined {
+    const candidate = this.#historyCandidates.get(id); this.#historyCandidates.delete(id); if (!candidate) return undefined;
+    const tab = this.#requireTab(id); const contents = this.#requireSurface(id).view.webContents; const endedAt = Date.now(); const url = contents.getURL() || tab.url; const title = contents.getTitle().trim() || tab.title || url; const faviconUrl = tab.faviconUrl && /^https:\/\//i.test(tab.faviconUrl) ? tab.faviconUrl : undefined;
+    return { schemaVersion: 2, id: randomUUID(), title, url, time: candidate.startedAt, startedAt: candidate.startedAt, endedAt, durationMs: Math.max(0, endedAt - candidate.startedAt), ...(faviconUrl ? { faviconUrl } : {}), profileId: this.windows.profileId(windowId), ...(tab.workspaceId ? { workspaceId: tab.workspaceId } : {}), ...(tab.sessionId ? { sessionId: tab.sessionId } : {}), tabId: id, source: "navigation", navigationType: candidate.navigationType };
+  }
+
+  #emitUpdate(id: string, error?: string, historyEntry?: ProfileHistoryEntry): void {
     const tab = this.#tabs.get(id);
     const windowId = this.#tabWindows.get(id);
     const surface = this.#surfaces.get(id);
@@ -482,7 +597,8 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
         canGoBack: isInternal ? Boolean(internal?.canGoBack) : navigation.canGoBack(),
         canGoForward: isInternal ? Boolean(internal?.canGoForward) : navigation.canGoForward()
       },
-      ...(error ? { error } : {})
+      ...(error ? { error } : {}),
+      ...(historyEntry ? { historyEntry } : {})
     };
     host.webContents.send("browser:tab-updated", update);
     for (const listener of this.#tabUpdateListeners) {

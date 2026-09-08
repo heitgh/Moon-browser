@@ -33,55 +33,80 @@ interface ImportSource {
   readonly kind: "chromium" | "firefox";
 }
 
+export interface BrowserProfileImportOptions {
+  readonly platform?: NodeJS.Platform;
+  readonly configDirectory?: string;
+  readonly appDataDirectory?: string;
+  readonly localAppDataDirectory?: string;
+  readonly pickDirectory?: () => Promise<string | null>;
+}
+
 const MAX_IMPORT_ITEMS = 50_000;
 const CHROMIUM_EPOCH_OFFSET_MS = 11_644_473_600_000;
 
 export class BrowserProfileImportService {
   readonly #sources = new Map<string, ImportSource>();
+  readonly #platform: NodeJS.Platform;
+  readonly #configDirectory: string;
+  readonly #appDataDirectory: string;
+  readonly #localAppDataDirectory: string;
+  readonly #pickDirectory: () => Promise<string | null>;
 
   constructor(
     readonly homeDirectory: string,
     readonly persistence: ProfileImportPersistence,
-  ) {}
+    options: BrowserProfileImportOptions = {},
+  ) {
+    this.#platform = options.platform ?? process.platform;
+    this.#configDirectory = options.configDirectory ?? process.env.XDG_CONFIG_HOME ?? join(homeDirectory, ".config");
+    this.#appDataDirectory = options.appDataDirectory ?? process.env.APPDATA ?? join(homeDirectory, "AppData/Roaming");
+    this.#localAppDataDirectory = options.localAppDataDirectory ?? process.env.LOCALAPPDATA ?? join(homeDirectory, "AppData/Local");
+    this.#pickDirectory = options.pickDirectory ?? (async () => {
+      const picked = await dialog.showOpenDialog({ title: "Selecionar perfil do navegador", properties: ["openDirectory"] });
+      return picked.canceled ? null : picked.filePaths[0] ?? null;
+    });
+  }
 
   async discover(): Promise<readonly ImportSourceSummary[]> {
     this.#sources.clear();
-    const chromiumRoots: readonly [ImportBrowser, string, string][] = [
-      [
-        "chrome",
-        join(this.homeDirectory, ".config/google-chrome"),
-        "Google Chrome",
-      ],
-      ["chromium", join(this.homeDirectory, ".config/chromium"), "Chromium"],
-      [
-        "brave",
-        join(this.homeDirectory, ".config/BraveSoftware/Brave-Browser"),
-        "Brave",
-      ],
-      ["vivaldi", join(this.homeDirectory, ".config/vivaldi"), "Vivaldi"],
-      [
-        "edge",
-        join(this.homeDirectory, ".config/microsoft-edge"),
-        "Microsoft Edge",
-      ],
-    ];
-    for (const [browser, root, label] of chromiumRoots) {
+    for (const [browser, root, label] of this.#chromiumRoots()) {
       for (const directory of await profileDirectories(
         root,
         /^(Default|Profile \d+)$/,
       ))
         await this.#addSource(browser, label, directory, "chromium");
     }
-    for (const directory of await profileDirectories(
-      join(this.homeDirectory, ".mozilla/firefox"),
-      /^[^.].*/,
-    )) {
-      if (await exists(join(directory, "places.sqlite")))
-        await this.#addSource("firefox", "Firefox", directory, "firefox");
+    for (const root of this.#firefoxRoots()) {
+      for (const directory of await profileDirectories(root, /^[^.].*/)) {
+        if (await exists(join(directory, "places.sqlite")))
+          await this.#addSource("firefox", "Firefox", directory, "firefox");
+      }
     }
-    return [...this.#sources.values()]
-      .map((source) => source.summary)
-      .sort((left, right) => right.modifiedAt - left.modifiedAt);
+    return this.#summaries();
+  }
+
+  async selectManualSource(): Promise<readonly ImportSourceSummary[]> {
+    const directory = await this.#pickDirectory();
+    if (!directory) return [];
+    const browser = inferBrowser(directory);
+    if (await exists(join(directory, "places.sqlite"))) {
+      await this.#addSource("firefox", "Firefox selecionado", directory, "firefox");
+    } else if (await exists(join(directory, "Bookmarks")) || await exists(join(directory, "History"))) {
+      await this.#addSource(browser, "Perfil selecionado", directory, "chromium");
+    } else {
+      for (const root of [directory, join(directory, "User Data")]) {
+        for (const profile of await profileDirectories(root, /^(Default|Profile \d+)$/))
+          await this.#addSource(inferBrowser(root), "Perfil selecionado", profile, "chromium");
+      }
+      for (const root of [directory, join(directory, "Profiles")]) {
+        for (const profile of await profileDirectories(root, /^[^.].*/))
+          if (await exists(join(profile, "places.sqlite")))
+            await this.#addSource("firefox", "Firefox selecionado", profile, "firefox");
+      }
+    }
+    const selected = this.#summaries().filter((source) => source.detectedPath === directory || source.detectedPath.startsWith(`${directory}/`) || source.detectedPath.startsWith(`${directory}\\`));
+    if (!selected.length) throw new Error("A pasta selecionada não contém um perfil compatível com favoritos ou histórico.");
+    return selected;
   }
 
   async import(selection: ImportSelection): Promise<ImportResult> {
@@ -160,6 +185,7 @@ export class BrowserProfileImportService {
         id,
         browser,
         name: `${label} — ${profileName}`,
+        detectedPath: directory,
         modifiedAt,
         categories: {
           bookmarks: data.bookmarks.length,
@@ -170,6 +196,43 @@ export class BrowserProfileImportService {
     } catch {
       /* unreadable or locked profiles are omitted without touching the source */
     }
+  }
+
+  #summaries(): readonly ImportSourceSummary[] {
+    return [...this.#sources.values()].map((source) => source.summary).sort((left, right) => right.modifiedAt - left.modifiedAt);
+  }
+
+  #chromiumRoots(): readonly [ImportBrowser, string, string][] {
+    if (this.#platform === "win32") return [
+      ["chrome", join(this.#localAppDataDirectory, "Google/Chrome/User Data"), "Google Chrome"],
+      ["chromium", join(this.#localAppDataDirectory, "Chromium/User Data"), "Chromium"],
+      ["brave", join(this.#localAppDataDirectory, "BraveSoftware/Brave-Browser/User Data"), "Brave"],
+      ["vivaldi", join(this.#localAppDataDirectory, "Vivaldi/User Data"), "Vivaldi"],
+      ["edge", join(this.#localAppDataDirectory, "Microsoft/Edge/User Data"), "Microsoft Edge"],
+    ];
+    return [
+      ["chrome", join(this.#configDirectory, "google-chrome"), "Google Chrome"],
+      ["chrome", join(this.homeDirectory, ".var/app/com.google.Chrome/config/google-chrome"), "Google Chrome (Flatpak)"],
+      ["chromium", join(this.#configDirectory, "chromium"), "Chromium"],
+      ["chromium", join(this.homeDirectory, "snap/chromium/common/chromium"), "Chromium (Snap)"],
+      ["chromium", join(this.homeDirectory, ".var/app/org.chromium.Chromium/config/chromium"), "Chromium (Flatpak)"],
+      ["brave", join(this.#configDirectory, "BraveSoftware/Brave-Browser"), "Brave"],
+      ["brave", join(this.homeDirectory, ".var/app/com.brave.Browser/config/BraveSoftware/Brave-Browser"), "Brave (Flatpak)"],
+      ["vivaldi", join(this.#configDirectory, "vivaldi"), "Vivaldi"],
+      ["edge", join(this.#configDirectory, "microsoft-edge"), "Microsoft Edge"],
+    ];
+  }
+
+  #firefoxRoots(): readonly string[] {
+    if (this.#platform === "win32") return [
+      join(this.#appDataDirectory, "Mozilla/Firefox/Profiles"),
+      join(this.#localAppDataDirectory, "Packages/Mozilla.Firefox_n80bbvh6b1yt2/LocalCache/Roaming/Mozilla/Firefox/Profiles"),
+    ];
+    return [
+      join(this.homeDirectory, ".mozilla/firefox"),
+      join(this.homeDirectory, "snap/firefox/common/.mozilla/firefox"),
+      join(this.homeDirectory, ".var/app/org.mozilla.firefox/.mozilla/firefox"),
+    ];
   }
 
   async #readSource(
@@ -271,6 +334,15 @@ async function profileDirectories(
   } catch {
     return [];
   }
+}
+
+function inferBrowser(directory: string): ImportBrowser {
+  const normalized = directory.toLocaleLowerCase("en-US");
+  if (normalized.includes("brave")) return "brave";
+  if (normalized.includes("vivaldi")) return "vivaldi";
+  if (normalized.includes("microsoft") || normalized.includes("edge")) return "edge";
+  if (normalized.includes("google") || normalized.includes("chrome")) return "chrome";
+  return "chromium";
 }
 
 async function readChromiumBookmarks(

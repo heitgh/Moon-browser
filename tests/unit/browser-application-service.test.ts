@@ -89,4 +89,15 @@ describe("BrowserApplicationService", () => {
     expect(application.tabs.list("window-a")).toEqual([]); expect(application.tabs.list("window-b").map(tab => tab.id)).toEqual(["b-tab"]); expect(saves.get("window-a")?.[0]?.map(tab => tab.id)).toEqual(["a-tab"]);
     await application.shutdown();
   });
+
+  it("persists a committed history visit in the profile that owns the window", async () => {
+    const browser = new FakeBrowser(); const recorded: unknown[] = [];
+    const profile = { loadBrowserSession: async () => [], saveBrowserSession: async () => undefined, recordHistoryEntry: async (entry: unknown) => { recorded.push(entry); }, close: async () => undefined };
+    const application = new BrowserApplicationService(browser as never, profile as never);
+    const tab = await application.createTab("window-1", { url: "https://moon.test/" });
+    const historyEntry = { schemaVersion: 2 as const, id: "visit-1", title: "Moon", url: "https://moon.test/", time: 10, startedAt: 10, endedAt: 20, durationMs: 10, profileId: "default", tabId: tab.id, source: "navigation" as const, navigationType: "typed" as const };
+    await browser.listener?.("window-1", { tab: { ...tab, loading: false }, navigation: { canGoBack: false, canGoForward: false }, historyEntry } as never);
+    expect(recorded).toEqual([historyEntry]);
+    await application.shutdown();
+  });
 });

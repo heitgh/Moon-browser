@@ -4,6 +4,8 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { existsSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 
 const runtimeDirectory = process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid?.() ?? 1000}`;
 const detectedWayland = process.env.WAYLAND_DISPLAY ?? (existsSync(join(runtimeDirectory, "wayland-1")) ? "wayland-1" : undefined);
@@ -39,6 +41,84 @@ async function setViewport(application: ElectronApplication, page: Page, width: 
   }, { width, height });
   await page.setViewportSize({ width, height });
 }
+
+async function startBrowserLifecycleFixture(): Promise<{ readonly origin: string; close(): Promise<void> }> {
+  const server = createServer((request, response) => {
+    response.setHeader("content-type", "text/html; charset=utf-8");
+    if (request.url === "/oauth") {
+      response.end('<!doctype html><button id="complete" onclick="window.opener.postMessage(\'oauth-complete\', \'*\');window.close()">Concluir</button>');
+      return;
+    }
+    response.end(`<!doctype html>
+      <button id="popup" onclick="window.popupRef=window.open('/oauth','moon-oauth','popup,width=480,height=640')">Login</button>
+      <button id="fullscreen" onclick="document.documentElement.requestFullscreen()">Fullscreen</button>
+      <script>window.addEventListener('message', event => { window.oauthResult = event.data; });</script>`);
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address() as AddressInfo;
+  return {
+    origin: `http://127.0.0.1:${address.port}`,
+    close: () => new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+  };
+}
+
+test("preserves OAuth popup semantics and restores the shell after HTML fullscreen", async () => {
+  const fixture = await startBrowserLifecycleFixture();
+  const userData = await mkdtemp(join(tmpdir(), "moon-e2e-browser-lifecycle-"));
+  const application = await electron.launch({
+    args: [...platformArguments, `--user-data-dir=${userData}`, "."],
+    cwd: process.cwd(),
+    env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData }
+  });
+  try {
+    const shell = await shellWindow(application);
+    await dismissOnboarding(shell);
+    const omnibox = shell.getByPlaceholder("Pesquise ou digite um endereço");
+    await omnibox.fill(fixture.origin);
+    await shell.getByLabel("Abrir endereço").click();
+    await expect.poll(() => shell.evaluate(origin => (window as unknown as { moonBrowser: { getTabs(): Promise<Array<{ url: string }>> } }).moonBrowser.getTabs().then(tabs => tabs.some(tab => tab.url === `${origin}/`)), fixture.origin)).toBe(true);
+
+    const popupPromise = application.waitForEvent("window");
+    await application.evaluate(async ({ webContents }, origin) => {
+      const contents = webContents.getAllWebContents().find(candidate => candidate.getURL() === `${origin}/`);
+      if (!contents) return false;
+      await contents.executeJavaScript("document.querySelector('#popup').click()", true);
+      return true;
+    }, fixture.origin);
+    const popup = await popupPromise;
+    await popup.waitForURL(`${fixture.origin}/oauth`);
+    await popup.locator("#complete").click();
+    await expect.poll(() => application.windows().some(page => page.url() === `${fixture.origin}/oauth`)).toBe(false);
+    await expect.poll(() => application.evaluate(async ({ webContents }, origin) => {
+      const contents = webContents.getAllWebContents().find(candidate => candidate.getURL() === `${origin}/`);
+      return contents ? await contents.executeJavaScript("window.oauthResult") : undefined;
+    }, fixture.origin)).toBe("oauth-complete");
+
+    const fullscreenResult = await application.evaluate(({ webContents }, origin) => {
+      const contents = webContents.getAllWebContents().find(candidate => candidate.getURL() === `${origin}/`);
+      if (!contents) return false;
+      contents.emit("enter-html-full-screen");
+      return true;
+    }, fixture.origin);
+    expect(fullscreenResult).toBe(true);
+    await expect.poll(() => shell.evaluate(() => document.documentElement.dataset.moonHtmlFullscreen)).toBe("true");
+    await application.evaluate(({ webContents }, origin) => {
+      const contents = webContents.getAllWebContents().find(candidate => candidate.getURL() === `${origin}/`);
+      if (!contents) return false;
+      contents.emit("leave-html-full-screen");
+      return true;
+    }, fixture.origin);
+    await expect.poll(() => shell.evaluate(() => document.documentElement.dataset.moonHtmlFullscreen)).toBe("false");
+    await expect(shell.getByLabel("Página inicial", { exact: true })).toBeVisible();
+  } finally {
+    await application.close();
+    await fixture.close();
+    await rm(userData, { recursive: true, force: true });
+  }
+});
 
 test("starts the packaged desktop shell and opens every primary panel", async () => {
   const userData = await mkdtemp(join(tmpdir(), "moon-e2e-smoke-"));

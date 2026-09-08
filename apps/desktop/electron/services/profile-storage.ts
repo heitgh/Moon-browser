@@ -1,6 +1,7 @@
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { BrowserTab } from "@moon/platform";
+import type { NoteModel } from "@moon/core";
 import { BetterSqliteConnection } from "../../../../packages/storage/adapters/better-sqlite-connection.js";
 import { parseMoonProfileBackup } from "../../../../packages/storage/backup/profile-backup.js";
 import { MoonDatabase } from "../../../../packages/storage/database/database.js";
@@ -11,10 +12,10 @@ import { HistoryRepository } from "../../../../packages/storage/repositories/his
 import { NoteRepository } from "../../../../packages/storage/repositories/note-repository.js";
 import { SettingsRepository } from "../../../../packages/storage/repositories/settings-repository.js";
 import { ThemeRepository, type ThemeRecord } from "../../../../packages/storage/repositories/theme-repository.js";
-import { WallpaperRepository } from "../../../../packages/storage/repositories/wallpaper-repository.js";
+import { WallpaperRepository, type WallpaperRecord } from "../../../../packages/storage/repositories/wallpaper-repository.js";
 import { WorkspaceRepository } from "../../../../packages/storage/repositories/workspace-repository.js";
 import { normalizeMoonInternalUrl } from "../../../../packages/navigation/internal-routes.js";
-import type { ProfileDataMutation, ProfileDataSnapshot } from "../../../../packages/ipc/profile-data-contract.js";
+import type { ProfileDataMutation, ProfileDataSnapshot, ProfileHistoryEntry, ProfileNoteDocument } from "../../../../packages/ipc/profile-data-contract.js";
 import { parseSitePermissionRecords, type SitePermissionRecord } from "../../../../packages/ipc/site-permission-contract.js";
 import type { ImportedProfileData, ImportResult } from "../../../../packages/ipc/browser-import-contract.js";
 import { createDefaultCustomization, validateCustomization, type CustomizationSchemaV4 } from "../../../../ui/customization/customization-schema.js";
@@ -191,8 +192,9 @@ export class ProfileStorage {
     const scratchpad = notes.find(note => note.id === "moon-scratchpad") ?? notes.find(note => note.id === "legacy-notes") ?? notes[0];
     return {
       bookmarks: bookmarks.map(item => ({ id: item.id, title: item.title, url: item.url, time: item.createdAt })),
-      history: history.map(item => ({ id: item.id, title: item.title, url: item.url, time: item.lastVisitedAt })),
+      history: history.map(item => ({ schemaVersion: 2, id: item.id, title: item.title, url: item.url, time: item.firstVisitedAt, startedAt: item.firstVisitedAt, ...(item.endedAt === undefined ? {} : { endedAt: item.endedAt }), ...(item.durationMs === undefined ? {} : { durationMs: item.durationMs }), ...(item.faviconUrl ? { faviconUrl: item.faviconUrl } : {}), ...(item.profileId ? { profileId: item.profileId } : {}), ...(item.workspaceId ? { workspaceId: item.workspaceId } : {}), ...(item.sessionId ? { sessionId: item.sessionId } : {}), ...(item.tabId ? { tabId: item.tabId } : {}), source: item.source ?? "legacy", navigationType: item.navigationType ?? "other" })),
       notes: scratchpad?.content ?? "",
+      noteDocuments: notes.map(profileNote),
       workspaces: workspaces.map(item => ({ id: item.id, name: item.name, position: item.position }))
     };
   }
@@ -207,13 +209,49 @@ export class ProfileStorage {
       }
       case "bookmark:delete": await this.#bookmarks.delete(mutation.id); return;
       case "history:record":
-        await this.#history.save({ id: mutation.value.id, title: mutation.value.title, url: mutation.value.url, transition: "link", visitCount: 1, typedCount: 0, firstVisitedAt: mutation.value.time, lastVisitedAt: mutation.value.time });
-        return;
+        await this.recordHistoryEntry(mutation.value); return;
+      case "history:delete": await this.#history.delete(mutation.id); return;
+      case "history:delete-range": await this.#history.deleteRange(mutation.from, mutation.to); return;
       case "history:clear": await this.#history.clear(); return;
       case "notes:save": {
         const existing = await this.#notes.get("moon-scratchpad");
         await this.#notes.save({ id: "moon-scratchpad", title: "Bloco de notas", content: mutation.content, format: "plain-text", pinned: false, archived: false, tags: [], createdAt: existing?.createdAt ?? now, updatedAt: now });
         return;
+      }
+      case "note:save": {
+        const existing = await this.#notes.get(mutation.value.id);
+        const revision = existing?.revision ?? 0;
+        if (revision !== mutation.expectedRevision) throw new Error("Esta nota foi alterada em outra janela. Reabra a nota antes de salvar novamente.");
+        if (mutation.value.parentId) {
+          if (mutation.value.parentId === mutation.value.id) throw new Error("Uma pasta não pode ser pai de si mesma.");
+          const parent = await this.#notes.get(mutation.value.parentId);
+          if (!parent || (parent.kind ?? "note") !== "folder" || parent.deletedAt) throw new Error("A pasta selecionada não está disponível.");
+        }
+        const all = await this.#notes.all();
+        if (mutation.value.parentId) { let parentId: string | undefined = mutation.value.parentId; const seen = new Set<string>(); while (parentId) { if (parentId === mutation.value.id || seen.has(parentId)) throw new Error("A hierarquia de pastas criaria um ciclo."); seen.add(parentId); parentId = all.find(note => note.id === parentId)?.parentId; } }
+        if (!existing && all.length >= 10_000) throw new Error("O perfil atingiu o limite de 10.000 notas e pastas.");
+        const previousVersions = existing?.versions ?? [];
+        const versions = existing && (existing.content !== mutation.value.content || existing.title !== mutation.value.title) ? [...previousVersions, { revision, title: existing.title, content: existing.content, updatedAt: existing.updatedAt }].slice(-20) : previousVersions;
+        const note: NoteModel = { ...mutation.value, archived: false, createdAt: existing?.createdAt ?? now, updatedAt: now, revision: revision + 1, versions };
+        await this.#database.transaction(async () => {
+          const latest = await this.#notes.get(note.id); if ((latest?.revision ?? 0) !== mutation.expectedRevision) throw new Error("Esta nota foi alterada em outra janela. Reabra a nota antes de salvar novamente.");
+          await this.#notes.save(note);
+          if (existing && existing.title !== note.title && existing.title.trim()) {
+            const escaped = existing.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); const link = new RegExp(`\\[\\[${escaped}\\]\\]`, "g");
+            for (const candidate of all) { link.lastIndex = 0; if (candidate.id !== note.id && !candidate.deletedAt && link.test(candidate.content)) { link.lastIndex = 0; await this.#notes.save({ ...candidate, content: candidate.content.replace(link, `[[${note.title}]]`), updatedAt: now, revision: (candidate.revision ?? 0) + 1, versions: [...(candidate.versions ?? []), { revision: candidate.revision ?? 0, title: candidate.title, content: candidate.content, updatedAt: candidate.updatedAt }].slice(-20) }); } }
+          }
+        });
+        return;
+      }
+      case "note:delete": {
+        const all = await this.#notes.all(); const ids = noteTreeIds(all, mutation.id); if (!ids.size) return;
+        await this.#database.transaction(async () => { for (const id of ids) { const note = all.find(item => item.id === id); if (note) await this.#notes.save({ ...note, archived: true, deletedAt: now, updatedAt: now, revision: (note.revision ?? 0) + 1 }); } }); return;
+      }
+      case "note:restore": {
+        const note = await this.#notes.get(mutation.id); if (!note) return; const restored = { ...note }; delete (restored as { deletedAt?: number }).deletedAt; if (restored.parentId && (await this.#notes.get(restored.parentId))?.deletedAt) delete (restored as { parentId?: string }).parentId; await this.#notes.save({ ...restored, archived: false, updatedAt: now, revision: (note.revision ?? 0) + 1 }); return;
+      }
+      case "note:purge": {
+        const all = await this.#notes.all(); const ids = noteTreeIds(all, mutation.id); await this.#database.transaction(async () => { for (const id of ids) await this.#notes.delete(id); }); return;
       }
       case "workspace:save": {
         const existing = await this.#workspaces.get(mutation.value.id);
@@ -223,6 +261,12 @@ export class ProfileStorage {
       }
       case "workspace:delete": await this.#workspaces.delete(mutation.id); return;
     }
+  }
+
+  async recordHistoryEntry(entry: ProfileHistoryEntry): Promise<void> {
+    const latest = (await this.#history.recent(1))[0];
+    if (latest?.url === entry.url && latest.tabId === entry.tabId && Math.abs(latest.firstVisitedAt - entry.startedAt) < 750) return;
+    await this.#history.save({ id: entry.id, title: entry.title, url: entry.url, ...(entry.faviconUrl ? { faviconUrl: entry.faviconUrl } : {}), transition: entry.navigationType === "reload" ? "reload" : entry.navigationType === "typed" ? "typed" : entry.navigationType === "form-submit" ? "form-submit" : "link", visitCount: 1, typedCount: entry.navigationType === "typed" ? 1 : 0, firstVisitedAt: entry.startedAt, lastVisitedAt: entry.endedAt ?? entry.startedAt, ...(entry.endedAt === undefined ? {} : { endedAt: entry.endedAt }), ...(entry.durationMs === undefined ? {} : { durationMs: entry.durationMs }), ...(entry.profileId ? { profileId: entry.profileId } : {}), ...(entry.workspaceId ? { workspaceId: entry.workspaceId } : {}), ...(entry.sessionId ? { sessionId: entry.sessionId } : {}), ...(entry.tabId ? { tabId: entry.tabId } : {}), source: entry.source, navigationType: entry.navigationType });
   }
 
   async importExternalProfile(sourceId: string, data: ImportedProfileData): Promise<ImportResult> {
@@ -250,6 +294,11 @@ export class ProfileStorage {
   getTheme(id: string): Promise<ThemeRecord | undefined> { return this.#themes.get(id); }
   saveTheme(theme: ThemeRecord): Promise<void> { return this.#themes.save(theme); }
   removeTheme(id: string): Promise<boolean> { return this.#themes.removeCustom(id); }
+  listWallpapers(): Promise<readonly WallpaperRecord[]> { return this.#wallpapers.list("image"); }
+  getWallpaper(id: string): Promise<WallpaperRecord | undefined> { return this.#wallpapers.get(id); }
+  saveWallpaper(wallpaper: WallpaperRecord): Promise<void> { return this.#wallpapers.save(wallpaper); }
+  removeWallpaper(id: string): Promise<boolean> { return this.#wallpapers.delete(id); }
+  getNote(id: string): Promise<NoteModel | undefined> { return this.#notes.get(id); }
 
   async #metadataNumber(key: string): Promise<number> {
     const row = await this.#database.get<{ value: string }>("SELECT value FROM moon_metadata WHERE key = ?", [key]);
@@ -260,4 +309,38 @@ export class ProfileStorage {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function profileNote(note: NoteModel): ProfileNoteDocument {
+  return {
+    id: note.id,
+    kind: note.kind ?? "note",
+    ...(note.parentId ? { parentId: note.parentId } : {}),
+    title: note.title,
+    content: note.content,
+    format: note.format,
+    pinned: note.pinned,
+    favorite: note.favorite ?? note.pinned,
+    archived: note.archived,
+    ...(note.deletedAt === undefined ? {} : { deletedAt: note.deletedAt }),
+    tags: note.tags,
+    ...(note.sourceUrl ? { sourceUrl: note.sourceUrl } : {}),
+    ...(note.tabId ? { tabId: note.tabId } : {}),
+    ...(note.workspaceId ? { workspaceId: note.workspaceId } : {}),
+    ...(note.sessionId ? { sessionId: note.sessionId } : {}),
+    createdAt: note.createdAt,
+    updatedAt: note.updatedAt,
+    revision: note.revision ?? 0,
+    versions: (note.versions ?? []).slice(-20).map(version => ({ revision: version.revision, title: version.title, content: version.content, updatedAt: version.updatedAt })),
+  };
+}
+
+function noteTreeIds(notes: readonly NoteModel[], rootId: string): Set<string> {
+  const ids = new Set<string>();
+  const visit = (id: string): void => {
+    if (ids.has(id) || !notes.some(note => note.id === id)) return;
+    ids.add(id);
+    notes.filter(note => note.parentId === id).forEach(note => visit(note.id));
+  };
+  visit(rootId); return ids;
 }
