@@ -104,3 +104,13 @@
 .moon-history-view, .moon-timeline-group { display: grid; gap: 14px; }.moon-timeline-group { gap: 8px; }
 .moon-timeline-date { color: var(--moon-text-muted); font-size: .78rem; margin: 0; text-transform: capitalize; }
 @media (max-width: 900px) { .moon-history-controls { grid-template-columns: 1fr 1fr; }.moon-history-controls input { grid-column: 1 / -1; } }
+
+.moon-research { display: grid; gap: 12px; min-width: 0; }
+.moon-research-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.moon-research-sources { display: grid; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--moon-border); border-radius: 12px; }
+.moon-research-sources label, .moon-research-consent { display: flex; gap: 8px; align-items: flex-start; overflow-wrap: anywhere; line-height: 1.5; }
+.moon-research-output { box-sizing: border-box; width: 100%; min-width: 0; resize: vertical; padding: 12px; color: var(--moon-text); background: var(--moon-surface); border: 1px solid var(--moon-border); border-radius: 10px; font: inherit; line-height: 1.6; }
+.moon-research-status { min-height: 24px; overflow-wrap: anywhere; }
+.moon-research-memory-item { border-top: 1px solid var(--moon-border); padding: 12px 0; }
+.moon-research-memory-item summary { cursor: pointer; padding: 8px 0; }
+.moon-research-memory-item[open] { display: grid; gap: 10px; }

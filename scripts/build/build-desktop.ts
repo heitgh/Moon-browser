@@ -11,6 +11,8 @@ function run(command: string, args: readonly string[]): Promise<void> {
   });
 }
 
+const requested = process.argv.slice(2);
+if (requested.length && (requested[0] !== "--linux" || requested.length < 2 || !requested.slice(1).every(target => ["AppImage", "deb", "rpm", "pacman"].includes(target)))) throw new Error("Alvos aceitos: --linux AppImage deb rpm pacman");
 await rm("dist/types", { recursive: true, force: true });
 await run(process.execPath, ["node_modules/typescript/bin/tsc", "--project", "tsconfig.build.json"]);
-await run(process.execPath, ["node_modules/electron-builder/out/cli/cli.js", "--config", "electron-builder.yml", "--publish", "never"]);
+await run(process.execPath, ["node_modules/electron-builder/out/cli/cli.js", "--config", "electron-builder.yml", "--publish", "never", ...requested]);

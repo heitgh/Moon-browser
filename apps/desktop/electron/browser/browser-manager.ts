@@ -1,3 +1,5 @@
+import { EXTRACT_PAGE_SCRIPT } from "../../../../packages/research/extract-page.js";
+import { researchUrl, parseSources, type ResearchSource } from "../../../../packages/research/research.js";
 import { randomUUID } from "node:crypto";
 import type {
   BrowserNavigationOptions,
@@ -73,6 +75,21 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     readonly requestPipeline?: SessionRequestPipeline,
     readonly permissionsForWindow?: (windowId: string) => SitePermissionService | undefined
   ) {}
+
+  async readResearchSource(tabId: string, windowId: string): Promise<ResearchSource> {
+    const tab = this.#tabs.get(tabId);
+    if (!tab || this.#tabWindows.get(tabId) !== windowId || tab.private || this.windows.isPrivate(windowId)) throw new Error("Aba indisponível para pesquisa.");
+    const contents = this.#surfaces.get(tabId)?.view.webContents;
+    if (!contents || contents.isDestroyed()) throw new Error("Abra uma página antes de pesquisar.");
+    const url = researchUrl(contents.getURL());
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const read = contents.executeJavaScriptInIsolatedWorld(1001, [{ code: EXTRACT_PAGE_SCRIPT }]);
+    try {
+      const data: unknown = await Promise.race([read, new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error("A leitura excedeu 5 segundos. Tente novamente.")), 5000); })]);
+      if (contents.isDestroyed() || contents.getURL() !== url) throw new Error("A página mudou durante a leitura. Selecione novamente.");
+      return parseSources([{ ...(data as object), tabId, url, title: contents.getTitle() }])[0]!;
+    } finally { if (timeout) clearTimeout(timeout); }
+  }
 
   onTabUpdated(listener: (windowId: string, update: BrowserTabUpdate) => void | Promise<void>): () => void {
     this.#tabUpdateListeners.add(listener);

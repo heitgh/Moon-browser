@@ -13,6 +13,12 @@ contextBridge.exposeInMainWorld("moonBrowser", Object.freeze({
     ...(url ? { url } : {}),
     ...(workspaceId ? { workspaceId } : {})
   }),
+  captureResearch: (workspaceId, tabIds, consent) => invoke("research:capture", { workspaceId, tabIds, consent }),
+  loadResearchMemory: workspaceId => invoke("research:load-memory", { workspaceId }),
+  saveResearchMemory: (workspaceId, value) => invoke("research:save-memory", { workspaceId, value }),
+  researchSessionUrls: workspaceId => invoke("research:session-urls", { workspaceId }),
+  restoreResearchSession: (workspaceId, id, urls) => invoke("research:restore-session", { workspaceId, id, urls }),
+  exportResearch: content => invoke("research:export", { content }),
   getWindowContext: () => invoke("browser:get-window-context"),
   createPrivateWindow: () => invoke("browser:create-private-window"),
   getTabs: () => invoke("browser:get-tabs"),

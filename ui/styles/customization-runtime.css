@@ -296,3 +296,18 @@ body { background: var(--moon-bg); color: var(--moon-text); font-family: var(--m
   .moon-customization-content { padding: var(--moon-space-5) var(--moon-space-4); }
   .moon-settings-overlay { padding: 0; }
 }
+
+[data-moon-theme="light"] .moon-home::after { background: rgb(255 255 255 / max(.8, var(--moon-wallpaper-dim))); }
+
+[data-moon-theme="light"] .moon-home-identity,
+[data-moon-theme="light"] .moon-home-greeting,
+[data-moon-theme="light"] .moon-home-search-input,
+[data-moon-theme="light"] .moon-shortcut-label { color: var(--moon-text); text-shadow: none; }
+[data-moon-theme="light"] .moon-home-clock,
+[data-moon-theme="light"] .moon-home-date { text-shadow: none; }
+[data-moon-theme="light"] .moon-home-search-input::placeholder,
+[data-moon-theme="light"] .moon-shortcut { color: var(--moon-text-muted); }
+[data-moon-theme="light"] .moon-shortcut-mark,
+[data-moon-theme="light"] .moon-tab.is-active { background: var(--moon-surface); color: var(--moon-text); border-color: var(--moon-border); }
+
+[data-moon-theme="light"] .moon-secondary-button { background: var(--moon-surface); border-color: var(--moon-border); color: var(--moon-text); }

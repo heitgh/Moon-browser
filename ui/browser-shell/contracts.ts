@@ -1,3 +1,4 @@
+import type { ResearchMemory, ResearchSource } from "../../packages/research/research.js";
 export interface Tab {
   readonly id: string;
   readonly url: string;
@@ -34,7 +35,7 @@ export interface FullscreenState { readonly tabId: string; readonly active: bool
 export interface MoonThemeSummary { readonly id: string; readonly packageId: string; readonly name: string; readonly version: string; readonly author: string; readonly trust: "official" | "local"; readonly active: boolean; readonly installedAt: number; }
 export interface MoonThemePayload { readonly summary: MoonThemeSummary; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; readonly iconData?: Readonly<Partial<Record<"logo" | "newTab" | "privateTab", string>>>; }
 export interface MoonThemePreview extends MoonThemeSummary { readonly intentId: string; readonly description?: string; readonly changes: readonly string[]; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; readonly iconData?: Readonly<Partial<Record<"logo" | "newTab" | "privateTab", string>>>; }
-export type Drawer = "profiles" | "workspaces" | "bookmarks" | "downloads" | "history" | "translate" | "notes" | "focus" | "extensions" | "ai" | "security";
+export type Drawer = "research" | "profiles" | "workspaces" | "bookmarks" | "downloads" | "history" | "translate" | "notes" | "focus" | "extensions" | "ai" | "security";
 export type { ProfileDataMutation, ProfileDataSnapshot } from "../../packages/ipc/profile-data-contract.js";
 export type { ProfileHistoryEntry } from "../../packages/ipc/profile-data-contract.js";
 export type { ProfileNoteDocument } from "../../packages/ipc/profile-data-contract.js";
@@ -48,6 +49,12 @@ export type { LocalProfileAvatar, LocalProfileSummary } from "../../packages/ipc
 import type { CreateLocalProfileRequest, DeleteLocalProfileRequest, LocalProfileSummary, UpdateLocalProfileRequest } from "../../packages/ipc/local-profile-contract.js";
 
 export interface MoonBrowserBridge {
+  captureResearch?(workspaceId: string, tabIds: string[], consent: boolean): Promise<ResearchSource[]>;
+  loadResearchMemory?(workspaceId: string): Promise<ResearchMemory>;
+  saveResearchMemory?(workspaceId: string, value: ResearchMemory): Promise<ResearchMemory>;
+  researchSessionUrls?(workspaceId: string): Promise<string[]>;
+  restoreResearchSession?(workspaceId: string, id: string, urls: string[]): Promise<number>;
+  exportResearch?(content: string): Promise<boolean>;
   createTab(url?: string, workspaceId?: string): Promise<Tab>;
   getWindowContext(): Promise<{ readonly private: boolean; readonly guest: boolean; readonly profileId: string }>;
   createPrivateWindow(): Promise<void>;

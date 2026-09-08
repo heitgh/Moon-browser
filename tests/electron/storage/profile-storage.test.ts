@@ -173,3 +173,33 @@ describe("ProfileStorage", () => {
     await storage.close();
   });
 });
+
+describe("Research memory persistence", () => {
+  it("requires prior granular consent, preserves old profile data and isolates workspaces", async () => {
+    const { storage, directory } = await profile();
+    await storage.migrateLegacyProfile(JSON.stringify(backup));
+    const initial = await storage.loadResearchMemory("research");
+    const now = Date.now();
+    const item = { id: "study-note", category: "notes" as const, title: "Estudo", markdown: "Conteúdo local", urls: ["https://example.org/study"], createdAt: now, expiresAt: now + 86400_000 };
+    await expect(storage.saveResearchMemory("research", { ...initial, enabled: ["notes"], items: [item] })).rejects.toThrow("Ative");
+    const allowed = await storage.saveResearchMemory("research", { ...initial, enabled: ["notes"] });
+    const saved = await storage.saveResearchMemory("research", { ...allowed, items: [item] });
+    expect((await storage.loadResearchMemory("other")).items).toEqual([]);
+    await expect(storage.saveResearchMemory("research", allowed)).rejects.toThrow("outra janela");
+    await storage.close();
+    const reopened = new ProfileStorage(directory); await reopened.open();
+    expect((await reopened.loadResearchMemory("research")).items).toEqual([item]);
+    expect((await reopened.loadProfileData()).notes).toBe(backup.notes);
+    const cleared = await reopened.saveResearchMemory("research", { ...saved, items: [] });
+    expect(cleared.items).toEqual([]); await reopened.close();
+  });
+  it("isolates memory between profiles and never deletes another workspace", async () => {
+    const first = await profile(); const second = await profile();
+    const enabled = await first.storage.saveResearchMemory("research", { ...(await first.storage.loadResearchMemory("research")), enabled: ["projects"] });
+    expect((await second.storage.loadResearchMemory("research")).enabled).toEqual([]);
+    await first.storage.saveResearchMemory("other", { ...(await first.storage.loadResearchMemory("other")), enabled: ["notes"] });
+    await first.storage.saveResearchMemory("research", { ...enabled, items: [], enabled: [] });
+    expect((await first.storage.loadResearchMemory("other")).enabled).toEqual(["notes"]);
+    await first.storage.close(); await second.storage.close();
+  });
+});

@@ -8,7 +8,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 
 const runtimeDirectory = process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid?.() ?? 1000}`;
-const detectedWayland = process.env.WAYLAND_DISPLAY ?? (existsSync(join(runtimeDirectory, "wayland-1")) ? "wayland-1" : undefined);
+const detectedWayland = process.env.MOON_HEADLESS === "1" ? undefined : process.env.WAYLAND_DISPLAY ?? (existsSync(join(runtimeDirectory, "wayland-1")) ? "wayland-1" : undefined);
 const detectedDisplay = process.env.DISPLAY ?? (existsSync("/tmp/.X11-unix/X0") ? ":0" : undefined);
 const desktopEnv = { ...process.env, ...(detectedWayland ? { WAYLAND_DISPLAY: detectedWayland, XDG_RUNTIME_DIR: runtimeDirectory } : {}), ...(detectedDisplay ? { DISPLAY: detectedDisplay } : {}) };
 const platformArguments = detectedWayland
@@ -405,4 +405,83 @@ test("keeps local profile SQLite data and Chromium partitions isolated", async (
     expect((await stat(join(userData, "moon.sqlite3"))).isFile()).toBe(true);
     expect((await stat(join(userData, "profiles", secondId, "moon.sqlite3"))).isFile()).toBe(true);
   } finally { await application.close(); await rm(userData, { recursive: true, force: true }); }
+});
+
+test("research reads real sources, saves notes and opt-in memory, and recovers after a crash", async () => {
+  const userData = await mkdtemp(join(tmpdir(), "moon-e2e-research-"));
+  const server = createServer((_request, response) => {
+    response.setHeader("content-type", "text/html; charset=utf-8");
+    response.end('<!doctype html><title>Estudo de energia</title><main><h1>Como as plantas usam a luz</h1><p>A fotossíntese converte energia luminosa em energia química nas plantas.</p><p>As plantas utilizam água e dióxido de carbono para produzir compostos orgânicos.</p><form><label>Dado pessoal <input value="segredo-de-teste"></label><span>nao-capturar-formulario</span></form><p hidden>nao-capturar-oculto</p></main>');
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/study`;
+  const launch = () => electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData } });
+  let application = await launch();
+  try {
+    let page = await shellWindow(application); await dismissOnboarding(page);
+    await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.unmaximize());
+    await setViewport(application, page, 1440, 900);
+    await page.evaluate(async () => {
+      const bridge = (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser;
+      const config = structuredClone(await bridge.loadCustomization());
+      await bridge.commitCustomization({ ...config, revision: config.revision + 1, global: { ...config.global, layout: { ...config.global.layout, drawer: { ...config.global.layout.drawer, width: 440 } } } });
+    });
+    await page.reload();
+    await page.getByPlaceholder("Pesquise ou digite um endereço").fill(url); await page.getByLabel("Abrir endereço").click();
+    await expect.poll(() => page.evaluate(async target => (await (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser.getTabs()).some(t => t.url === target && t.title === "Estudo de energia"), url)).toBe(true);
+    await page.getByLabel("Moon Research", { exact: true }).click();
+    await expect(page.getByText("Estudo de energia —", { exact: false })).toBeVisible();
+    await page.getByLabel("Ler fontes selecionadas", { exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("autorize");
+    await page.getByLabel("Autorizo a leitura local destas abas e confirmei que não contêm dados sensíveis.").check();
+    await page.getByLabel("Ler fontes selecionadas", { exact: true }).click();
+    const result = page.getByLabel("Resultado com fontes em Markdown");
+    await expect(result).toHaveValue(/fotossíntese/);
+    const content = await result.inputValue(); expect(content).toContain(url); expect(content).not.toContain("segredo-de-teste"); expect(content).not.toContain("nao-capturar");
+    await page.getByLabel("Salvar como nota", { exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("Nota salva");
+    await page.locator(".moon-drawer-body").evaluate(node => { node.scrollTop = 0; });
+    await page.locator(".moon-drawer").screenshot({ path: "assets/screenshots/update-research.png" });
+    await page.getByLabel("O que o Moon lembra sobre mim?", { exact: true }).click();
+    await page.getByLabel("Sessões", { exact: true }).check();
+    await expect(page.locator(".moon-research")).toHaveAttribute("aria-busy", "false");
+    await page.getByLabel("Nome da lembrança", { exact: true }).fill("Sessão de biologia");
+    await page.getByLabel("Categoria da lembrança", { exact: true }).selectOption("sessions");
+    await page.getByLabel("Guardar lembrança", { exact: true }).click();
+    await expect(page.getByText("Sessão de biologia · expira", { exact: false })).toBeVisible();
+    await page.getByText("Sessão de biologia · expira", { exact: false }).click();
+    await page.evaluate(async target => {
+      const bridge = (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser;
+      const tab = (await bridge.getTabs()).find(t => t.url === target); if (tab) await bridge.closeTab(tab.id);
+    }, url);
+    await page.getByLabel("Retomar Sessão de biologia", { exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("1 abas restauradas");
+    await page.getByLabel("Retomar Sessão de biologia", { exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("0 abas restauradas");
+    await page.locator(".moon-drawer").screenshot({ path: "assets/screenshots/update-memory.png" });
+    const crossWorkspace = await page.evaluate(async () => {
+      const bridge = (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser;
+      const tabs = await bridge.getTabs();
+      try { await bridge.captureResearch!("other", [tabs[0]!.id], true); return false; } catch { return true; }
+    }); expect(crossWorkspace).toBe(true);
+    const child = application.process(); const exited = new Promise<void>(resolve => child.once("exit", () => resolve())); await application.evaluate(({ app }) => app.exit(1)).catch(() => undefined); await exited;
+    application = await launch(); page = await shellWindow(application);
+    if (await page.getByLabel("Pular configuração inicial").waitFor({ state: "visible", timeout: 1000 }).then(() => true).catch(() => false)) await page.getByLabel("Pular configuração inicial").click();
+    await page.getByLabel("Moon Research", { exact: true }).click();
+    await expect(page.locator(".moon-research")).toBeVisible();
+    await page.getByLabel("O que o Moon lembra sobre mim?", { exact: true }).click();
+    await expect(page.getByText("Sessão de biologia · expira", { exact: false })).toBeVisible();
+    await page.getByLabel("Fechar painel", { exact: true }).click();
+    await page.keyboard.press("Control+Shift+P"); await page.getByLabel("Buscar na Central de comandos").fill("Trechos principais");
+    await expect(page.locator('.moon-command-result[data-kind="note"]')).toBeVisible();
+    await page.keyboard.press("Enter"); await expect(page.locator(".moon-drawer-title")).toHaveText("Bloco de notas");
+    await page.locator(".moon-drawer").screenshot({ path: "assets/screenshots/update-study-note.png" });
+    const privatePagePromise = application.waitForEvent("window");
+    await page.evaluate(() => (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser.createPrivateWindow());
+    const privatePage = await privatePagePromise; await privatePage.waitForLoadState();
+    await expect.poll(() => privatePage.evaluate(async () => {
+      const bridge = (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser;
+      try { await bridge.loadResearchMemory!("research"); return false; } catch { return true; }
+    })).toBe(true);
+  } finally { await application.close(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(userData, { recursive: true, force: true }); }
 });

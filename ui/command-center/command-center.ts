@@ -1,6 +1,6 @@
 import { button, element, icon, type IconName } from "../browser-shell/dom.js";
 
-export type CommandCenterKind = "tab" | "history" | "bookmark" | "workspace" | "setting" | "command";
+export type CommandCenterKind = "note" | "download" | "tab" | "history" | "bookmark" | "workspace" | "setting" | "command";
 export interface CommandCenterItem { readonly id: string; readonly kind: CommandCenterKind; readonly title: string; readonly subtitle?: string; readonly keywords?: readonly string[]; readonly icon: IconName; readonly action: () => void | Promise<void>; }
 export interface CommandCenterOptions { readonly items: () => readonly CommandCenterItem[]; readonly onClose: () => void; }
 
@@ -14,7 +14,7 @@ export class CommandCenter {
 
   constructor(readonly options: CommandCenterOptions) {
     this.#dialog.setAttribute("role", "dialog"); this.#dialog.setAttribute("aria-modal", "true"); this.#dialog.setAttribute("aria-label", "Central de comandos");
-    const search = element("div", "moon-command-search"); search.append(icon("search"), this.#input, element("kbd", "", "Esc")); this.#input.type = "search"; this.#input.placeholder = "Busque abas, histórico, favoritos, workspaces ou comandos"; this.#input.setAttribute("aria-label", "Buscar na Central de comandos"); this.#input.setAttribute("role", "combobox"); this.#input.setAttribute("aria-controls", "moon-command-results"); this.#input.setAttribute("aria-expanded", "true");
+    const search = element("div", "moon-command-search"); search.append(icon("search"), this.#input, element("kbd", "", "Esc")); this.#input.type = "search"; this.#input.placeholder = "Busque abas, notas, downloads, favoritos ou comandos"; this.#input.setAttribute("aria-label", "Buscar na Central de comandos"); this.#input.setAttribute("role", "combobox"); this.#input.setAttribute("aria-controls", "moon-command-results"); this.#input.setAttribute("aria-expanded", "true");
     this.#list.id = "moon-command-results"; this.#list.setAttribute("role", "listbox"); this.#dialog.append(search, this.#list); this.element.append(this.#dialog);
     this.#input.addEventListener("input", () => { this.#selected = 0; this.#render(); }); this.element.addEventListener("pointerdown", event => { if (event.target === this.element) this.close(); }); this.element.addEventListener("keydown", event => this.#key(event)); this.#render(); requestAnimationFrame(() => this.#input.focus());
   }
@@ -41,5 +41,5 @@ export class CommandCenter {
 function normalize(value: string): string { return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim(); }
 function fuzzy(haystack: string, needle: string): boolean { if (haystack.includes(needle)) return true; let cursor = 0; for (const character of haystack) if (character === needle[cursor]) cursor += 1; return cursor === needle.length; }
 function score(item: CommandCenterItem, terms: readonly string[]): number { const title = normalize(item.title); const subtitle = normalize(item.subtitle ?? ""); return terms.reduce((total, term) => total + (title.startsWith(term) ? 10 : title.includes(term) ? 6 : subtitle.includes(term) ? 3 : 1), 0) + (item.kind === "tab" ? 2 : 0); }
-function priority(kind: CommandCenterKind): number { return ({ command: 0, tab: 1, workspace: 2, bookmark: 3, history: 4, setting: 5 })[kind]; }
-function kindLabel(kind: CommandCenterKind): string { return ({ command: "Comando", tab: "Aba", workspace: "Workspace", bookmark: "Favorito", history: "Histórico", setting: "Configuração" })[kind]; }
+function priority(kind: CommandCenterKind): number { return ({ command: 0, tab: 1, workspace: 2, bookmark: 3, history: 4, setting: 5, note: 3, download: 4 })[kind]; }
+function kindLabel(kind: CommandCenterKind): string { return ({ command: "Comando", tab: "Aba", workspace: "Workspace", bookmark: "Favorito", history: "Histórico", setting: "Configuração", note: "Nota", download: "Download" })[kind]; }

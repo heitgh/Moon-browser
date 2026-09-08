@@ -18,7 +18,7 @@ linux:
   syncDesktopName: true
   maintainer: Heitgh <207310826+heitgh@users.noreply.github.com>
   icon: assets/branding/moon-icon.svg
-  artifactName: Moon-Browser-Linux-x64.${ext}
+  artifactName: Moon-Browser-${version}-Linux-x64.${ext}
   target:
     - target: AppImage
       arch:
@@ -42,7 +42,7 @@ win:
       arch:
         - x64
 nsis:
-  artifactName: Moon-Browser-Windows-x64-Setup.${ext}
+  artifactName: Moon-Browser-${version}-Windows-x64-Setup.${ext}
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
@@ -50,7 +50,7 @@ nsis:
   shortcutName: Moon Browser
   uninstallDisplayName: Moon Browser
 portable:
-  artifactName: Moon-Browser-Windows-x64-Portable.${ext}
+  artifactName: Moon-Browser-${version}-Windows-x64-Portable.${ext}
 mac:
   category: public.app-category.productivity
   target: dmg

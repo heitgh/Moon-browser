@@ -16,6 +16,7 @@ export class CustomizationApplier {
       background: mix(appearance.colors.background, "#ffffff", .9), surface: mix(appearance.colors.surface, "#ffffff", .92), elevated: mix(appearance.colors.elevated, "#ffffff", .86),
       text: mix(appearance.colors.text, "#000000", .88), textMuted: mix(appearance.colors.textMuted, "#000000", .62), border: mix(appearance.colors.border, "#000000", .14)
     } : appearance.colors;
+    const region = (value: string): string => resolvedMode === "light" ? mix(value, "#ffffff", .92) : value;
     this.root.dataset.moonTheme = resolvedMode;
     this.root.dataset.moonThemeMode = appearance.mode;
     this.root.dataset.moonDensity = layout.density;
@@ -40,8 +41,8 @@ export class CustomizationApplier {
       "--moon-bg": colors.background, "--moon-surface": colors.surface, "--moon-surface-raised": colors.elevated,
       "--moon-text": colors.text, "--moon-text-muted": colors.textMuted, "--moon-border": colors.border,
       "--moon-success": colors.success, "--moon-warning": colors.warning, "--moon-danger": colors.danger,
-      "--moon-region-toolbar": appearance.regions.toolbar, "--moon-region-tabs": appearance.regions.tabs, "--moon-region-sidebar": appearance.regions.sidebar,
-      "--moon-region-home": appearance.regions.home, "--moon-region-content": appearance.regions.content, "--moon-region-selection": appearance.regions.selection,
+      "--moon-region-toolbar": region(appearance.regions.toolbar), "--moon-region-tabs": region(appearance.regions.tabs), "--moon-region-sidebar": region(appearance.regions.sidebar),
+      "--moon-region-home": region(appearance.regions.home), "--moon-region-content": region(appearance.regions.content), "--moon-region-selection": appearance.regions.selection,
       "--moon-sidebar-width": `${layout.sidebar.width}px`, "--moon-sidebar-icon": `${layout.sidebar.iconSize}px`, "--moon-sidebar-gap": `${layout.sidebar.spacing}px`,
       "--moon-sidebar-hide-delay": `${layout.sidebar.hideDelay}ms`,
       "--moon-drawer-width": `${layout.drawer.width}px`, "--moon-tabs-width": `${layout.tabs.width}px`, "--moon-toolbar-height": `${layout.toolbar.height}px`, "--moon-ui-scale": String(layout.uiScale),

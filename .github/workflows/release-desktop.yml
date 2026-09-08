@@ -26,14 +26,14 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag da release (ex.: v0.5.0-demo.2)"
+        description: "Tag da release (ex.: v0.6.0-alpha.1)"
         required: true
-        default: "v0.5.0-demo.2"
+        default: "v0.6.0-alpha.1"
         type: string
       publish_release:
         description: "Publicar os instaladores em GitHub Releases"
         required: true
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -44,6 +44,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  quality:
+    uses: ./.github/workflows/quality.yml
+
   build:
     name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -139,10 +142,10 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: build
+    environment: release-approval
+    needs: [build, quality]
     if: >-
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && inputs.publish_release)
+      github.event_name == 'workflow_dispatch' && inputs.publish_release
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -164,6 +167,11 @@ jobs:
           else
             tag=v$(node -p "require('./package.json').version")
           fi
+          expected="v$(node -p "require('./package.json').version")"
+          if [[ "$tag" != "$expected" ]]; then
+            echo "A tag precisa corresponder à versão compilada: $expected" >&2
+            exit 1
+          fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Download installers
@@ -180,12 +188,8 @@ jobs:
         run: |
           notes_file="docs/releases/${RELEASE_TAG}.md"
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" release/* --clobber --repo "$GITHUB_REPOSITORY"
-            if [[ -f "$notes_file" ]]; then
-              gh release edit "$RELEASE_TAG" --latest --notes-file "$notes_file" --repo "$GITHUB_REPOSITORY"
-            else
-              gh release edit "$RELEASE_TAG" --latest --repo "$GITHUB_REPOSITORY"
-            fi
+            echo "Release já existe. Use uma nova versão; artefatos publicados são imutáveis." >&2
+            exit 1
           else
             if [[ -f "$notes_file" ]]; then
               gh release create "$RELEASE_TAG" release/* \
@@ -193,13 +197,13 @@ jobs:
                 --target "$GITHUB_SHA" \
                 --title "Moon Browser $RELEASE_TAG" \
                 --notes-file "$notes_file" \
-                --latest
+                --prerelease
             else
               gh release create "$RELEASE_TAG" release/* \
                 --repo "$GITHUB_REPOSITORY" \
                 --target "$GITHUB_SHA" \
                 --title "Moon Browser $RELEASE_TAG" \
                 --generate-notes \
-                --latest
+                --prerelease
             fi
           fi

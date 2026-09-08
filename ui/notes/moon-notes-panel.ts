@@ -19,7 +19,7 @@ export class MoonNotesPanel {
   #mode: "all" | "favorites" | "trash" = "all";
   #query = "";
   #preview = false;
-  #saveTimer: number | undefined;
+  #saveTimers = new Map<string, number>();
 
   constructor(readonly options: MoonNotesPanelOptions) {}
 
@@ -27,6 +27,8 @@ export class MoonNotesPanel {
     this.#documents = documents; this.#scratchpad = scratchpad; this.#private = privateWindow;
     if (this.#selectedId && !documents.some(note => note.id === this.#selectedId)) this.#selectedId = undefined;
   }
+
+  select(id: string): void { this.#selectedId = id; this.#mode = "all"; this.#query = ""; }
 
   render(container: HTMLElement): void { this.#render(); container.append(this.element); }
 
@@ -56,7 +58,7 @@ export class MoonNotesPanel {
     const note = element("p", "moon-recovery-note", "Seu bloco rápido continua compatível. Crie uma nota para ativar pastas, Markdown, backlinks e histórico de versões.");
     const textarea = element("textarea", "moon-notes-input"); textarea.value = this.#scratchpad; textarea.placeholder = "Suas anotações ficam salvas localmente neste perfil do Moon."; textarea.rows = 12; textarea.disabled = this.#private;
     const status = element("span", "moon-notes-status", this.#private ? "Desativado nesta janela" : "Salvo no perfil");
-    textarea.addEventListener("input", () => { this.#scratchpad = textarea.value; this.options.onScratchChanged(this.#scratchpad); status.textContent = "Salvando…"; if (this.#saveTimer !== undefined) clearTimeout(this.#saveTimer); this.#saveTimer = window.setTimeout(() => { void this.options.mutate({ type: "notes:save", content: this.#scratchpad }).then(saved => { status.textContent = saved ? "Salvo no perfil" : "Falha ao salvar"; }); }, 250); }); this.element.append(note, textarea, status);
+    textarea.addEventListener("input", () => { this.#scratchpad = textarea.value; this.options.onScratchChanged(this.#scratchpad); status.textContent = "Salvando…"; clearTimeout(this.#saveTimers.get("scratchpad")); this.#saveTimers.set("scratchpad", window.setTimeout(() => { this.#saveTimers.delete("scratchpad"); void this.options.mutate({ type: "notes:save", content: this.#scratchpad }).then(saved => { status.textContent = saved ? "Salvo no perfil" : "Falha ao salvar"; }); }, 250)); }); this.element.append(note, textarea, status);
   }
 
   #editor(editor: HTMLElement, note: ProfileNoteDocument): void {
@@ -68,8 +70,8 @@ export class MoonNotesPanel {
     const content = element("textarea", "moon-notes-input"); content.value = note.content; content.rows = 16; content.placeholder = "Markdown, [[links internos]], listas e checklists…"; content.disabled = this.#private; const previewBody = element("div", "moon-notes-preview"); if (this.#preview) renderMarkdown(previewBody, note.content, wikiTitle => { const target = this.#documents.find(candidate => candidate.title === wikiTitle && !candidate.deletedAt); if (target) { this.#selectedId = target.id; this.#preview = false; this.#render(); } }); else previewBody.hidden = true;
     const context = button("moon-text-button", "Vincular nota à página atual", "globe"); context.append(element("span", "", note.sourceUrl ? "Atualizar vínculo da página" : "Vincular à página atual")); context.disabled = this.#private || !this.options.activeContext().url; const status = element("span", "moon-notes-status", `Salvo · revisão ${note.revision}`);
     const values = () => ({ title: title.value, content: content.value, tags: tags.value.split(",").map(value => value.trim()).filter(Boolean), parentId: parent.value || undefined });
-    const schedule = (): void => { status.textContent = "Salvando…"; if (this.#saveTimer !== undefined) clearTimeout(this.#saveTimer); this.#saveTimer = window.setTimeout(() => void this.#save(note, values(), status), 350); };
-    title.addEventListener("input", schedule); content.addEventListener("input", schedule); tags.addEventListener("change", schedule); parent.addEventListener("change", schedule); favorite.addEventListener("click", () => void this.#save(note, { ...values(), favorite: !note.favorite }, status)); context.addEventListener("click", () => { const active = this.options.activeContext(); void this.#save(note, { ...values(), sourceUrl: active.url, tabId: active.tabId, workspaceId: active.workspaceId }, status); }); content.addEventListener("keydown", event => { if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "s") { event.preventDefault(); if (this.#saveTimer !== undefined) clearTimeout(this.#saveTimer); void this.#save(note, values(), status); } });
+    const schedule = (): void => { status.textContent = "Salvando…"; clearTimeout(this.#saveTimers.get(note.id)); this.#saveTimers.set(note.id, window.setTimeout(() => void this.#save(note, values(), status), 350)); };
+    title.addEventListener("input", schedule); content.addEventListener("input", schedule); tags.addEventListener("change", schedule); parent.addEventListener("change", schedule); favorite.addEventListener("click", () => void this.#save(note, { ...values(), favorite: !note.favorite }, status)); context.addEventListener("click", () => { const active = this.options.activeContext(); void this.#save(note, { ...values(), sourceUrl: active.url, tabId: active.tabId, workspaceId: active.workspaceId }, status); }); content.addEventListener("keydown", event => { if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "s") { event.preventDefault(); clearTimeout(this.#saveTimers.get(note.id)); void this.#save(note, values(), status); } });
     const backlinks = this.#documents.filter(candidate => candidate.id !== note.id && !candidate.deletedAt && candidate.content.includes(`[[${note.title}]]`)); const related = element("div", "moon-notes-related"); related.append(element("strong", "", `Backlinks (${backlinks.length})`)); backlinks.forEach(candidate => { const open = button("moon-text-button", `Abrir backlink ${candidate.title}`); open.append(element("span", "", candidate.title)); open.addEventListener("click", () => { this.#selectedId = candidate.id; this.#render(); }); related.append(open); });
     const versions = element("details", "moon-notes-versions"); versions.append(element("summary", "", `Versões locais (${note.versions.length})`)); [...note.versions].reverse().forEach(version => { const restore = button("moon-text-button", `Restaurar revisão ${version.revision}`); restore.append(element("span", "", `r${version.revision} · ${new Date(version.updatedAt).toLocaleString("pt-BR")}`)); restore.addEventListener("click", () => { if (confirm(`Restaurar a revisão ${version.revision}? A versão atual continuará no histórico.`)) void this.#save(note, { title: version.title, content: version.content }, status); }); versions.append(restore); });
     const source = note.sourceUrl ? element("a", "moon-note-source", note.sourceUrl) : element("span"); if (source instanceof HTMLAnchorElement) { source.href = note.sourceUrl!; source.target = "_blank"; source.rel = "noreferrer noopener"; }
@@ -77,10 +79,10 @@ export class MoonNotesPanel {
   }
 
   async #save(note: ProfileNoteDocument, patch: Partial<Pick<ProfileNoteDocument, "title" | "content" | "favorite" | "tags" | "parentId" | "sourceUrl" | "tabId" | "workspaceId">>, status: HTMLElement): Promise<void> {
-    if (this.#private) return; this.#saveTimer = undefined;
-    const parentId = patch.parentId === undefined ? note.parentId : patch.parentId; const sourceUrl = patch.sourceUrl ?? note.sourceUrl; const tabId = patch.tabId ?? note.tabId; const workspaceId = patch.workspaceId ?? note.workspaceId;
+    if (this.#private) return; clearTimeout(this.#saveTimers.get(note.id)); this.#saveTimers.delete(note.id);
+    const parentId = Object.hasOwn(patch, "parentId") ? patch.parentId : note.parentId; const sourceUrl = patch.sourceUrl ?? note.sourceUrl; const tabId = patch.tabId ?? note.tabId; const workspaceId = patch.workspaceId ?? note.workspaceId;
     const value = { id: note.id, kind: note.kind, title: patch.title ?? note.title, content: note.kind === "folder" ? "" : patch.content ?? note.content, format: note.format, pinned: note.pinned, favorite: patch.favorite ?? note.favorite, tags: patch.tags ?? note.tags, ...(parentId ? { parentId } : {}), ...(sourceUrl ? { sourceUrl } : {}), ...(tabId ? { tabId } : {}), ...(workspaceId ? { workspaceId } : {}), ...(note.sessionId ? { sessionId: note.sessionId } : {}) };
-    const saved = await this.options.mutate({ type: "note:save", value, expectedRevision: note.revision }); status.textContent = saved ? "Salvo" : "Conflito ao salvar"; if (saved) await this.options.refresh();
+    const saved = await this.options.mutate({ type: "note:save", value, expectedRevision: this.#documents.find(item => item.id === note.id)?.revision ?? note.revision }); status.textContent = saved ? "Salvo" : "Conflito ao salvar"; if (saved) await this.options.refresh();
   }
 
   async #create(kind: "note" | "folder"): Promise<void> { const id = `note-${crypto.randomUUID()}`; const parentId = this.#selectedId && this.#documents.find(note => note.id === this.#selectedId)?.kind === "folder" ? this.#selectedId : undefined; const saved = await this.options.mutate({ type: "note:save", value: { id, kind, ...(parentId ? { parentId } : {}), title: kind === "folder" ? "Nova pasta" : "Nova nota", content: "", format: "markdown", pinned: false, favorite: false, tags: [] }, expectedRevision: 0 }); if (saved) { this.#selectedId = id; this.#mode = "all"; await this.options.refresh(); } }

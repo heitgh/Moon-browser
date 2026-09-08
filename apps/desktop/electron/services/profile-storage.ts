@@ -1,3 +1,4 @@
+import { emptyMemory, parseMemory, scopeId, type ResearchMemory } from "../../../../packages/research/research.js";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { BrowserTab } from "@moon/platform";
@@ -69,6 +70,31 @@ export class ProfileStorage {
 
   async close(): Promise<void> {
     await this.#database.close();
+  }
+
+  async loadResearchMemory(workspaceId: string): Promise<ResearchMemory> {
+    const key = `research:v1:${scopeId(workspaceId)}`;
+    const raw = await this.#settings.getValue<ResearchMemory>(key);
+    if (!raw) return emptyMemory();
+    const clean = parseMemory(raw);
+    if (clean.items.length !== raw.items.length) await this.#settings.setValue(key, clean);
+    return clean;
+  }
+
+  async saveResearchMemory(workspaceId: string, value: unknown): Promise<ResearchMemory> {
+    const next = parseMemory(value);
+    const key = `research:v1:${scopeId(workspaceId)}`;
+    return this.#database.transaction(async () => {
+      const previous = await this.loadResearchMemory(workspaceId);
+      if (next.revision !== previous.revision) throw new Error("A memória mudou em outra janela. Reabra o painel.");
+      for (const item of next.items) {
+        const old = previous.items.find(candidate => candidate.id === item.id);
+        if ((!old || JSON.stringify(old) !== JSON.stringify(item)) && !previous.enabled.includes(item.category)) throw new Error("Ative esta categoria antes de memorizar.");
+      }
+      const saved = { ...next, revision: previous.revision + 1 };
+      await this.#settings.setValue(key, saved);
+      return saved;
+    });
   }
 
   async loadCustomization(legacyDocument?: unknown): Promise<CustomizationSchemaV4> {

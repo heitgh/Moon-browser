@@ -1,3 +1,4 @@
+import { ResearchPanel } from "./research/research-panel.js";
 import { MoonApp } from "./app/app.js";
 import { resolveNavigationInput } from "./browser/navigation-input.js";
 import {
@@ -154,9 +155,14 @@ class BrowserShell {
   #commandReturnFocus: HTMLElement | undefined;
   readonly #permissionController: PermissionPromptController | undefined;
   readonly #notesPanel: MoonNotesPanel;
+  readonly #researchPanel: ResearchPanel;
   #resizeObserver: ResizeObserver | undefined;
 
   constructor(readonly container: HTMLElement) {
+    this.#researchPanel = new ResearchPanel({ bridge: this.#bridge, context: () => ({ workspaceId: this.#workspaceId, private: this.#windowPrivate || this.#windowGuest, tabs: [...this.#tabs.values()] }), saveNote: async (title, markdown, url) => {
+      const saved = await this.#mutateProfileData({ type: "note:save", value: { id: `note-${crypto.randomUUID()}`, kind: "note", title, content: markdown, format: "markdown", pinned: false, favorite: false, tags: ["pesquisa"], workspaceId: this.#workspaceId, ...(url ? { sourceUrl: url } : {}) }, expectedRevision: 0 });
+      if (saved) await this.#reloadProfileData(); return saved;
+    } });
     this.#permissionController = this.#bridge ? new PermissionPromptController({ container, bridge: this.#bridge, onError: error => this.#showError(error), onPermissionsChanged: records => { this.#sitePermissions = records; this.#renderDrawer(); }, onIdle: async () => { if (!this.#settings) await this.#bridge!.setContentVisible(true); } }) : undefined;
     this.#notesPanel = new MoonNotesPanel({ mutate: mutation => this.#mutateProfileData(mutation), refresh: () => this.#reloadProfileData(), onScratchChanged: content => { this.#notes = content; this.#refreshHomeData(); }, activeContext: () => { const tab = this.#activeTabId ? this.#tabs.get(this.#activeTabId) : undefined; return { ...(tab && this.#isWeb(tab.url) ? { url: tab.url } : {}), ...(tab ? { tabId: tab.id } : {}), workspaceId: this.#workspaceId }; }, importMarkdown: () => this.#bridge?.importMarkdownNote() ?? Promise.resolve(null), exportMarkdown: id => this.#bridge?.exportMarkdownNote(id) ?? Promise.resolve(false) });
   }
@@ -205,10 +211,10 @@ class BrowserShell {
       ["home", "Página inicial", "home", () => void this.#showHome()], ["commands", "Central de comandos", "search", () => { void this.#openCommandCenter(); }], ["profiles", "Gerenciar perfis", "moon", () => this.#toggleDrawer("profiles")], ["workspaces", "Workspaces", "grid", () => this.#toggleDrawer("workspaces")],
       ["bookmarks", "Favoritos", "star", () => this.#toggleDrawer("bookmarks")], ["downloads", "Downloads", "download", () => this.#toggleDrawer("downloads")],
       ["history", "Histórico", "history", () => this.#toggleDrawer("history")], ["translate", "Traduzir página", "translate", () => this.#toggleDrawer("translate")],
-      ["notes", "Bloco de notas", "note", () => this.#toggleDrawer("notes")], ["focus", "Foco e Zen", "play", () => this.#toggleDrawer("focus")], ["extensions", "Extensões", "plugin", () => this.#toggleDrawer("extensions")],
+      ["research", "Moon Research", "search", () => this.#toggleDrawer("research")], ["notes", "Bloco de notas", "note", () => this.#toggleDrawer("notes")], ["focus", "Foco e Zen", "play", () => this.#toggleDrawer("focus")], ["extensions", "Extensões", "plugin", () => this.#toggleDrawer("extensions")],
       ["ai", "Moon AI", "sparkles", () => this.#toggleDrawer("ai")]
     ];
-    controls.filter(([id]) => (id !== "ai" || AI_ENABLED) && (id !== "extensions" || MODULES_ENABLED)).forEach(([id, label, name, action]) => { const control = btn("moon-rail-button", label, name); control.append(el("span", "moon-rail-label", label)); control.addEventListener("click", action); this.#rail.set(id, control); rail.append(control); });
+    controls.filter(([id]) => (id !== "research" || featureEnabled(DEFAULT_FEATURE_FLAGS, "research")) && (id !== "ai" || AI_ENABLED) && (id !== "extensions" || MODULES_ENABLED)).forEach(([id, label, name, action]) => { const control = btn("moon-rail-button", label, name); control.append(el("span", "moon-rail-label", label)); control.addEventListener("click", action); this.#rail.set(id, control); rail.append(control); });
     rail.append(el("div", "moon-rail-spacer"));
     const settings = btn("moon-rail-button", "Configurações", "settings"); settings.append(el("span", "moon-rail-label", "Configurações")); settings.addEventListener("click", () => void this.#openSettings()); this.#rail.set("settings", settings); rail.append(settings);
 
@@ -282,8 +288,9 @@ class BrowserShell {
   #toggleDrawer(name: Drawer): void { if (this.#openDrawer === name) return this.#closeDrawer(); this.#openDrawer = name; this.#drawer.classList.add("is-open"); this.#renderDrawer(); requestAnimationFrame(() => this.#syncBounds()); }
   #closeDrawer(): void { this.#openDrawer = undefined; this.#drawer.classList.remove("is-open"); this.#rail.forEach(item => item.classList.remove("is-active")); this.#render(); requestAnimationFrame(() => this.#syncBounds()); }
   #renderDrawer(): void {
-    if (!this.#openDrawer) return; const titles: Readonly<Record<Drawer, string>> = { profiles: "Gerenciar perfis", workspaces: "Workspaces", bookmarks: "Favoritos", downloads: "Downloads", history: "Histórico", translate: "Tradutor", notes: "Bloco de notas", focus: "Foco e Zen", extensions: "Extensões", ai: "Moon AI", security: "Proteção" };
+    if (!this.#openDrawer) return; const titles: Readonly<Record<Drawer, string>> = { research: "Moon Research", profiles: "Gerenciar perfis", workspaces: "Workspaces", bookmarks: "Favoritos", downloads: "Downloads", history: "Histórico", translate: "Tradutor", notes: "Bloco de notas", focus: "Foco e Zen", extensions: "Extensões", ai: "Moon AI", security: "Proteção" };
     this.#drawerTitle.textContent = titles[this.#openDrawer]; this.#drawerBody.replaceChildren(); this.#rail.forEach(item => item.classList.remove("is-active")); this.#rail.get(this.#openDrawer)?.classList.add("is-active");
+    if (this.#openDrawer === "research") this.#researchPanel.mount(this.#drawerBody);
     if (this.#openDrawer === "profiles") this.#profilesDrawer(); if (this.#openDrawer === "workspaces") this.#workspaceDrawer(); if (this.#openDrawer === "bookmarks") this.#bookmarksDrawer(); if (this.#openDrawer === "downloads") this.#downloadsDrawer(); if (this.#openDrawer === "history") this.#historyDrawer(); if (this.#openDrawer === "translate") this.#translateDrawer(); if (this.#openDrawer === "notes") this.#notesDrawer(); if (this.#openDrawer === "focus") this.#focusPanel.render(this.#drawerBody); if (this.#openDrawer === "extensions") this.#extensionsDrawer(); if (this.#openDrawer === "ai") this.#aiDrawer(); if (this.#openDrawer === "security") this.#securityDrawer();
   }
   #profilesDrawer(): void {
@@ -542,7 +549,10 @@ class BrowserShell {
     const bookmarks = this.#bookmarks.map(item => ({ id: `bookmark:${item.id}`, kind: "bookmark" as const, title: item.title || this.#hostname(item.url), subtitle: item.url, icon: "star" as const, action: () => this.#navigate(item.url) }));
     const history = this.#history.slice(0, 100).map(item => ({ id: `history:${item.id}`, kind: "history" as const, title: item.title || this.#hostname(item.url), subtitle: item.url, icon: "history" as const, action: () => this.#navigate(item.url) }));
     const settings = SETTINGS_CATALOG.map(item => ({ id: `setting:${item.id}`, kind: "setting" as const, title: item.title, subtitle: item.description, keywords: item.keywords, icon: "settings" as const, action: () => { this.#customization.setExperience("advanced", item.section); return this.#openSettings("modal", item.section); } }));
-    return [...commands, ...tabs, ...workspaces, ...bookmarks, ...history, ...settings];
+    const notes = this.#windowPrivate ? [] : this.#noteDocuments.filter(note => !note.deletedAt && note.kind === "note" && (!note.workspaceId || note.workspaceId === this.#workspaceId)).map(note => ({ id: `note:${note.id}`, kind: "note" as const, title: note.title, subtitle: note.content.slice(0, 180), keywords: note.tags, icon: "note" as const, action: () => { this.#notesPanel.select(note.id); this.#toggleDrawer("notes"); } }));
+    const downloads = this.#windowPrivate ? [] : this.#downloads.map(item => ({ id: `download:${item.id}`, kind: "download" as const, title: item.filename, subtitle: this.#downloadStateLabel(item.state), icon: "download" as const, action: () => this.#toggleDrawer("downloads") }));
+    const researchCommands: readonly CommandCenterItem[] = featureEnabled(DEFAULT_FEATURE_FLAGS, "research") ? [{ id: "command:research", kind: "command", title: "Pesquisar, estudar e retomar com Moon Research", icon: "search", action: () => this.#toggleDrawer("research") }] : [];
+    return [...researchCommands, ...commands, ...tabs, ...workspaces, ...bookmarks, ...history, ...notes, ...downloads, ...settings];
   }
 
   async #showSettingsPage(section: SettingsSection): Promise<void> {
@@ -599,7 +609,10 @@ class BrowserShell {
     this.#noteDocuments = [...(snapshot.noteDocuments ?? [])];
     if (snapshot.workspaces.length > 0) this.#workspaces = snapshot.workspaces.map(({ id, name }) => ({ id, name }));
     if (!this.#workspaces.some(workspace => workspace.id === this.#workspaceId)) this.#workspaceId = this.#workspaces[0]?.id ?? "research";
-    this.#render(); this.#renderDrawer();
+    this.#render();
+    const editingNote = this.#openDrawer === "notes" && this.#drawerBody.contains(document.activeElement) && (document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement);
+    if (editingNote) this.#notesPanel.update(this.#noteDocuments, this.#notes, this.#windowPrivate);
+    else this.#renderDrawer();
   }
   #renderPrivateIdentity(): void {
     document.documentElement.dataset.moonPrivate = this.#windowPrivate ? "on" : "off";

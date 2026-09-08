@@ -110,6 +110,23 @@ describe("Moon browser shell", () => {
     const editor = document.querySelector(".moon-notes-editor .moon-notes-input") as HTMLTextAreaElement; editor.value = "# Roadmap\nVeja [[Pesquisa]]"; editor.dispatchEvent(new Event("input", { bubbles: true }));
     await new Promise(resolve => setTimeout(resolve, 400)); await flush();
     expect(mutateProfileData.mock.calls.some(([mutation]) => mutation.type === "note:save" && mutation.expectedRevision === 1 && mutation.value?.content?.includes("[[Pesquisa]]"))).toBe(true);
+    const current = document.querySelector(".moon-notes-editor .moon-notes-input") as HTMLTextAreaElement;
+    current.focus(); current.value += "\nSegunda edição"; current.dispatchEvent(new Event("input", { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 400)); await flush();
+    expect(document.activeElement).toBe(current);
+    expect(mutateProfileData.mock.calls.some(([mutation]) => mutation.type === "note:save" && mutation.expectedRevision === 2 && mutation.value?.content?.includes("Segunda edição"))).toBe(true);
+
+  });
+  it("does not cancel an autosave when another note is edited immediately", async () => {
+    const first = document.querySelector(".moon-notes-editor .moon-notes-input") as HTMLTextAreaElement;
+    first.blur();
+    first.value = "Primeira nota pendente"; first.dispatchEvent(new Event("input", { bubbles: true }));
+    (document.querySelector('[aria-label="Criar nova nota"]') as HTMLButtonElement).click(); await flush();
+    const second = document.querySelector(".moon-notes-editor .moon-notes-input") as HTMLTextAreaElement;
+    second.value = "Segunda nota pendente"; second.dispatchEvent(new Event("input", { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 450)); await flush();
+    const saved = mutateProfileData.mock.calls.flatMap(([mutation]) => mutation.type === "note:save" ? [mutation.value?.content] : []);
+    expect(saved).toContain("Primeira nota pendente"); expect(saved).toContain("Segunda nota pendente");
   });
   it("runs a reversible continuous Focus session through the real shell", async () => {
     (document.querySelector('[aria-label="Foco e Zen"]') as HTMLButtonElement).click();
