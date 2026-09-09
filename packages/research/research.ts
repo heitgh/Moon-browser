@@ -27,6 +27,7 @@ export function parseSources(value: unknown): ResearchSource[] {
 }
 const normalize = (value: string): string => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 const quote = (value: string): string => value.replace(/[\r\n]+/g, " ");
+const tableCell = (value: string): string => quote(value).replaceAll("&", "&amp;").replaceAll("\\", "&#92;").replaceAll("|", "&#124;");
 export function localResearch(sources: readonly ResearchSource[], mode: ResearchMode, query = ""): ResearchResult {
   const checked = parseSources(sources);
   const terms = normalize(query).match(/[\p{L}\p{N}]{3,}/gu) ?? [];
@@ -39,7 +40,7 @@ export function localResearch(sources: readonly ResearchSource[], mode: Research
   let body = selected.map(p => `> ${quote(p.text)} [${p.index}]`).join("\n\n");
   if (mode === "flashcards") body = selected.map((p, i) => `### Cartão ${i + 1}\n\nQual trecho da fonte ${p.index} você consegue explicar com suas palavras?\n\n**Resposta de referência:** ${quote(p.text)} [${p.index}]`).join("\n\n");
   if (mode === "checklist") body = selected.map(p => `- [ ] Ler e explicar: ${quote(p.text)} [${p.index}]`).join("\n\n");
-  if (mode === "compare") body = "| Fonte | Trecho inicial |\n| --- | --- |\n" + checked.map((s, i) => `| ${quote(s.title).replace(/\|/g, "\\|")} [${i + 1}] | ${quote(s.text.slice(0, 350)).replace(/\|/g, "\\|")} |`).join("\n");
+  if (mode === "compare") body = "| Fonte | Trecho inicial |\n| --- | --- |\n" + checked.map((s, i) => `| ${tableCell(s.title)} [${i + 1}] | ${tableCell(s.text.slice(0, 350))} |`).join("\n");
   if (!body) body = "Não encontrei base textual suficiente. Nenhuma resposta foi inventada.";
   const refs = checked.map((s, i) => `[${i + 1}] ${quote(s.title)} — ${s.url}${s.truncated ? " (leitura limitada a 60.000 caracteres)" : ""}`).join("\n\n");
   return { title: titles[mode], sources: checked, markdown: `# ${titles[mode]}\n\nLeitura local por extração de trechos; não é um resumo ou resposta de IA generativa. Confira o contexto nas fontes.${query ? `\n\nPergunta: ${quote(query.slice(0, 1000))}` : ""}\n\n${body}\n\n## Fontes\n\n${refs}` };

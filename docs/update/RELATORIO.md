@@ -76,6 +76,7 @@ Ambiente comum: Linux x64/Wayland, Node 26.8.1, npm 12.0.2, Electron 43.4.1; per
 | B09 / P2 | Uma execução E2E excedeu tempo ao fechar teste de wallpaper, depois de todas as asserções | Log preservado; teste isolado e suíte completa posterior passaram. Causa intermitente não confirmada; monitorar |
 | B10 / P1 para estabilidade | Memória elevada com 50 abas, sem hibernação homologada | Amostra de processos abaixo; investigar/reproduzir em carga real. ABERTO |
 | B11 / P1 para distribuição | RPM depende de rpmbuild ausente; Windows, assinatura, integração de instalação/desinstalação e updater não homologados | Build inicial falhou apenas ao empacotar RPM. BLOQUEADO |
+| B12 / P1 | CodeQL detectou escape incompleto de `|` em células Markdown quando a fonte contém barra invertida. As células agora codificam `&`, `\\` e `|` como entidades antes de compor a tabela | Regressão unitária com título e texto hostis. CONCLUÍDO |
 
 Falhas ambientais preservadas: E2E restrito recusou bind/socket com EPERM; execução autorizada com sessão gráfica passou. Script de galeria inicial não detectava Wayland, corrigido usando a detecção já presente nos testes. Não foram escondidas como testes aprovados.
 
@@ -86,7 +87,7 @@ Resultados finais e logs: [evidências locais](../../../moon-update-evidence/). 
 | Área / esperado | Execução e evidência | Estado |
 | --- | --- | --- |
 | TypeScript/lint | `final-typecheck.log`, `final-lint.log`, sem erros | CONCLUÍDO |
-| Unitários | 134 testes, `final-unit.log` | CONCLUÍDO |
+| Unitários | 135 testes após a correção CodeQL; o log local inicial registra 134 | CONCLUÍDO |
 | Integração shell | 34 testes, `final-integration.log`; novas notas com foco, revisão e troca rápida | CONCLUÍDO |
 | SQLite/Electron | 20 testes, `final-electron.log`; persistência, backup, migração, temas, perfis e memória | CONCLUÍDO |
 | E2E desktop | 10 testes, `final-e2e.log`; sessão gráfica real, fixture HTTP local | CONCLUÍDO na suíte disponível |
