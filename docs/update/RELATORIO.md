@@ -1,6 +1,6 @@
 # Moon Browser 0.6.0-alpha.1 — relatório da atualização
 
-Data: 8 de setembro de 2026. **Resultado geral: PARCIAL. Release público: BLOQUEADO. Migração oficial: NÃO INICIADA.**
+Data: 8 de setembro de 2026. **Resultado geral: PARCIAL. Release público: BLOQUEADO. Migração oficial: BRANCH E PR PREPARADOS; MERGE NA `main` PENDENTE DE APROVAÇÃO FINAL.**
 
 ## 1. Resumo executivo
 
@@ -165,9 +165,9 @@ Documentos históricos não foram reescritos como se registrassem testes atuais.
 
 ## 11. Migração
 
-**NÃO INICIADA.** Mudanças permanecem na branch isolada. Comparação desta atualização: baseline `5d3117b` até HEAD; comparar também a base original antes de transportar, para incluir conscientemente as alterações preexistentes. Evidências locais e bundle preservam o trabalho para revisão.
+**BRANCH E PR PREPARADOS; MERGE PENDENTE.** As mudanças estão na branch oficial `codex/moon-super-update` e no PR #13, com os artefatos e evidências preservados para revisão. O merge na `main` permanece pendente da aprovação final. Comparação desta atualização: baseline `5d3117b` até HEAD; comparar também a base original antes de transportar, para incluir conscientemente as alterações preexistentes.
 
-Não houve push, PR, merge, release ou substituição de perfil pessoal. Revisão humana final continua obrigatória por solicitação do usuário e do documento. [Plano e rollback](MIGRACAO.md). Mesmo com aprovação, revalidar o estado dos remotos e suas proteções antes da integração.
+Houve push da branch e abertura do PR; não houve merge, release ou substituição de perfil pessoal. A revisão humana final continua obrigatória por solicitação do usuário e do documento. [Plano e rollback](MIGRACAO.md). Mesmo com aprovação, revalidar o estado dos remotos e suas proteções antes da integração.
 
 ## 12. Artefatos de release
 
