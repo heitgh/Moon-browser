@@ -66,7 +66,10 @@ describe("BrowserProfileImportService", () => {
         };
       },
     };
-    const service = new BrowserProfileImportService(home, persistence);
+    const service = new BrowserProfileImportService(home, persistence, {
+      platform: "linux",
+      configDirectory: join(home, ".config"),
+    });
     const sources = await service.discover();
     expect(sources).toHaveLength(1);
     expect(sources[0]).toMatchObject({
@@ -91,7 +94,10 @@ describe("BrowserProfileImportService", () => {
       await mkdir(profile, { recursive: true });
       await writeFile(join(profile, "Bookmarks"), chromiumBookmarks(`https://${name === "Default" ? "default" : "second"}.example/`));
     }
-    const service = new BrowserProfileImportService(home, persistenceStub());
+    const service = new BrowserProfileImportService(home, persistenceStub(), {
+      platform: "linux",
+      configDirectory: join(home, ".config"),
+    });
     const sources = await service.discover();
     expect(sources).toHaveLength(2);
     expect(sources.map(source => source.name).sort()).toEqual(["Chromium (Snap) — Default", "Chromium (Snap) — Profile 2"]);
@@ -101,7 +107,10 @@ describe("BrowserProfileImportService", () => {
   it("returns an empty discovery result when no compatible browser exists", async () => {
     const home = await mkdtemp(join(tmpdir(), "moon-import-empty-"));
     temporary.push(home);
-    const service = new BrowserProfileImportService(home, persistenceStub());
+    const service = new BrowserProfileImportService(home, persistenceStub(), {
+      platform: "linux",
+      configDirectory: join(home, ".config"),
+    });
     await expect(service.discover()).resolves.toEqual([]);
   });
 
