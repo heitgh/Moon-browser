@@ -1,3 +1,4 @@
+import type { ResearchMemory, ResearchSource } from "../../packages/research/research.js";
 export interface Tab {
   readonly id: string;
   readonly url: string;
@@ -18,6 +19,7 @@ export interface TabUpdate {
   readonly tab: Tab;
   readonly navigation: Navigation;
   readonly error?: string;
+  readonly historyEntry?: import("../../packages/ipc/profile-data-contract.js").ProfileHistoryEntry;
 }
 
 export interface Workspace { readonly id: string; readonly name: string; }
@@ -29,20 +31,30 @@ export interface Preferences { readonly accent: string; readonly wallpaper: stri
 export interface ManagedDownload { readonly id: string; readonly url: string; readonly filename: string; readonly savePath: string; readonly state: "in-progress" | "paused" | "completed" | "cancelled" | "failed"; readonly receivedBytes: number; readonly totalBytes: number; readonly speedBytesPerSecond: number; readonly percentage: number | null; readonly startedAt: number; readonly completedAt?: number; }
 export interface AdblockStatus { readonly phase: "loading" | "active" | "disabled" | "failed"; readonly enabled: boolean; readonly blockedCount: number; readonly error?: string; }
 export interface PermissionRequest { readonly id: string; readonly origin: string; readonly permission: string; }
+export interface FullscreenState { readonly tabId: string; readonly active: boolean; }
 export interface MoonThemeSummary { readonly id: string; readonly packageId: string; readonly name: string; readonly version: string; readonly author: string; readonly trust: "official" | "local"; readonly active: boolean; readonly installedAt: number; }
 export interface MoonThemePayload { readonly summary: MoonThemeSummary; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; readonly iconData?: Readonly<Partial<Record<"logo" | "newTab" | "privateTab", string>>>; }
 export interface MoonThemePreview extends MoonThemeSummary { readonly intentId: string; readonly description?: string; readonly changes: readonly string[]; readonly tokens: import("../../packages/theme-contract/types.js").MoonThemeTokens; readonly wallpaperData?: string; readonly iconData?: Readonly<Partial<Record<"logo" | "newTab" | "privateTab", string>>>; }
-export type Drawer = "profiles" | "workspaces" | "bookmarks" | "downloads" | "history" | "translate" | "notes" | "focus" | "extensions" | "ai" | "security";
+export type Drawer = "research" | "profiles" | "workspaces" | "bookmarks" | "downloads" | "history" | "translate" | "notes" | "focus" | "extensions" | "ai" | "security";
 export type { ProfileDataMutation, ProfileDataSnapshot } from "../../packages/ipc/profile-data-contract.js";
+export type { ProfileHistoryEntry } from "../../packages/ipc/profile-data-contract.js";
+export type { ProfileNoteDocument } from "../../packages/ipc/profile-data-contract.js";
 import type { ProfileDataMutation, ProfileDataSnapshot } from "../../packages/ipc/profile-data-contract.js";
 import type { SitePermissionRecord } from "../../packages/ipc/site-permission-contract.js";
 export type { SitePermissionRecord } from "../../packages/ipc/site-permission-contract.js";
 import type { ImportResult, ImportSelection, ImportSourceSummary } from "../../packages/ipc/browser-import-contract.js";
+import type { WallpaperLibraryItem, WallpaperLibrarySummary, WallpaperLibraryUpdate } from "../../packages/ipc/wallpaper-library-contract.js";
 import type { CustomizationSchemaV4 } from "../customization/customization-schema.js";
 export type { LocalProfileAvatar, LocalProfileSummary } from "../../packages/ipc/local-profile-contract.js";
 import type { CreateLocalProfileRequest, DeleteLocalProfileRequest, LocalProfileSummary, UpdateLocalProfileRequest } from "../../packages/ipc/local-profile-contract.js";
 
 export interface MoonBrowserBridge {
+  captureResearch?(workspaceId: string, tabIds: string[], consent: boolean): Promise<ResearchSource[]>;
+  loadResearchMemory?(workspaceId: string): Promise<ResearchMemory>;
+  saveResearchMemory?(workspaceId: string, value: ResearchMemory): Promise<ResearchMemory>;
+  researchSessionUrls?(workspaceId: string): Promise<string[]>;
+  restoreResearchSession?(workspaceId: string, id: string, urls: string[]): Promise<number>;
+  exportResearch?(content: string): Promise<boolean>;
   createTab(url?: string, workspaceId?: string): Promise<Tab>;
   getWindowContext(): Promise<{ readonly private: boolean; readonly guest: boolean; readonly profileId: string }>;
   createPrivateWindow(): Promise<void>;
@@ -93,8 +105,18 @@ export interface MoonBrowserBridge {
   getLocalProfileDeletionSummary(id: string): Promise<{ readonly profile: LocalProfileSummary; readonly directoryName: string; readonly includes: readonly string[] }>;
   deleteLocalProfile(request: DeleteLocalProfileRequest): Promise<{ readonly id: string; readonly backupPath?: string }>;
   discoverImportSources(): Promise<readonly ImportSourceSummary[]>;
+  selectManualImportSource(): Promise<readonly ImportSourceSummary[]>;
   importBrowserProfile(selection: ImportSelection): Promise<ImportResult>;
   importBookmarksHtml(): Promise<ImportResult | null>;
+  listWallpapers(): Promise<readonly WallpaperLibrarySummary[]>;
+  getWallpaper(id: string): Promise<WallpaperLibraryItem>;
+  importWallpaper(): Promise<WallpaperLibraryItem | null>;
+  replaceWallpaper(id: string): Promise<WallpaperLibraryItem | null>;
+  updateWallpaper(update: WallpaperLibraryUpdate): Promise<WallpaperLibrarySummary>;
+  removeWallpaper(id: string): Promise<boolean>;
+  exportWallpaper(id: string): Promise<boolean>;
+  importMarkdownNote(): Promise<import("../../packages/ipc/profile-data-contract.js").ProfileNoteDocument | null>;
+  exportMarkdownNote(id: string): Promise<boolean>;
   importMoonTheme(): Promise<MoonThemePreview | null>;
   confirmMoonTheme(intentId: string): Promise<MoonThemeSummary>;
   cancelMoonTheme(intentId: string): Promise<void>;
@@ -106,6 +128,7 @@ export interface MoonBrowserBridge {
   exportMoonTheme(id: string): Promise<boolean>;
   onTabUpdated(listener: (update: TabUpdate) => void): () => void;
   onTabClosed(listener: (event: { readonly tabId: string }) => void): () => void;
+  onFullscreenChanged?(listener: (state: FullscreenState) => void): () => void;
   onDownloadsUpdated(listener: (downloads: readonly ManagedDownload[]) => void): () => void;
   onAdblockStatus(listener: (status: AdblockStatus) => void): () => void;
   onPermissionRequested(listener: (request: PermissionRequest) => void): () => void;

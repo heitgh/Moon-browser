@@ -81,3 +81,5 @@
 .moon-content, .moon-stage { min-height: 0; overflow: hidden; position: relative; }
 .moon-stage { height: 100%; }
 .moon-browser-viewport { inset: 0; pointer-events: none; position: absolute; }
+html[data-moon-html-fullscreen="true"] #moon-root { visibility: hidden; }
+html[data-moon-html-fullscreen="true"], html[data-moon-html-fullscreen="true"] body { background: #000; }

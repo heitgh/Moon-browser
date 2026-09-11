@@ -1,6 +1,6 @@
 {
   "name": "@moon/mobile",
-  "version": "0.5.0-demo.2",
+  "version": "0.6.0-alpha.1",
   "private": true,
   "type": "module",
   "description": "Shared Moon Browser mobile application package.",

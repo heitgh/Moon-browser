@@ -5,6 +5,7 @@ import type {
 } from "../../customization/customization-schema.js";
 import type {
   ManagedDownload,
+  ProfileHistoryEntry,
   SavedLink,
   Shortcut,
   Tab,
@@ -22,6 +23,7 @@ const DEFAULT_SHORTCUTS: readonly Shortcut[] = [
 export interface HomeRuntimeData {
   readonly shortcuts: readonly Shortcut[];
   readonly bookmarks: readonly SavedLink[];
+  readonly history: readonly ProfileHistoryEntry[];
   readonly tabs: readonly Tab[];
   readonly workspaces: readonly Workspace[];
   readonly downloads: readonly ManagedDownload[];
@@ -53,6 +55,7 @@ export class HomeView {
   #data: HomeRuntimeData = {
     shortcuts: [],
     bookmarks: [],
+    history: [],
     tabs: [],
     workspaces: [],
     downloads: [],
@@ -60,6 +63,8 @@ export class HomeView {
     favicons: {},
   };
   #clockTimer: number | undefined;
+  #suggestionTimer: number | undefined;
+  #suggestionRequest = 0;
   #editing = false;
   #draggedWidget: HomeWidgetId | undefined;
   #wallpaperSettings: WallpaperSettings | undefined;
@@ -130,6 +135,7 @@ export class HomeView {
   }
   dispose(): void {
     if (this.#clockTimer !== undefined) window.clearInterval(this.#clockTimer);
+    if (this.#suggestionTimer !== undefined) window.clearTimeout(this.#suggestionTimer);
     document.removeEventListener("visibilitychange", this.#visibilityListener);
     this.#motionPreference?.removeEventListener("change", this.#motionListener);
   }
@@ -457,6 +463,8 @@ export class HomeView {
     input.type = "search";
     input.placeholder = "Pesquisar ou digitar endereço";
     input.setAttribute("aria-label", input.placeholder);
+    input.setAttribute("role", "combobox"); input.setAttribute("aria-autocomplete", "list"); input.setAttribute("aria-expanded", "false");
+    const suggestions = element("div", "moon-home-suggestions"); suggestions.id = `moon-suggestions-${crypto.randomUUID()}`; suggestions.setAttribute("role", "listbox"); suggestions.hidden = true; input.setAttribute("aria-controls", suggestions.id);
     const submit = button("moon-home-search-button", "Pesquisar", "search");
     submit.type = "submit";
     form.append(
@@ -464,13 +472,32 @@ export class HomeView {
       input,
       element("kbd", "moon-shortcut", "Ctrl K"),
       submit,
+      suggestions,
     );
+    const close = (): void => { suggestions.hidden = true; suggestions.replaceChildren(); input.setAttribute("aria-expanded", "false"); input.removeAttribute("aria-activedescendant"); };
+    const choose = (button: HTMLButtonElement): void => { const value = button.dataset.value; if (!value) return; input.value = value; close(); this.onNavigate(value); };
+    const select = (direction: -1 | 1): void => { const items = [...suggestions.querySelectorAll<HTMLButtonElement>("[role=option]")]; if (!items.length) return; const current = items.findIndex(item => item.id === input.getAttribute("aria-activedescendant")); const next = items[(current + direction + items.length) % items.length]!; input.setAttribute("aria-activedescendant", next.id); next.scrollIntoView({ block: "nearest" }); };
+    input.addEventListener("input", () => { if (this.#suggestionTimer !== undefined) window.clearTimeout(this.#suggestionTimer); const request = ++this.#suggestionRequest; this.#suggestionTimer = window.setTimeout(() => { if (request !== this.#suggestionRequest) return; this.#renderSuggestions(input.value, suggestions, choose); input.setAttribute("aria-expanded", String(!suggestions.hidden)); }, 100); });
+    input.addEventListener("keydown", event => { if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); if (suggestions.hidden) this.#renderSuggestions(input.value, suggestions, choose); select(event.key === "ArrowDown" ? 1 : -1); } else if (event.key === "Escape") { event.preventDefault(); close(); } else if (event.key === "Enter") { const active = suggestions.querySelector<HTMLButtonElement>(`#${CSS.escape(input.getAttribute("aria-activedescendant") ?? "")}`); if (active) { event.preventDefault(); choose(active); } } });
+    input.addEventListener("blur", () => window.setTimeout(close, 120));
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       const value = input.value.trim();
       if (value) this.onNavigate(value);
     });
     return form;
+  }
+
+  #renderSuggestions(query: string, container: HTMLElement, choose: (button: HTMLButtonElement) => void): void {
+    const term = query.trim().toLocaleLowerCase("pt-BR"); if (!term) { container.hidden = true; container.replaceChildren(); return; }
+    const candidates = [
+      ...this.#data.tabs.filter(tab => tab.url.startsWith("http")).map(tab => ({ kind: "Aba", title: tab.title || tab.url, url: tab.url })),
+      ...this.#data.bookmarks.map(item => ({ kind: "Favorito", title: item.title || item.url, url: item.url })),
+      ...this.#data.history.map(item => ({ kind: "Histórico", title: item.title || item.url, url: item.url }))
+    ].filter(item => `${item.title} ${item.url}`.toLocaleLowerCase("pt-BR").includes(term));
+    const seen = new Set<string>(); const fragment = document.createDocumentFragment();
+    for (const item of candidates) { if (seen.has(item.url) || seen.size >= 8) continue; seen.add(item.url); const option = button("moon-home-suggestion", `Abrir ${item.title}`); option.id = `moon-suggestion-${crypto.randomUUID()}`; option.setAttribute("role", "option"); option.dataset.value = item.url; const copy = element("span", "moon-list-copy"); copy.append(element("strong", "", item.title), element("small", "", `${item.kind} · ${hostname(item.url)}`)); option.append(this.#siteMark(item.url, hostname(item.url).slice(0, 1).toUpperCase()), copy); option.addEventListener("mousedown", event => event.preventDefault()); option.addEventListener("click", () => choose(option)); fragment.append(option); }
+    container.replaceChildren(fragment); container.hidden = !container.childElementCount;
   }
 
   #shortcuts(): HTMLElement {

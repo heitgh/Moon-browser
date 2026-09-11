@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0-alpha.1 — atualização local (2026-09-08)
+
+- Pesquisa local de até cinco abas, trechos com fontes e roteiros de estudo; IA generativa permanece indisponível.
+- Memória explícita por categoria/workspace, expiração, inspeção, exportação, exclusão e retomada de sessões por URLs.
+- Notas e downloads na Central de comandos; correções de revisão, foco e autosave independente entre notas.
+- Correções de contraste claro, isolamento DOM dos testes e nomes versionados de artefatos.
+- Publicação somente manual após qualidade/build e ambiente de aprovação configurado; esta versão é prerelease.
+- Dependência indireta js-yaml atualizada para 4.3.2 para corrigir alerta alto; dois alertas moderados nas ferramentas de teste permanecem registrados.
+- [Escopo, evidências e limitações](docs/update/RELATORIO.md). Nenhuma publicação ou migração oficial realizada.
+
 ## 0.5.0-demo.2 — Personalization Studio V4 (2026-08-30)
 
 ### Adicionado

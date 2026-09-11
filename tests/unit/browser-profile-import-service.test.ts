@@ -66,11 +66,15 @@ describe("BrowserProfileImportService", () => {
         };
       },
     };
-    const service = new BrowserProfileImportService(home, persistence);
+    const service = new BrowserProfileImportService(home, persistence, {
+      platform: "linux",
+      configDirectory: join(home, ".config"),
+    });
     const sources = await service.discover();
     expect(sources).toHaveLength(1);
     expect(sources[0]).toMatchObject({
       browser: "chromium",
+      detectedPath: profile,
       categories: { bookmarks: 1, history: 0 },
     });
     const result = await service.import({
@@ -80,6 +84,46 @@ describe("BrowserProfileImportService", () => {
     expect(result.imported.bookmarks).toBe(1);
     expect(staged?.bookmarks[0]?.url).toBe("https://moon.example/");
     expect(await readFile(path, "utf8")).toBe(source);
+  });
+
+  it("detects alternate Linux installs and multiple profiles", async () => {
+    const home = await mkdtemp(join(tmpdir(), "moon-import-alternate-"));
+    temporary.push(home);
+    for (const name of ["Default", "Profile 2"]) {
+      const profile = join(home, "snap/chromium/common/chromium", name);
+      await mkdir(profile, { recursive: true });
+      await writeFile(join(profile, "Bookmarks"), chromiumBookmarks(`https://${name === "Default" ? "default" : "second"}.example/`));
+    }
+    const service = new BrowserProfileImportService(home, persistenceStub(), {
+      platform: "linux",
+      configDirectory: join(home, ".config"),
+    });
+    const sources = await service.discover();
+    expect(sources).toHaveLength(2);
+    expect(sources.map(source => source.name).sort()).toEqual(["Chromium (Snap) — Default", "Chromium (Snap) — Profile 2"]);
+    expect(sources.every(source => source.detectedPath.includes("snap/chromium"))).toBe(true);
+  });
+
+  it("returns an empty discovery result when no compatible browser exists", async () => {
+    const home = await mkdtemp(join(tmpdir(), "moon-import-empty-"));
+    temporary.push(home);
+    const service = new BrowserProfileImportService(home, persistenceStub(), {
+      platform: "linux",
+      configDirectory: join(home, ".config"),
+    });
+    await expect(service.discover()).resolves.toEqual([]);
+  });
+
+  it("adds a manually selected profile without accepting a renderer path", async () => {
+    const home = await mkdtemp(join(tmpdir(), "moon-import-manual-"));
+    temporary.push(home);
+    const profile = join(home, "portable-browser/Profile 7");
+    await mkdir(profile, { recursive: true });
+    await writeFile(join(profile, "Bookmarks"), chromiumBookmarks("https://portable.example/"));
+    const service = new BrowserProfileImportService(home, persistenceStub(), { pickDirectory: async () => profile });
+    const selected = await service.selectManualSource();
+    expect(selected).toHaveLength(1);
+    expect(selected[0]).toMatchObject({ browser: "chromium", detectedPath: profile, categories: { bookmarks: 1, history: 0 } });
   });
 
   it("rejects renderer-controlled paths and unsupported categories at the IPC boundary", () => {
@@ -108,3 +152,17 @@ describe("BrowserProfileImportService", () => {
     ).toBe("&lt;script&gt;alert(1)&lt;/script&gt;");
   });
 });
+
+function chromiumBookmarks(url: string): string {
+  return JSON.stringify({ roots: { bookmark_bar: { children: [{ type: "url", name: "Imported", url, date_added: "13300000000000000" }] } } });
+}
+
+function persistenceStub() {
+  return {
+    importExternalProfile: async (sourceId: string, data: ImportedProfileData): Promise<ImportResult> => ({
+      sourceId,
+      imported: { bookmarks: data.bookmarks.length, history: data.history.length },
+      skipped: { bookmarks: 0, history: 0 },
+    }),
+  };
+}

@@ -1,3 +1,5 @@
+import { DEFAULT_FEATURE_FLAGS, featureEnabled } from "../../../../config/feature-flags.js";
+import { registerResearchIpc } from "../ipc/research-ipc.js";
 import { app } from "electron";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
@@ -71,7 +73,8 @@ async function createMainWindow(privateMode = false, profileId = defaultProfileI
       void profiles?.releaseGuest(profileId).catch(error => console.error("Guest profile cleanup failed", error));
     }
   });
-  if (!privateMode) await application?.restoreWindow(id);
+  if (privateMode) await application?.createTab(id, { active: true, private: true, sessionId: id });
+  else await application?.restoreWindow(id);
   await window.loadFile(join(appRoot, "index.html"));
 }
 
@@ -85,6 +88,7 @@ app.whenReady().then(async () => {
   installApplicationMenu(() => { void createMainWindow(true, defaultProfileId); });
   registerBrowserIpc(ipc, application, windows, profileId => createMainWindow(true, profileId));
   registerProductIpc(ipc, downloads, adblock, profiles, windows, app.getPath("home"), app.getVersion(), profileId => createMainWindow(false, profileId));
+  if (featureEnabled(DEFAULT_FEATURE_FLAGS, "research")) registerResearchIpc(ipc, windows, browser, application, profiles);
   registerApplicationLifecycle(windows, createMainWindow);
   await createMainWindow();
   void adblock.initialize();

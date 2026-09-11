@@ -104,11 +104,53 @@ describe("ProfileStorage", () => {
     await storage.close();
   });
 
+  it("persists versioned timeline visits and deletes items or ranges exactly", async () => {
+    const { storage } = await profile();
+    const visit = (id: string, startedAt: number, url: string) => ({ schemaVersion: 2 as const, id, title: id, url, time: startedAt, startedAt, endedAt: startedAt + 50, durationMs: 50, profileId: "default", workspaceId: "research", sessionId: "session-1", tabId: "tab-1", source: "navigation" as const, navigationType: "typed" as const });
+    await storage.recordHistoryEntry(visit("visit-older", 100, "https://older.test/"));
+    await storage.recordHistoryEntry(visit("visit-newer", 200, "https://newer.test/"));
+    expect((await storage.loadProfileData()).history.map(item => item.id)).toEqual(["visit-newer", "visit-older"]);
+    await storage.applyProfileMutation({ type: "history:delete", id: "visit-newer" });
+    expect((await storage.loadProfileData()).history.map(item => item.id)).toEqual(["visit-older"]);
+    await storage.applyProfileMutation({ type: "history:delete-range", from: 90, to: 150 });
+    expect((await storage.loadProfileData()).history).toEqual([]);
+    await storage.close();
+  });
+
   it("persists validated site permission decisions in profile settings", async () => {
     const { storage } = await profile();
     const records = [{ origin: "https://meet.example", permission: "media", decision: "allow" as const, updatedAt: 10 }];
     await storage.saveSitePermissions(records);
     expect(await storage.loadSitePermissions()).toEqual(records);
+    await storage.close();
+  });
+
+  it("persists managed wallpaper assets independently from themes", async () => {
+    const { storage } = await profile();
+    const record = { id: "wallpaper-1234567890abcdef", name: "Aurora local", source: "data:image/png;base64,iVBORw0KGgo=", type: "image" as const, thumbnailData: "data:image/png;base64,iVBORw0KGgo=", mimeType: "image/png" as const, bytes: 8, hash: "1234567890abcdef", favorite: true, tags: ["noite"], fit: "cover" as const, position: "center", repeat: false, createdAt: 10, updatedAt: 20 };
+    await storage.saveWallpaper(record);
+    expect(await storage.getWallpaper(record.id)).toEqual(record);
+    expect(await storage.listWallpapers()).toEqual([record]);
+    expect(await storage.removeWallpaper(record.id)).toBe(true);
+    expect(await storage.getWallpaper(record.id)).toBeUndefined();
+    await storage.close();
+  });
+
+  it("stores Moon Notes with folders, safe backlink renames, revisions and recoverable trash", async () => {
+    const { storage } = await profile();
+    const input = (id: string, title: string, content: string, parentId?: string) => ({ id, kind: "note" as const, ...(parentId ? { parentId } : {}), title, content, format: "markdown" as const, pinned: false, favorite: false, tags: ["produto"] });
+    await storage.applyProfileMutation({ type: "note:save", expectedRevision: 0, value: { ...input("folder-one", "Produto", ""), kind: "folder", content: "" } });
+    await storage.applyProfileMutation({ type: "note:save", expectedRevision: 0, value: input("note-source", "Origem", "Veja [[Destino]]", "folder-one") });
+    await storage.applyProfileMutation({ type: "note:save", expectedRevision: 0, value: input("note-target", "Destino", "Conteúdo") });
+    await storage.applyProfileMutation({ type: "note:save", expectedRevision: 1, value: input("note-target", "Destino novo", "Conteúdo atualizado") });
+    let snapshot = await storage.loadProfileData();
+    expect(snapshot.noteDocuments.find(note => note.id === "note-source")?.content).toBe("Veja [[Destino novo]]");
+    expect(snapshot.noteDocuments.find(note => note.id === "note-target")?.versions).toHaveLength(1);
+    await expect(storage.applyProfileMutation({ type: "note:save", expectedRevision: 1, value: input("note-target", "Conflito", "x") })).rejects.toThrow(/outra janela/i);
+    await storage.applyProfileMutation({ type: "note:delete", id: "folder-one" }); snapshot = await storage.loadProfileData();
+    expect(snapshot.noteDocuments.find(note => note.id === "note-source")?.deletedAt).toBeTypeOf("number");
+    await storage.applyProfileMutation({ type: "note:restore", id: "note-source" }); expect((await storage.loadProfileData()).noteDocuments.find(note => note.id === "note-source")?.deletedAt).toBeUndefined();
+    await storage.applyProfileMutation({ type: "note:purge", id: "note-source" }); expect((await storage.loadProfileData()).noteDocuments.some(note => note.id === "note-source")).toBe(false);
     await storage.close();
   });
 
@@ -129,5 +171,35 @@ describe("ProfileStorage", () => {
     expect(result).toEqual({ sourceId: "source-12345678", imported: { bookmarks: 1, history: 1 }, skipped: { bookmarks: 2, history: 1 } });
     const snapshot = await storage.loadProfileData(); expect(snapshot.bookmarks.filter(item => item.url === "https://new.test/")).toHaveLength(1); expect(snapshot.history.filter(item => item.url === "https://history.test/")).toHaveLength(1);
     await storage.close();
+  });
+});
+
+describe("Research memory persistence", () => {
+  it("requires prior granular consent, preserves old profile data and isolates workspaces", async () => {
+    const { storage, directory } = await profile();
+    await storage.migrateLegacyProfile(JSON.stringify(backup));
+    const initial = await storage.loadResearchMemory("research");
+    const now = Date.now();
+    const item = { id: "study-note", category: "notes" as const, title: "Estudo", markdown: "Conteúdo local", urls: ["https://example.org/study"], createdAt: now, expiresAt: now + 86400_000 };
+    await expect(storage.saveResearchMemory("research", { ...initial, enabled: ["notes"], items: [item] })).rejects.toThrow("Ative");
+    const allowed = await storage.saveResearchMemory("research", { ...initial, enabled: ["notes"] });
+    const saved = await storage.saveResearchMemory("research", { ...allowed, items: [item] });
+    expect((await storage.loadResearchMemory("other")).items).toEqual([]);
+    await expect(storage.saveResearchMemory("research", allowed)).rejects.toThrow("outra janela");
+    await storage.close();
+    const reopened = new ProfileStorage(directory); await reopened.open();
+    expect((await reopened.loadResearchMemory("research")).items).toEqual([item]);
+    expect((await reopened.loadProfileData()).notes).toBe(backup.notes);
+    const cleared = await reopened.saveResearchMemory("research", { ...saved, items: [] });
+    expect(cleared.items).toEqual([]); await reopened.close();
+  });
+  it("isolates memory between profiles and never deletes another workspace", async () => {
+    const first = await profile(); const second = await profile();
+    const enabled = await first.storage.saveResearchMemory("research", { ...(await first.storage.loadResearchMemory("research")), enabled: ["projects"] });
+    expect((await second.storage.loadResearchMemory("research")).enabled).toEqual([]);
+    await first.storage.saveResearchMemory("other", { ...(await first.storage.loadResearchMemory("other")), enabled: ["notes"] });
+    await first.storage.saveResearchMemory("research", { ...enabled, items: [], enabled: [] });
+    expect((await first.storage.loadResearchMemory("other")).enabled).toEqual(["notes"]);
+    await first.storage.close(); await second.storage.close();
   });
 });

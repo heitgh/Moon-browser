@@ -2,7 +2,9 @@ import type { ElectronAdblockService } from "../services/adblock-service.js";
 import type { ElectronDownloadManager } from "../services/download-manager.js";
 import type { IpcRouter } from "./ipc-router.js";
 import { dialog } from "electron";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
+import { basename, extname } from "node:path";
+import { randomUUID } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { parseMoonProfileBackup } from "../../../../packages/storage/backup/profile-backup.js";
@@ -14,8 +16,10 @@ import { parseProfileDataMutation } from "../../../../packages/ipc/profile-data-
 import type { WindowManager } from "../main/window-manager.js";
 import { BrowserProfileImportService } from "../services/browser-profile-import-service.js";
 import { parseImportSelection } from "../../../../packages/ipc/browser-import-contract.js";
+import { parseWallpaperLibraryUpdate } from "../../../../packages/ipc/wallpaper-library-contract.js";
 import { parseCreateLocalProfile, parseDeleteLocalProfile, parseLocalProfileId, parseUpdateLocalProfile } from "../../../../packages/ipc/local-profile-contract.js";
 import type { LocalProfileManager } from "../services/local-profile-manager.js";
+import { WallpaperLibraryService } from "../services/wallpaper-library-service.js";
 
 interface IdPayload { readonly id: string; }
 
@@ -31,6 +35,7 @@ export function registerProductIpc(
 ): void {
   const themeServices = new Map<string, MoonThemeService>();
   const importerServices = new Map<string, BrowserProfileImportService>();
+  const wallpaperServices = new Map<string, WallpaperLibraryService>();
   const idFrom = (payload: IdPayload): string => {
     if (!payload || typeof payload.id !== "string" || payload.id.length > 100) {
       throw new TypeError("A valid ID is required");
@@ -54,6 +59,10 @@ export function registerProductIpc(
   const importerFor = async (event: Electron.IpcMainInvokeEvent): Promise<BrowserProfileImportService> => {
     const profileId = profileIdFor(event); const existing = importerServices.get(profileId); if (existing) return existing;
     const service = new BrowserProfileImportService(homeDirectory, await profiles.storage(profileId)); importerServices.set(profileId, service); return service;
+  };
+  const wallpapersFor = async (event: Electron.IpcMainInvokeEvent): Promise<WallpaperLibraryService> => {
+    const profileId = profileIdFor(event); const existing = wallpaperServices.get(profileId); if (existing) return existing;
+    const service = new WallpaperLibraryService(await profiles.storage(profileId)); wallpaperServices.set(profileId, service); return service;
   };
   const boundedCustomization = (value: unknown): unknown => {
     let serialized: string;
@@ -162,18 +171,33 @@ export function registerProductIpc(
     const snapshot = await (await profileFor(event)).loadProfileData();
     const windowId = windows.idForWebContents(event.sender);
     if (!windowId) throw new Error("Browser window is not registered");
-    return windows.isPrivate(windowId) ? { ...snapshot, history: [], notes: "" } : snapshot;
+    return windows.isPrivate(windowId) ? { ...snapshot, history: [], notes: "", noteDocuments: [] } : snapshot;
   });
   router.register("profile:mutate", async (event, payload: unknown) => {
     const windowId = windows.idForWebContents(event.sender);
     if (!windowId) throw new Error("Browser window is not registered");
     const mutation = parseProfileDataMutation(payload);
-    if (windows.isPrivate(windowId) && (mutation.type === "history:record" || mutation.type === "notes:save")) throw new Error("Private windows cannot persist history or notes");
+    if (windows.isPrivate(windowId) && (mutation.type === "history:record" || mutation.type === "notes:save" || mutation.type.startsWith("note:"))) throw new Error("Private windows cannot persist history or notes");
     return (await profileFor(event)).applyProfileMutation(mutation);
   });
   router.register("import:discover", async event => { assertNormalWindow(event); return (await importerFor(event)).discover(); });
+  router.register("import:select-manual", async event => { assertNormalWindow(event); return (await importerFor(event)).selectManualSource(); });
   router.register("import:run", async (event, payload: unknown) => { assertNormalWindow(event); return (await importerFor(event)).import(parseImportSelection(payload)); });
   router.register("import:bookmarks-html", async event => { assertNormalWindow(event); return (await importerFor(event)).importBookmarksHtml(); });
+  router.register("wallpaper:list", async event => (await wallpapersFor(event)).list());
+  router.register("wallpaper:get", async (event, payload: IdPayload) => (await wallpapersFor(event)).get(idFrom(payload)));
+  router.register("wallpaper:import", async event => { assertNormalWindow(event); return (await wallpapersFor(event)).importFromDialog(); });
+  router.register("wallpaper:replace", async (event, payload: IdPayload) => { assertNormalWindow(event); return (await wallpapersFor(event)).replaceFromDialog(idFrom(payload)); });
+  router.register("wallpaper:update", async (event, payload: unknown) => { assertNormalWindow(event); return (await wallpapersFor(event)).update(parseWallpaperLibraryUpdate(payload)); });
+  router.register("wallpaper:remove", async (event, payload: IdPayload) => { assertNormalWindow(event); return (await wallpapersFor(event)).remove(idFrom(payload)); });
+  router.register("wallpaper:export", async (event, payload: IdPayload) => (await wallpapersFor(event)).exportToDialog(idFrom(payload)));
+  router.register("note:import-markdown", async event => {
+    assertNormalWindow(event); const picked = await dialog.showOpenDialog({ title: "Importar nota Markdown", properties: ["openFile"], filters: [{ name: "Markdown", extensions: ["md", "markdown", "txt"] }] }); const path = picked.filePaths[0]; if (picked.canceled || !path) return null;
+    const info = await stat(path); if (!info.isFile() || info.size > 1_000_000) throw new Error("A nota deve ter até 1 MB."); const content = await readFile(path, "utf8"); const id = `note-${randomUUID()}`; const title = basename(path, extname(path)).slice(0, 200) || "Nota importada"; const storage = await profileFor(event); await storage.applyProfileMutation({ type: "note:save", expectedRevision: 0, value: { id, kind: "note", title, content, format: "markdown", pinned: false, favorite: false, tags: ["importada"] } }); return (await storage.loadProfileData()).noteDocuments.find(note => note.id === id) ?? null;
+  });
+  router.register("note:export-markdown", async (event, payload: IdPayload) => {
+    const note = await (await profileFor(event)).getNote(idFrom(payload)); if (!note || (note.kind ?? "note") !== "note") throw new Error("Nota não encontrada."); const cleanName = Array.from(note.title, character => character.charCodeAt(0) < 32 ? "-" : character).join("").replace(/[\\/:*?"<>|]/g, "-"); const picked = await dialog.showSaveDialog({ title: "Exportar nota Markdown", defaultPath: `${cleanName.slice(0, 100) || "moon-note"}.md`, filters: [{ name: "Markdown", extensions: ["md"] }] }); if (picked.canceled || !picked.filePath) return false; await writeFile(picked.filePath, note.content, { encoding: "utf8", mode: 0o600 }); return true;
+  });
   router.register("theme:import", async event => { assertNormalWindow(event); return (await themesFor(event)).importFromDialog(); });
   router.register("theme:confirm", async (event, payload: { readonly intentId: string }) => { assertNormalWindow(event); return (await themesFor(event)).confirm(idFrom({ id: payload?.intentId })); });
   router.register("theme:cancel", async (event, payload: { readonly intentId: string }) => (await themesFor(event)).cancel(idFrom({ id: payload?.intentId })));
@@ -201,7 +225,7 @@ export function registerProductIpc(
   router.register("local-profile:delete", async (event, payload: unknown) => {
     assertNormalWindow(event); const request = parseDeleteLocalProfile(payload);
     if (windows.hasProfileWindows(request.id)) throw new Error("Feche todas as janelas deste perfil antes de excluí-lo.");
-    themeServices.delete(request.id); importerServices.delete(request.id); return profiles.delete(request);
+    themeServices.delete(request.id); importerServices.delete(request.id); wallpaperServices.delete(request.id); return profiles.delete(request);
   });
 }
 

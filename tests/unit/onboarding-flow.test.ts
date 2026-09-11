@@ -28,7 +28,7 @@ describe("OnboardingFlow", () => {
   it("resumes saved choices and cancels the whole visual draft when skipped", async () => {
     const storage = new MemoryStorage(); const store = CustomizationStore.load(storage);
     storage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify({ status: "in-progress", step: 1, choices: { appearanceMode: "light", tabPosition: "left" } }));
-    const close = vi.fn(); const flow = new OnboardingFlow({ store, storage, onDiscoverImportSources: async () => [], onImportBrowserProfile: vi.fn(), onImportBookmarksHtml: async () => null, onClose: close }); document.body.append(flow.element);
+    const close = vi.fn(); const flow = new OnboardingFlow({ store, storage, onDiscoverImportSources: async () => [], onSelectManualImportSource: async () => [], onImportBrowserProfile: vi.fn(), onImportBookmarksHtml: async () => null, onClose: close }); document.body.append(flow.element);
     expect(document.querySelector("h1")?.textContent).toBe("Escolha onde suas abas vivem"); expect(store.config.appearance.mode).toBe("light"); expect(store.config.layout.tabs.position).toBe("left");
     (document.querySelector('[aria-label="Direita"]') as HTMLButtonElement).click();
     (document.querySelector('[aria-label="Pular configuração inicial"]') as HTMLButtonElement).click(); await flush();
@@ -39,7 +39,7 @@ describe("OnboardingFlow", () => {
     const storage = new MemoryStorage(); const store = CustomizationStore.load(storage);
     storage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify({ status: "in-progress", step: 2, choices: {} }));
     const run = vi.fn(async () => ({ sourceId: "source-12345678", imported: { bookmarks: 2, history: 0 }, skipped: { bookmarks: 0, history: 0 } })); const close = vi.fn();
-    const flow = new OnboardingFlow({ store, storage, onDiscoverImportSources: async () => [{ id: "source-12345678", browser: "chromium", name: "Chromium — Default", modifiedAt: 1, categories: { bookmarks: 2, history: 3 } }], onImportBrowserProfile: run, onImportBookmarksHtml: async () => null, onClose: close }); document.body.append(flow.element);
+    const flow = new OnboardingFlow({ store, storage, onDiscoverImportSources: async () => [{ id: "source-12345678", browser: "chromium", name: "Chromium — Default", detectedPath: "/home/test/.config/chromium/Default", modifiedAt: 1, categories: { bookmarks: 2, history: 3 } }], onSelectManualImportSource: async () => [], onImportBrowserProfile: run, onImportBookmarksHtml: async () => null, onClose: close }); document.body.append(flow.element);
     (document.querySelector('[aria-label="Detectar navegadores instalados"]') as HTMLButtonElement).click(); await flush();
     const checkboxes = document.querySelectorAll<HTMLInputElement>(".moon-onboarding-import-source input"); checkboxes[1]!.checked = false;
     (document.querySelector('[aria-label="Importar seleção de Chromium — Default"]') as HTMLButtonElement).click(); await flush();

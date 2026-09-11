@@ -5,6 +5,7 @@ export interface ImportSourceSummary {
   readonly id: string;
   readonly browser: ImportBrowser;
   readonly name: string;
+  readonly detectedPath: string;
   readonly modifiedAt: number;
   readonly categories: Readonly<Record<ImportCategory, number>>;
 }

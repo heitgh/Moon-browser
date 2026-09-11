@@ -10,15 +10,22 @@ const downloadListeners: Array<(downloads: readonly unknown[]) => void> = [];
 const adblockListeners: Array<(status: unknown) => void> = [];
 const tabUpdateListeners: Array<(update: unknown) => void> = [];
 const permissionListeners: Array<(request: { readonly id: string; readonly origin: string; readonly permission: string }) => void> = [];
-const profileData = { bookmarks: [] as Array<{ id: string; title: string; url: string; time: number }>, history: [] as Array<{ id: string; title: string; url: string; time: number }>, notes: "", workspaces: [{ id: "research", name: "Pesquisa", position: 0 }, { id: "study", name: "Estudos", position: 1 }, { id: "projects", name: "Projetos", position: 2 }] };
+const profileData = { bookmarks: [] as Array<{ id: string; title: string; url: string; time: number }>, history: [] as Array<{ id: string; title: string; url: string; time: number }>, notes: "", noteDocuments: [] as Array<Record<string, unknown>>, workspaces: [{ id: "research", name: "Pesquisa", position: 0 }, { id: "study", name: "Estudos", position: 1 }, { id: "projects", name: "Projetos", position: 2 }] };
 let sitePermissions: Array<{ origin: string; permission: string; decision: "allow" | "deny"; updatedAt: number }> = [];
 let localProfiles = [{ id: "default", name: "Padrão", avatar: "moon", color: "#8b5cf6", kind: "persistent", default: true, createdAt: 1, lastUsedAt: 1 }];
-const mutateProfileData = vi.fn(async (mutation: { type: string; id?: string; content?: string; value?: { id: string; title?: string; url?: string; time?: number; name?: string; position?: number } }) => {
+const wallpaperItem = { id: "wallpaper-1234567890abcdef", name: "Nebulosa local", thumbnailData: "data:image/png;base64,YQ==", data: "data:image/png;base64,YQ==", mimeType: "image/png" as const, bytes: 1, favorite: false, tags: ["espaço"], fit: "cover" as const, position: "center", repeat: false, createdAt: 1, updatedAt: 2 };
+const mutateProfileData = vi.fn(async (mutation: { type: string; id?: string; content?: string; expectedRevision?: number; value?: { id: string; title?: string; url?: string; time?: number; name?: string; position?: number; kind?: string; content?: string; format?: string; pinned?: boolean; favorite?: boolean; tags?: readonly string[] } }) => {
   if (mutation.type === "bookmark:save" && mutation.value) profileData.bookmarks.unshift(mutation.value as typeof profileData.bookmarks[number]);
   if (mutation.type === "bookmark:delete") profileData.bookmarks = profileData.bookmarks.filter(item => item.id !== mutation.id);
   if (mutation.type === "history:record" && mutation.value) profileData.history.unshift(mutation.value as typeof profileData.history[number]);
+  if (mutation.type === "history:delete") profileData.history = profileData.history.filter(item => item.id !== mutation.id);
+  if (mutation.type === "history:delete-range") profileData.history = profileData.history.filter(item => (item.time ?? 0) < Number((mutation as { from?: number }).from) || (item.time ?? 0) > Number((mutation as { to?: number }).to));
   if (mutation.type === "history:clear") profileData.history = [];
   if (mutation.type === "notes:save") profileData.notes = mutation.content ?? "";
+  if (mutation.type === "note:save" && mutation.value) { const existing = profileData.noteDocuments.find(note => note.id === mutation.value!.id); const now = Date.now(); const saved = { ...existing, ...mutation.value, archived: false, favorite: mutation.value.favorite ?? false, createdAt: existing?.createdAt ?? now, updatedAt: now, revision: Number(existing?.revision ?? 0) + 1, versions: existing?.versions ?? [] }; profileData.noteDocuments = [...profileData.noteDocuments.filter(note => note.id !== mutation.value!.id), saved]; }
+  if (mutation.type === "note:delete") profileData.noteDocuments = profileData.noteDocuments.map(note => note.id === mutation.id ? { ...note, archived: true, deletedAt: Date.now() } : note);
+  if (mutation.type === "note:restore") profileData.noteDocuments = profileData.noteDocuments.map(note => { if (note.id !== mutation.id) return note; const restored = { ...note }; delete restored.deletedAt; return { ...restored, archived: false }; });
+  if (mutation.type === "note:purge") profileData.noteDocuments = profileData.noteDocuments.filter(note => note.id !== mutation.id);
   if (mutation.type === "workspace:save" && mutation.value) profileData.workspaces.push(mutation.value as typeof profileData.workspaces[number]);
   if (mutation.type === "workspace:delete") profileData.workspaces = profileData.workspaces.filter(item => item.id !== mutation.id);
 });
@@ -35,9 +42,12 @@ const bridge = {
   migrateLegacyProfile: vi.fn(async () => ({ migrated: true, version: 1 })), loadCustomization: vi.fn(async (legacy: unknown) => legacy), commitCustomization: vi.fn(async (document: unknown) => document), getProfileData: vi.fn(async () => profileData), mutateProfileData, onTabUpdated: vi.fn((listener: (update: unknown) => void) => { tabUpdateListeners.push(listener); return () => undefined; }), onTabClosed: vi.fn(() => () => undefined),
   listLocalProfiles: vi.fn(async () => localProfiles),
   createLocalProfile: vi.fn(async (profile: { name: string; avatar: string; color: string }) => { const created = { id: "profile-product", ...profile, kind: "persistent", default: false, createdAt: 2, lastUsedAt: 2 }; localProfiles = [...localProfiles, created]; return created; }), updateLocalProfile: vi.fn(async (profile: unknown) => profile), openLocalProfile: vi.fn(async () => undefined), createGuestProfile: vi.fn(async () => undefined), getLocalProfileDeletionSummary: vi.fn(async () => undefined), deleteLocalProfile: vi.fn(async () => undefined),
-  discoverImportSources: vi.fn(async () => [{ id: "source-12345678", browser: "chromium", name: "Chromium — Default", modifiedAt: Date.now(), categories: { bookmarks: 3, history: 5 } }]),
+  discoverImportSources: vi.fn(async () => [{ id: "source-12345678", browser: "chromium", name: "Chromium — Default", detectedPath: "/home/test/.config/chromium/Default", modifiedAt: Date.now(), categories: { bookmarks: 3, history: 5 } }]),
+  selectManualImportSource: vi.fn(async () => [{ id: "source-manual-1234", browser: "brave", name: "Perfil selecionado — Profile 4", detectedPath: "/mnt/portable/Brave/Profile 4", modifiedAt: Date.now(), categories: { bookmarks: 7, history: 0 } }]),
   importBrowserProfile: vi.fn(async (selection: { sourceId: string; categories: readonly string[] }) => ({ sourceId: selection.sourceId, imported: { bookmarks: selection.categories.includes("bookmarks") ? 3 : 0, history: selection.categories.includes("history") ? 5 : 0 }, skipped: { bookmarks: 0, history: 0 } })),
   importBookmarksHtml: vi.fn(async () => null),
+  listWallpapers: vi.fn(async () => [{ ...wallpaperItem, data: undefined }]), getWallpaper: vi.fn(async () => wallpaperItem), importWallpaper: vi.fn(async () => null), replaceWallpaper: vi.fn(async () => null), updateWallpaper: vi.fn(async () => ({ ...wallpaperItem, data: undefined })), removeWallpaper: vi.fn(async () => true), exportWallpaper: vi.fn(async () => true),
+  importMarkdownNote: vi.fn(async () => null), exportMarkdownNote: vi.fn(async () => true),
   onDownloadsUpdated: vi.fn((listener: (downloads: readonly unknown[]) => void) => { downloadListeners.push(listener); return () => undefined; }),
   onAdblockStatus: vi.fn((listener: (status: unknown) => void) => { adblockListeners.push(listener); return () => undefined; }),
   onPermissionRequested: vi.fn((listener: (request: { readonly id: string; readonly origin: string; readonly permission: string }) => void) => { permissionListeners.push(listener); return () => undefined; })
@@ -85,11 +95,38 @@ describe("Moon browser shell", () => {
   });
   it("persists notes entered through the SQLite profile bridge", async () => {
     mutateProfileData.mockClear();
-    (document.querySelector('[aria-label="Bloco de notas"]') as HTMLButtonElement).click();
+    if (!document.querySelector(".moon-notes")) (document.querySelector('[aria-label="Bloco de notas"]') as HTMLButtonElement).click();
     const notes = document.querySelector(".moon-notes-input") as HTMLTextAreaElement;
     notes.value = "Decisão importante da startup"; notes.dispatchEvent(new Event("input", { bubbles: true }));
     await new Promise(resolve => setTimeout(resolve, 300)); await flush();
     expect(mutateProfileData).toHaveBeenCalledWith({ type: "notes:save", content: "Decisão importante da startup" });
+  });
+
+  it("creates and autosaves a version-aware Markdown note", async () => {
+    mutateProfileData.mockClear();
+    if (!document.querySelector(".moon-notes")) (document.querySelector('[aria-label="Bloco de notas"]') as HTMLButtonElement).click();
+    (document.querySelector('[aria-label="Criar nova nota"]') as HTMLButtonElement).click(); await flush();
+    expect(mutateProfileData.mock.calls.some(([mutation]) => mutation.type === "note:save" && mutation.expectedRevision === 0)).toBe(true);
+    const editor = document.querySelector(".moon-notes-editor .moon-notes-input") as HTMLTextAreaElement; editor.value = "# Roadmap\nVeja [[Pesquisa]]"; editor.dispatchEvent(new Event("input", { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 400)); await flush();
+    expect(mutateProfileData.mock.calls.some(([mutation]) => mutation.type === "note:save" && mutation.expectedRevision === 1 && mutation.value?.content?.includes("[[Pesquisa]]"))).toBe(true);
+    const current = document.querySelector(".moon-notes-editor .moon-notes-input") as HTMLTextAreaElement;
+    current.focus(); current.value += "\nSegunda edição"; current.dispatchEvent(new Event("input", { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 400)); await flush();
+    expect(document.activeElement).toBe(current);
+    expect(mutateProfileData.mock.calls.some(([mutation]) => mutation.type === "note:save" && mutation.expectedRevision === 2 && mutation.value?.content?.includes("Segunda edição"))).toBe(true);
+
+  });
+  it("does not cancel an autosave when another note is edited immediately", async () => {
+    const first = document.querySelector(".moon-notes-editor .moon-notes-input") as HTMLTextAreaElement;
+    first.blur();
+    first.value = "Primeira nota pendente"; first.dispatchEvent(new Event("input", { bubbles: true }));
+    (document.querySelector('[aria-label="Criar nova nota"]') as HTMLButtonElement).click(); await flush();
+    const second = document.querySelector(".moon-notes-editor .moon-notes-input") as HTMLTextAreaElement;
+    second.value = "Segunda nota pendente"; second.dispatchEvent(new Event("input", { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 450)); await flush();
+    const saved = mutateProfileData.mock.calls.flatMap(([mutation]) => mutation.type === "note:save" ? [mutation.value?.content] : []);
+    expect(saved).toContain("Primeira nota pendente"); expect(saved).toContain("Segunda nota pendente");
   });
   it("runs a reversible continuous Focus session through the real shell", async () => {
     (document.querySelector('[aria-label="Foco e Zen"]') as HTMLButtonElement).click();
@@ -164,6 +201,23 @@ describe("Moon browser shell", () => {
     (document.querySelector('[aria-label="Favoritos"]') as HTMLButtonElement).click(); await flush();
     expect((document.querySelector(".moon-drawer .moon-site-mark img") as HTMLImageElement | null)?.src).toContain("data:image/png;base64");
   });
+  it("renders and deletes a committed visit from the versioned timeline", async () => {
+    mutateProfileData.mockClear(); const startedAt = Date.now();
+    tabUpdateListeners[0]?.({ tab: { ...tab, url: "https://timeline.test/", title: "Timeline Test", active: true, loading: false }, navigation: { canGoBack: false, canGoForward: false }, historyEntry: { schemaVersion: 2, id: "visit-timeline", title: "Timeline Test", url: "https://timeline.test/", time: startedAt, startedAt, endedAt: startedAt + 20, durationMs: 20, profileId: "default", workspaceId: "research", tabId: "tab-1", source: "navigation", navigationType: "typed" } });
+    await flush(); (document.querySelector('[aria-label="Histórico"]') as HTMLButtonElement).click();
+    expect(document.querySelector(".moon-history-view.is-timeline")?.textContent).toContain("Timeline Test");
+    (document.querySelector('[aria-label="Remover Timeline Test"]') as HTMLButtonElement).click(); await flush();
+    expect(mutateProfileData).toHaveBeenCalledWith({ type: "history:delete", id: "visit-timeline" });
+  });
+  it("offers private local Home suggestions with complete keyboard selection", async () => {
+    navigate.mockClear(); const startedAt = Date.now();
+    tabUpdateListeners[0]?.({ tab: { ...tab, url: "https://suggestion.test/", title: "Suggestion Site", active: true, loading: false }, navigation: { canGoBack: false, canGoForward: false }, historyEntry: { schemaVersion: 2, id: "visit-suggestion", title: "Suggestion Site", url: "https://suggestion.test/", time: startedAt, startedAt, source: "navigation", navigationType: "typed" } }); await flush();
+    tabUpdateListeners[0]?.({ tab, navigation: { canGoBack: true, canGoForward: false } }); await flush();
+    const search = document.querySelector(".moon-home-search-input") as HTMLInputElement; search.value = "suggestion"; search.dispatchEvent(new Event("input", { bubbles: true })); await new Promise(resolve => setTimeout(resolve, 120));
+    expect(document.querySelector('[role="listbox"]')?.textContent).toContain("Suggestion Site");
+    search.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); await flush();
+    expect(navigate).toHaveBeenCalledWith(expect.any(String), "https://suggestion.test/");
+  });
   it("does not rebuild the hidden Home for ordinary web-tab updates", async () => {
     const search = document.querySelector(".moon-home-search-input");
     tabUpdateListeners[0]?.({ tab: { ...tab, url: "https://moon.test/", title: "Moon Test", active: true, loading: false }, navigation: { canGoBack: false, canGoForward: false } }); await flush();
@@ -202,6 +256,25 @@ describe("Moon browser shell", () => {
     expect(bridge.discoverImportSources).toHaveBeenCalledOnce(); expect(document.querySelector(".moon-import-source")?.textContent).toContain("Chromium — Default");
     (document.querySelector('[aria-label="Importar de Chromium — Default"]') as HTMLButtonElement).click(); await flush();
     expect(bridge.importBrowserProfile).toHaveBeenCalledWith({ sourceId: "source-12345678", categories: ["bookmarks", "history"] });
+    (document.querySelector('[aria-label="Fechar e cancelar alterações"]') as HTMLButtonElement).click(); await flush();
+  });
+
+  it("offers manual profile selection and identifies the local source path", async () => {
+    bridge.selectManualImportSource.mockClear();
+    (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
+    (document.querySelector('[aria-label="Selecionar pasta de perfil manualmente"]') as HTMLButtonElement).click(); await flush();
+    expect(bridge.selectManualImportSource).toHaveBeenCalledOnce();
+    expect(document.querySelector(".moon-import-source")?.textContent).toContain("/mnt/portable/Brave/Profile 4");
+    (document.querySelector('[aria-label="Fechar e cancelar alterações"]') as HTMLButtonElement).click(); await flush();
+  });
+
+  it("applies a managed wallpaper independently from a saved theme", async () => {
+    bridge.getWallpaper.mockClear();
+    (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
+    (document.querySelector('[aria-label="Aparência"]') as HTMLButtonElement).click(); await flush();
+    (document.querySelector('[aria-label="Aplicar wallpaper Nebulosa local"]') as HTMLButtonElement).click(); await flush();
+    expect(bridge.getWallpaper).toHaveBeenCalledWith("wallpaper-1234567890abcdef");
+    expect(document.querySelector<HTMLElement>(".moon-preview-wallpaper")?.style.backgroundImage).toContain("data:image/png");
     (document.querySelector('[aria-label="Fechar e cancelar alterações"]') as HTMLButtonElement).click(); await flush();
   });
 

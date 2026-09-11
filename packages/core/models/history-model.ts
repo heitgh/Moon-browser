@@ -19,6 +19,11 @@ export interface HistoryModel {
   readonly typedCount: number;
   readonly firstVisitedAt: number;
   readonly lastVisitedAt: number;
+  readonly endedAt?: number;
+  readonly durationMs?: number;
+  readonly profileId?: string;
+  readonly source?: "navigation" | "import" | "legacy";
+  readonly navigationType?: "link" | "typed" | "reload" | "redirect" | "form-submit" | "history" | "generated" | "other";
   readonly tabId?: string;
   readonly workspaceId?: string;
   readonly sessionId?: string;

@@ -24,6 +24,7 @@ export interface OnboardingFlowOptions {
   readonly store: CustomizationStore;
   readonly storage?: Storage;
   readonly onDiscoverImportSources: () => Promise<readonly ImportSourceSummary[]>;
+  readonly onSelectManualImportSource: () => Promise<readonly ImportSourceSummary[]>;
   readonly onImportBrowserProfile: (sourceId: string, categories: readonly ImportCategory[]) => Promise<ImportResult>;
   readonly onImportBookmarksHtml: () => Promise<ImportResult | null>;
   readonly onClose: (completed: boolean) => void | Promise<void>;
@@ -119,9 +120,10 @@ export class OnboardingFlow {
     this.#intro("ETAPA 3 · IMPORTAÇÃO OPCIONAL", "Traga só o que você escolher", "A leitura é local e somente favoritos e histórico entram no Moon. Senhas, cookies, sessões, extensões e carteiras nunca são importados.");
     const controls = element("div", "moon-onboarding-import-actions");
     const detect = button("moon-secondary-button", "Detectar navegadores instalados", "search"); detect.append(element("span", "", "Detectar navegadores")); detect.addEventListener("click", () => void this.#discover());
-    const html = button("moon-secondary-button", "Importar favoritos de arquivo HTML", "download"); html.append(element("span", "", "Arquivo HTML")); html.addEventListener("click", () => void this.#importHtml()); controls.append(detect, html); this.#body.append(controls);
+    const manual = button("moon-secondary-button", "Selecionar pasta de perfil manualmente", "folder"); manual.append(element("span", "", "Selecionar pasta")); manual.addEventListener("click", () => void this.#selectManual());
+    const html = button("moon-secondary-button", "Importar favoritos de arquivo HTML", "download"); html.append(element("span", "", "Arquivo HTML")); html.addEventListener("click", () => void this.#importHtml()); controls.append(detect, manual, html); this.#body.append(controls);
     if (this.#sources.length) { const list = element("div", "moon-onboarding-import-list"); this.#sources.forEach(source => list.append(this.#source(source))); this.#body.append(list); }
-    else this.#body.append(element("p", "moon-onboarding-note", "Nada é lido até você clicar em detectar. A origem recebe um identificador opaco; caminhos locais não chegam à interface."));
+    else this.#body.append(element("p", "moon-onboarding-note", "Nada é lido até você detectar ou selecionar uma pasta. O caminho é exibido localmente para confirmar a origem e nunca sai do dispositivo."));
   }
 
   #privacy(): void {
@@ -148,7 +150,7 @@ export class OnboardingFlow {
   }
 
   #source(source: ImportSourceSummary): HTMLElement {
-    const row = element("article", "moon-onboarding-import-source"); const copy = element("div"); copy.append(element("strong", "", source.name), element("small", "", `Atualizado em ${new Intl.DateTimeFormat("pt-BR").format(source.modifiedAt)}`));
+    const row = element("article", "moon-onboarding-import-source"); const copy = element("div"); copy.append(element("strong", "", source.name), element("small", "", `Atualizado em ${new Intl.DateTimeFormat("pt-BR").format(source.modifiedAt)}`), element("code", "moon-import-path", source.detectedPath));
     const categories = element("div", "moon-import-categories"); const inputs = new Map<ImportCategory, HTMLInputElement>();
     (["bookmarks", "history"] as const).forEach(category => { const label = element("label", "moon-import-category"); const input = element("input"); input.type = "checkbox"; input.checked = source.categories[category] > 0; input.disabled = source.categories[category] === 0; inputs.set(category, input); label.append(input, element("span", "", `${category === "bookmarks" ? "Favoritos" : "Histórico"} (${source.categories[category]})`)); categories.append(label); });
     const run = button("moon-primary-button", `Importar seleção de ${source.name}`, "download"); run.append(element("span", "", "Importar seleção")); run.addEventListener("click", () => { const selected = [...inputs].filter(([, input]) => input.checked).map(([category]) => category); if (!selected.length) return this.#say("Selecione ao menos uma categoria.", true); void this.#runImport(source.id, selected); }); row.append(copy, categories, run); return row;
@@ -159,6 +161,7 @@ export class OnboardingFlow {
   #persist(): void { this.#storage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify(this.#state)); }
   #applySavedChoices(): void { const choices = this.#state.choices; if (choices.appearanceMode) this.options.store.set("appearance.mode", choices.appearanceMode); if (choices.density) this.options.store.set("layout.density", choices.density); if (choices.tabPosition) this.options.store.set("layout.tabs.position", choices.tabPosition); if (choices.searchEngine) this.options.store.set("search.defaultEngine", choices.searchEngine); if (choices.favicons !== undefined) this.options.store.set("favicons.enabled", choices.favicons); }
   async #discover(): Promise<void> { if (this.#busy) return; this.#busy = true; this.#say("Procurando perfis locais…"); try { this.#sources = await this.options.onDiscoverImportSources(); this.#render(); if (!this.#sources.length) this.#say("Nenhum perfil compatível foi encontrado."); } catch (error) { this.#say(error, true); } finally { this.#busy = false; } }
+  async #selectManual(): Promise<void> { if (this.#busy) return; this.#busy = true; try { const selected = await this.options.onSelectManualImportSource(); if (!selected.length) return this.#say("Seleção manual cancelada."); const sources = new Map(this.#sources.map(source => [source.id, source])); selected.forEach(source => sources.set(source.id, source)); this.#sources = [...sources.values()]; this.#render(); this.#say(`${selected.length} perfil(is) válido(s) adicionado(s).`); } catch (error) { this.#say(error, true); } finally { this.#busy = false; } }
   async #runImport(sourceId: string, categories: readonly ImportCategory[]): Promise<void> { if (this.#busy) return; this.#busy = true; this.#say("Importando em uma transação local…"); try { const result = await this.options.onImportBrowserProfile(sourceId, categories); this.#say(this.#resultMessage(result)); } catch (error) { this.#say(error, true); } finally { this.#busy = false; } }
   async #importHtml(): Promise<void> { if (this.#busy) return; this.#busy = true; try { const result = await this.options.onImportBookmarksHtml(); if (result) this.#say(this.#resultMessage(result)); } catch (error) { this.#say(error, true); } finally { this.#busy = false; } }
   #resultMessage(result: ImportResult): string { return `Importação concluída: ${result.imported.bookmarks} favoritos e ${result.imported.history} itens do histórico.`; }
