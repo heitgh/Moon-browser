@@ -16,6 +16,19 @@ Pesquisa por trechos e memória manual, com armazenamento local e escolha explí
 
 </div>
 
+## Downloads rápidos
+
+**Versão pública atual: [`v0.5.0-demo.2`](https://github.com/heitgh/Moon-browser/releases/tag/v0.5.0-demo.2)**
+
+| Sistema | Download direto | Verificação |
+| --- | --- | --- |
+| Windows x64 | [Instalador `.exe`](https://github.com/heitgh/Moon-browser/releases/download/v0.5.0-demo.2/Moon-Browser-Windows-x64-Setup.exe) · [Versão portátil](https://github.com/heitgh/Moon-browser/releases/download/v0.5.0-demo.2/Moon-Browser-Windows-x64-Portable.exe) | [SHA-256](https://github.com/heitgh/Moon-browser/releases/download/v0.5.0-demo.2/SHA256SUMS-windows.txt) |
+| Linux x64 | [AppImage](https://github.com/heitgh/Moon-browser/releases/download/v0.5.0-demo.2/Moon-Browser-Linux-x64.AppImage) · [DEB](https://github.com/heitgh/Moon-browser/releases/download/v0.5.0-demo.2/Moon-Browser-Linux-x64.deb) · [RPM](https://github.com/heitgh/Moon-browser/releases/download/v0.5.0-demo.2/Moon-Browser-Linux-x64.rpm) · [pacman](https://github.com/heitgh/Moon-browser/releases/download/v0.5.0-demo.2/Moon-Browser-Linux-x64.pacman) | [SHA-256](https://github.com/heitgh/Moon-browser/releases/download/v0.5.0-demo.2/SHA256SUMS-linux.txt) |
+
+[Ver todas as versões publicadas](https://github.com/heitgh/Moon-browser/releases) · [Instruções de instalação, atualização e rollback](#instalacao)
+
+> A alpha `0.6.0-alpha.1` ainda não possui instalador público. Os downloads acima são da demo `v0.5.0-demo.2` e não incluem Research/Memory.
+
 ![Home escura do Moon, com abas, workspaces Pesquisa, Estudos e Projetos, busca e atalhos](assets/screenshots/update-home-dark.png)
 
 *Captura real da alpha, com perfil de teste. O indicador registra o AdBlock ainda carregando naquele instante.*
