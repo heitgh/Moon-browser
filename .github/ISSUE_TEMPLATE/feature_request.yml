@@ -1,0 +1,59 @@
+name: Feature request
+description: Proponha uma melhoria concreta para o Moon Browser.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        O Moon prioriza ergonomia, personalização, privacidade e controle do usuário. Ideias são bem-vindas quando partem de um problema claro e evitam prometer recursos ainda não validados.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qual problema isso resolve?
+      description: Explique a situação antes de sugerir a solução.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposta
+      description: Descreva como você imagina a experiência ou comportamento.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: Há outra forma mais simples de resolver o mesmo problema?
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área principal
+      options:
+        - Navegação e abas
+        - Workspaces e organização
+        - Home e personalização
+        - Research / Memory
+        - Notas
+        - Privacidade e segurança
+        - Desempenho
+        - Acessibilidade
+        - Instalação / atualização
+        - Desenvolvimento / documentação
+        - Outro
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmações
+      options:
+        - label: Procurei por uma proposta semelhante nas issues abertas.
+          required: true
