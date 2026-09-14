@@ -21,7 +21,7 @@
 > [!IMPORTANT]
 > **Moon is experimental.** The current public prerelease is `v0.6.0-alpha.2`, built from the validated `main` branch. Do not use Moon as your only browser for critical data.
 
-A `v0.6.0-alpha.2` foi publicada após Quality, CodeQL, matriz de compatibilidade e builds de Windows/Linux aprovados. Ela inclui recuperação limitada de páginas travadas, correções de sessão/OAuth, sondas para Pinterest e TikTok e um padrão visual mais compacto. Login humano e macOS continuam pendentes. Consulte a [auditoria de compatibilidade](docs/audits/compatibility-stability-2026-09-14.md) e a [matriz de testes](docs/roadmap/compatibility.md). Isso **não altera os downloads públicos**.
+A `v0.6.0-alpha.2` foi publicada após Quality, CodeQL, matriz de compatibilidade e builds de Windows/Linux aprovados. Ela inclui recuperação limitada de páginas travadas, correções de sessão/OAuth, sondas para Pinterest e TikTok e um padrão visual mais compacto. Login humano e macOS continuam pendentes. Consulte a [auditoria de compatibilidade](docs/audits/compatibility-stability-2026-09-14.md) e a [matriz de testes](docs/roadmap/compatibility.md). Os downloads oficiais desta prerelease estão na seção abaixo.
 
 ## O que é o Moon?
 
@@ -57,12 +57,12 @@ A proposta não é esconder a complexidade atrás de promessas de “IA mágica�
   <img src="assets/screenshots/update-study-note.png" alt="Moon Notes with material saved from Research" width="46%" />
 </p>
 
-As capturas acima vêm da alpha e usam dados de teste. Elas mostram cenários reais do projeto, mas não significam que todos esses recursos já estejam presentes na demo pública `v0.6.0-alpha.2`.
+As capturas acima vêm da alpha e usam dados de teste. Elas mostram cenários reais do projeto, mas não garantem o mesmo comportamento em toda plataforma ou máquina.
 
 <a id="download"></a>
 ## Download
 
-### Demo pública — `v0.6.0-alpha.2`
+### Prerelease pública — `v0.6.0-alpha.2`
 
 | Sistema | Download | Integridade |
 | --- | --- | --- |
