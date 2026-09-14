@@ -404,7 +404,7 @@ export const DEFAULT_CUSTOMIZATION: CustomizationConfig = {
       autoHide: false,
       hideDelay: 600,
     },
-    drawer: { mode: "overlay", width: 292 },
+    drawer: { mode: "fixed", width: 292 },
     toolbar: {
       position: "top",
       height: 42,

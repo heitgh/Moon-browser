@@ -9,7 +9,7 @@ describe("simple mode defaults", () => {
     expect(defaults.global.layout.toolbar.height).toBe(42);
     expect(defaults.global.layout.tabs.width).toBe(196);
     expect(defaults.global.layout.sidebar.width).toBe(48);
-    expect(defaults.global.layout.drawer.mode).toBe("overlay");
+    expect(defaults.global.layout.drawer.mode).toBe("fixed");
     expect(defaults.global.workspaceDisplay.visibility).toBe("home-only");
     expect(defaults.global.home.preset).toBe("minimal");
     expect(defaults.global.layout.statusBar.visible).toBe(false);
