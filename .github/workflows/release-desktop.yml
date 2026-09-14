@@ -28,7 +28,7 @@ on:
       tag:
         description: "Tag da release (ex.: v0.6.0-alpha.1)"
         required: true
-        default: "v0.6.0-alpha.1"
+        default: "v0.6.0-alpha.2"
         type: string
       publish_release:
         description: "Publicar os instaladores em GitHub Releases"
@@ -145,7 +145,8 @@ jobs:
     environment: release-approval
     needs: [build, quality]
     if: >-
-      github.event_name == 'workflow_dispatch' && inputs.publish_release
+      (github.event_name == 'workflow_dispatch' && inputs.publish_release) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -171,6 +172,13 @@ jobs:
           if [[ "$tag" != "$expected" ]]; then
             echo "A tag precisa corresponder à versão compilada: $expected" >&2
             exit 1
+          fi
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            trigger="$(grep -E '^v[0-9]' .github/release-trigger | head -n 1)"
+            if [[ "$trigger" != "$expected" ]]; then
+              echo "O release-trigger precisa corresponder à versão compilada: $expected" >&2
+              exit 1
+            fi
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
