@@ -380,7 +380,7 @@ describe("Moon browser shell", () => {
     expect(newTabPosition?.closest("label")?.textContent).toContain("Posição do botão +");
     position.value = "left"; position.dispatchEvent(new Event("change", { bubbles: true })); await flush();
     expect(document.documentElement.dataset.moonTabs).toBe("left");
-    expect(document.documentElement.style.getPropertyValue("--moon-tabs-width")).toBe("240px");
+    expect(document.documentElement.style.getPropertyValue("--moon-tabs-width")).toBe("196px");
     expect(document.querySelector('[aria-label^="Usar wallpaper"]')).not.toBeNull();
     (document.querySelector('[aria-label="Cancelar mudanças"]') as HTMLButtonElement).click(); await flush();
     expect(document.documentElement.dataset.moonTabs).toBe("top");
