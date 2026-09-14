@@ -50,6 +50,7 @@ test("keeps cookies through redirects and recovers a crashed site renderer", asy
     const shell = await shellWindow(application);
     const skip = shell.getByLabel("Pular configuração inicial");
     if (await skip.waitFor({ state: "visible", timeout: 5_000 }).then(() => true).catch(() => false)) await skip.click();
+    await shell.screenshot({ path: "test-results/compact-shell.png" });
     const bridge = () => (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser;
 
     await shell.getByPlaceholder("Pesquise ou digite um endereço").fill(`${origin}/login`);

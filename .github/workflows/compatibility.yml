@@ -22,6 +22,13 @@ jobs:
       - run: npm ci
       - run: npm run native:electron
       - run: xvfb-run -a npm run test:compat
+      - if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: moon-compact-ui-and-compatibility
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 14
 
   external:
     runs-on: ubuntu-latest
