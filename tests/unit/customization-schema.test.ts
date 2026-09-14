@@ -85,7 +85,7 @@ describe("CustomizationSchemaV4", () => {
     const legacy = structuredClone(createDefaultCustomization());
     delete (legacy.global.layout as { tabs?: typeof legacy.global.layout.tabs }).tabs;
     const migrated = validateCustomization(legacy);
-    expect(migrated.global.layout.tabs).toEqual({ position: "top", width: 240, newTabButton: "after-tabs" });
+    expect(migrated.global.layout.tabs).toEqual({ position: "top", width: 196, newTabButton: "after-tabs" });
   });
 
   it("round-trips all, appearance and workspace exports", () => {
