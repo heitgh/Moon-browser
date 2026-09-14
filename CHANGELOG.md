@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.0-alpha.2 — em validação, não publicada (2026-09-14)
+
+- recuperação automática limitada a duas tentativas para renderer travado, com mensagens legíveis e sem detalhes internos;
+- popups de autenticação preservam `window.opener` inclusive quando Chromium informa disposition `default`;
+- user-agent compatível com Chromium, sem tokens Electron/Moon que provocam bloqueios artificiais;
+- pipeline de requisições passa a falhar aberto quando uma política excede 1,5 s;
+- navegação principal e endpoints de identidade não são bloqueados pelo AdBlock;
+- modo Simples nasce compacto, com toolbar/abas/sidebar menores, drawer sobreposto e workspaces somente na Home;
+- matriz Electron para cookie, redirect, OAuth e crash; sondas reais de Pinterest/TikTok são opt-in e informativas;
+- downloads continuam em `v0.5.0-demo.2`; nenhuma release foi criada.
+
+
 ## 0.6.0-alpha.1 — atualização local (2026-09-08)
 
 - Pesquisa local de até cinco abas, trechos com fontes e roteiros de estudo; IA generativa permanece indisponível.
