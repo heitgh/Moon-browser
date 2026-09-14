@@ -1,6 +1,6 @@
 # Moon Browser — estado atual e histórico
 
-Atualização validada no CI, ainda **não publicada**, **0.6.0-alpha.2**, 14 de setembro de 2026: branch isolada com recuperação de renderer, correções de OAuth/sessão, timeout do pipeline e padrão compacto do modo Simples. No commit `c0ca1ba`, Quality, CodeQL, matriz determinística/externa e builds de Windows/Linux passaram. Login humano, macOS, merge, tag e downloads novos continuam pendentes. Evidências: [auditoria](../audits/compatibility-stability-2026-09-14.md) e [matriz](compatibility.md).
+Atualização **publicada como prerelease**, **0.6.0-alpha.2**, 14 de setembro de 2026: branch isolada com recuperação de renderer, correções de OAuth/sessão, timeout do pipeline e padrão compacto do modo Simples. No commit `c0ca1ba`, Quality, CodeQL, matriz determinística/externa e builds de Windows/Linux passaram. Merge, tag e downloads Windows/Linux foram concluídos; login humano e macOS continuam pendentes. Evidências: [auditoria](../audits/compatibility-stability-2026-09-14.md) e [matriz](compatibility.md).
 
 
 Atualização local **0.6.0-alpha.1**, 8 de setembro de 2026: Research por extração local, memória opt-in e sessões por URLs implementados. IA generativa, distribuição estável e migração oficial continuam bloqueadas. Consulte [o relatório verificável](../update/RELATORIO.md), que distingue execução real, cobertura parcial e pendências.
