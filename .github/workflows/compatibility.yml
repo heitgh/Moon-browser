@@ -20,6 +20,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run native:electron
       - run: xvfb-run -a npm run test:compat
 
   external:
@@ -33,6 +34,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run native:electron
       - run: xvfb-run -a npm run test:compat:external
       - if: always()
         uses: actions/upload-artifact@v6
