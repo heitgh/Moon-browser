@@ -1,0 +1,82 @@
+name: Bug report
+description: Reporte um problema reproduzível no Moon Browser.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por ajudar a melhorar o Moon. Antes de enviar, remova dados pessoais, tokens, cookies, URLs privadas e qualquer informação sensível.
+
+  - type: input
+    id: version
+    attributes:
+      label: Versão / origem do build
+      description: Ex.: v0.5.0-demo.2, main em um commit específico ou build local.
+      placeholder: v0.5.0-demo.2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Sistema operacional
+      options:
+        - Windows 11
+        - Windows 10
+        - Arch Linux
+        - Ubuntu / Debian
+        - Fedora / derivados
+        - Outra distribuição Linux
+        - Outro
+    validations:
+      required: true
+
+  - type: input
+    id: architecture
+    attributes:
+      label: Arquitetura
+      placeholder: x64
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Passos para reproduzir
+      description: Escreva os passos mínimos necessários para reproduzir o problema.
+      placeholder: |
+        1. Abrir...
+        2. Clicar em...
+        3. Observar...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamento esperado
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: O que aconteceu
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Capturas, logs ou contexto adicional
+      description: Use somente dados fictícios ou já sanitizados.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmações
+      options:
+        - label: Procurei por uma issue existente antes de abrir esta.
+          required: true
+        - label: Removi dados pessoais e informações sensíveis do relato.
+          required: true
