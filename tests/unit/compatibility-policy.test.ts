@@ -9,6 +9,7 @@ import {
 describe("site compatibility policy", () => {
   it("presents a Chromium-compatible user agent without Electron branding", () => {
     expect(sanitizeChromiumUserAgent("Mozilla/5.0 Chrome/140.0.0.0 Electron/43.0.0 Safari/537.36 MoonBrowser/0.6")).toBe("Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36");
+    expect(sanitizeChromiumUserAgent("Mozilla/5.0 moon-browser/0.6.0-alpha.1 Chrome/150.0 Electron/43.4 Safari/537.36")).toBe("Mozilla/5.0 Chrome/150.0 Safari/537.36");
   });
 
   it("fails open for top-level navigation and authentication endpoints", () => {

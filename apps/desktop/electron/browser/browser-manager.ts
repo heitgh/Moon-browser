@@ -20,7 +20,7 @@ import type { SessionRequestPipeline } from "../security/session-request-pipelin
 import type { SitePermissionService } from "../security/site-permission-service.js";
 import type { SitePermissionRecord } from "../../../../packages/ipc/site-permission-contract.js";
 import { decideWindowOpen, isSafeWebPopupUrl } from "./window-open-policy.js";
-import { configureCompatibilitySession, isRecoverableRendererExit, navigationFailureMessage } from "./compatibility-policy.js";
+import { configureCompatibilityWebContents, isRecoverableRendererExit, navigationFailureMessage } from "./compatibility-policy.js";
 import type { ProfileHistoryEntry, ProfileHistoryNavigationType } from "../../../../packages/ipc/profile-data-contract.js";
 
 export interface BrowserNavigationState {
@@ -135,7 +135,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     });
     this.downloads?.attach(surface.view.webContents.session, profileId);
     this.requestPipeline?.attach(surface.view.webContents.session);
-    configureCompatibilitySession(surface.view.webContents.session);
+    configureCompatibilityWebContents(surface.view.webContents);
     this.#installPermissionHandler(surface.view.webContents.session);
 
     const requestedUrl = options.url ?? "moon://newtab";

@@ -1,4 +1,4 @@
-import type { Session } from "electron";
+import type { Session, WebContents } from "electron";
 import { isAuthenticationPopupUrl } from "./window-open-policy.js";
 
 const configuredSessions = new WeakSet<Session>();
@@ -10,10 +10,15 @@ export function configureCompatibilitySession(session: Session): void {
   session.setUserAgent(sanitizeChromiumUserAgent(session.getUserAgent()));
 }
 
+export function configureCompatibilityWebContents(contents: WebContents): void {
+  configureCompatibilitySession(contents.session);
+  contents.setUserAgent(sanitizeChromiumUserAgent(contents.getUserAgent()));
+}
+
 export function sanitizeChromiumUserAgent(value: string): string {
   return value
     .replace(/\sElectron\/[^\s]+/gi, "")
-    .replace(/\sMoon(?:Browser|\/)[^\s]*/gi, "")
+    .replace(/\s(?:MoonBrowser|moon-browser)\/[^\s]+/gi, "")
     .replace(/\s{2,}/g, " ")
     .trim();
 }
