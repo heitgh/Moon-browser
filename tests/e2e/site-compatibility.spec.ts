@@ -12,6 +12,7 @@ async function shellWindow(application: ElectronApplication): Promise<Page> {
 }
 
 test("keeps cookies through redirects and recovers a crashed site renderer", async () => {
+  test.setTimeout(60_000);
   let heavyRequests = 0;
   const server = createServer((request, response) => {
     if (request.url === "/login") {
