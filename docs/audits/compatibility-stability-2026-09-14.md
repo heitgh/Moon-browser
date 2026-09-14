@@ -27,7 +27,12 @@ Revisão do repositório oficial `heitgh/Moon-browser` (main em `289a986`) e com
 
 ## Validação
 
-Status neste commit: **pendente do GitHub Actions**. O relatório será atualizado com quantidade, duração, SHA e falhas reais. Não interpretar a existência dos testes como aprovação.
+Status do commit de código `c0ca1ba`: **aprovado no GitHub Actions em 14 de setembro de 2026**.
+
+- [Quality #56](https://github.com/heitgh/Moon-browser/actions/runs/34844035905): typecheck e lint aprovados; 141 unitários, 34 de integração, 20 Electron/SQLite e 11 E2E aprovados; 2 probes externos ignorados nesse job; audit no nível alto aprovado com 2 vulnerabilidades moderadas registradas; build Linux aprovado.
+- [Site compatibility #8](https://github.com/heitgh/Moon-browser/actions/runs/34844035967): 1 teste determinístico aprovado em 13,8 s e 2 probes externos (Pinterest/TikTok) aprovados em 14,0 s. [Captura/trace do modo compacto](https://github.com/heitgh/Moon-browser/actions/runs/34844035967/artifacts/10347121607).
+- [CodeQL #59](https://github.com/heitgh/Moon-browser/actions/runs/34844035895): aprovado.
+- [Desktop Releases #30](https://github.com/heitgh/Moon-browser/actions/runs/34844036179): setup/portátil Windows e AppImage/deb/rpm/pacman Linux, com checksums, aprovados como artefatos temporários. A etapa de publicação foi ignorada.
 
 ## Limites
 

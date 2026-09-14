@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.6.0-alpha.2 — em validação, não publicada (2026-09-14)
+## 0.6.0-alpha.2 — validada no CI, não publicada (2026-09-14)
+
+- Quality aprovado: TypeScript, lint, 141 unitários, 34 de integração, 20 Electron/SQLite, 11 E2E (2 probes externos separados), audit no nível alto e build Linux.
+- Matriz de compatibilidade aprovada: 1 cenário determinístico de cookie/redirect/OAuth/crash e 2 sondas externas, Pinterest e TikTok.
+- CodeQL e builds de instaladores Windows/Linux aprovados; publicação permaneceu ignorada e os artefatos não são downloads oficiais.
 
 - recuperação automática limitada a duas tentativas para renderer travado, com mensagens legíveis e sem detalhes internos;
 - popups de autenticação preservam `window.opener` inclusive quando Chromium informa disposition `default`;

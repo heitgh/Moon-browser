@@ -26,3 +26,10 @@ Snapshots guardam URLs HTTP/HTTPS não sensíveis do workspace, até 50, com ded
 - Memória não criptografada, restrita a material não sensível e gravação manual. Exclusão lógica não significa sanitização forense de backups, SQLite/WAL ou disco.
 - Quotas: 5 fontes, 60 mil caracteres/fonte, 20 mil nós visitados/fonte, 100 itens e 2 MB/workspace, 30 mil caracteres/item, 50 URLs/item.
 - Provedor generativo, PDFs, recuperação semântica, classificação robusta de dados sensíveis e criptografia não foram implementados. Antes de conectar um provedor, aplicar o ADR 0005 com modelo real, consentimento contextual, chaves seguras, streaming, limites, cancelamento e auditoria.
+
+
+## Adendo de compatibilidade e recuperação — 0.6.0-alpha.2
+
+Cada `WebContents` recebe user-agent Chromium sanitizado; a `Session` persistente continua sendo a unidade de cookies, redirects, permissões e downloads. Popups reconhecidos como OAuth/SSO abrem em `BrowserWindow` sandboxed na mesma sessão, preservando `window.opener`; navegações comuns mantêm o comportamento de aba. O pipeline de política possui deadline de 1,5 s e falha aberto para não congelar a navegação. `render-process-gone` e `unresponsive` permitem no máximo duas recargas progressivas, evitando loops; erros de rede apresentados no shell são mensagens de produto, não códigos TypeScript/Chromium.
+
+A validação do commit `c0ca1ba` cobriu cookie+302, popup/callback OAuth, crash forçado e sondas reais de Pinterest/TikTok. Login humano, CAPTCHA, macOS e observação prolongada de mídia continuam fora dessa evidência.

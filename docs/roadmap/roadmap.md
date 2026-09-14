@@ -9,7 +9,7 @@ Features remain behind flags until their security and persistence behavior is ve
 
 ## Foco imediato — 0.6.0-alpha.2
 
-1. Aprovar typecheck, lint, unitários, integração, Electron storage, E2E determinístico e build.
+1. Manter verdes typecheck, lint, unitários, integração, Electron storage, E2E determinístico e builds; o gate passou em Linux e Windows no commit `c0ca1ba`.
 2. Executar sondas externas de Pinterest e TikTok em mais de uma rede/plataforma.
 3. Fazer teste humano de login Google/Pinterest sem registrar credenciais, cookies ou tokens.
 4. Capturar comparação visual do chrome compacto nas mesmas dimensões do baseline.
