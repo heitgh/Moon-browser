@@ -392,22 +392,22 @@ export const DEFAULT_CUSTOMIZATION: CustomizationConfig = {
     motion: { enabled: true, speed: 1 },
   },
   layout: {
-    density: "comfortable",
+    density: "compact",
     uiScale: 1,
-    tabs: { position: "top", width: 240, newTabButton: "after-tabs" },
+    tabs: { position: "top", width: 196, newTabButton: "after-tabs" },
     sidebar: {
       position: "left",
-      width: 56,
-      iconSize: 18,
-      spacing: 8,
+      width: 48,
+      iconSize: 16,
+      spacing: 6,
       labels: "hover",
       autoHide: false,
       hideDelay: 600,
     },
-    drawer: { mode: "fixed", width: 292 },
+    drawer: { mode: "overlay", width: 292 },
     toolbar: {
       position: "top",
-      height: 48,
+      height: 42,
       autoHide: false,
       items: (
         [
@@ -427,10 +427,10 @@ export const DEFAULT_CUSTOMIZATION: CustomizationConfig = {
       ).map(([id, visible]) => ({ id, visible })),
     },
     omnibox: { position: "toolbar" },
-    statusBar: { visible: true },
+    statusBar: { visible: false },
   },
   home: {
-    preset: "custom",
+    preset: "minimal",
     columns: 4,
     gap: 16,
     maxWidth: 900,
@@ -486,7 +486,7 @@ export const DEFAULT_CUSTOMIZATION: CustomizationConfig = {
   },
   icons: { overrides: {} },
   workspaceDisplay: {
-    visibility: "always",
+    visibility: "home-only",
     position: "bar",
     compactSelector: true,
   },
