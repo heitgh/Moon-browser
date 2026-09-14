@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 import type { WindowManager } from "../main/window-manager.js";
 import type { SessionRequestPipeline } from "../security/session-request-pipeline.js";
+import { shouldBypassContentBlocking } from "../browser/compatibility-policy.js";
 
 export type AdblockPhase = "loading" | "active" | "disabled" | "failed";
 export interface AdblockStatus {
@@ -68,7 +69,7 @@ export class ElectronAdblockService {
   }
 
   #beforeRequest(details: Electron.OnBeforeRequestListenerDetails): Promise<Electron.CallbackResponse> | undefined {
-    const blocker = this.#blocker; if (!this.#enabled || !blocker) return undefined;
+    const blocker = this.#blocker; if (!this.#enabled || !blocker || shouldBypassContentBlocking(details)) return undefined;
     return new Promise(resolve => blocker.onBeforeRequest(details, resolve));
   }
 
