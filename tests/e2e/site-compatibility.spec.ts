@@ -66,7 +66,6 @@ test("keeps cookies through redirects and recovers a crashed site renderer", asy
     }, `${origin}/account`);
     expect(sessionText).toContain("moon_session=authenticated");
 
-    const popupPromise = application.waitForEvent("window");
     await shell.evaluate(async target => {
       const api = bridge();
       const tab = await api.createTab(target, "research");
@@ -77,7 +76,8 @@ test("keeps cookies through redirects and recovers a crashed site renderer", asy
       const page = webContents.getAllWebContents().find(item => item.getURL() === url);
       await page?.executeJavaScript("document.querySelector('#login').click()", true);
     }, `${origin}/`);
-    const popup = await popupPromise;
+    await expect.poll(() => application.windows().some(page => /\/authorize/.test(page.url()))).toBe(true);
+    const popup = application.windows().find(page => /\/authorize/.test(page.url()))!;
     await popup.waitForURL(/\/authorize/);
     await popup.locator("#done").click();
     await expect.poll(() => application.evaluate(async ({ webContents }, url) => {
