@@ -20,6 +20,7 @@ import type { SessionRequestPipeline } from "../security/session-request-pipelin
 import type { SitePermissionService } from "../security/site-permission-service.js";
 import type { SitePermissionRecord } from "../../../../packages/ipc/site-permission-contract.js";
 import { decideWindowOpen, isSafeWebPopupUrl } from "./window-open-policy.js";
+import { configureCompatibilityWebContents, isRecoverableRendererExit, navigationFailureMessage } from "./compatibility-policy.js";
 import type { ProfileHistoryEntry, ProfileHistoryNavigationType } from "../../../../packages/ipc/profile-data-contract.js";
 
 export interface BrowserNavigationState {
@@ -55,6 +56,8 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
   readonly #fullscreenWindowCleanup = new Map<string, () => void>();
   readonly #auxiliaryWindows = new Map<number, { readonly tabId: string; readonly window: Electron.BrowserWindow }>();
   readonly #historyCandidates = new Map<string, { readonly startedAt: number; readonly navigationType: ProfileHistoryNavigationType }>();
+  readonly #recoveryAttempts = new Map<string, number>();
+  readonly #recoveryTimers = new Map<string, NodeJS.Timeout>();
   readonly #nextNavigationTypes = new Map<string, ProfileHistoryNavigationType>();
   readonly #permissionRequests = new Map<string, {
     readonly windowId: string;
@@ -132,6 +135,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     });
     this.downloads?.attach(surface.view.webContents.session, profileId);
     this.requestPipeline?.attach(surface.view.webContents.session);
+    configureCompatibilityWebContents(surface.view.webContents);
     this.#installPermissionHandler(surface.view.webContents.session);
 
     const requestedUrl = options.url ?? "moon://newtab";
@@ -192,6 +196,10 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     this.#internalHistory.delete(id);
     this.#historyCandidates.delete(id);
     this.#nextNavigationTypes.delete(id);
+    this.#recoveryAttempts.delete(id);
+    const recoveryTimer = this.#recoveryTimers.get(id);
+    if (recoveryTimer) clearTimeout(recoveryTimer);
+    this.#recoveryTimers.delete(id);
     if (wasActive) this.#activeTabs.delete(windowId);
 
     const host = this.windows.get(windowId);
@@ -423,6 +431,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       this.#emitUpdate(id);
     });
     contents.on("did-stop-loading", () => {
+      this.#recoveryAttempts.delete(id);
       this.#replaceTab(id, { loading: false });
       this.#syncFromContents(id, this.#completeHistoryEntry(id, windowId));
     });
@@ -448,20 +457,21 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       if (errorCode === -3) return;
       this.#historyCandidates.delete(id);
       this.#replaceTab(id, { loading: false, url: validatedUrl || this.#requireTab(id).url });
-      this.#emitUpdate(id, errorDescription);
+      this.#emitUpdate(id, navigationFailureMessage(errorCode));
     });
     contents.on("render-process-gone", (_event, details) => {
       if (this.#htmlFullscreenTabs.get(windowId) === id) this.#leaveHtmlFullscreen(id, windowId);
-      this.#replaceTab(id, { loading: false });
-      this.#emitUpdate(id, `A página foi encerrada (${details.reason}).`);
+      this.#recoverPage(id, windowId, details.reason);
     });
+    contents.on("unresponsive", () => this.#recoverPage(id, windowId, "unresponsive"));
+    contents.on("responsive", () => this.#recoveryAttempts.delete(id));
     contents.on("enter-html-full-screen", () => this.#enterHtmlFullscreen(id, windowId));
     contents.on("leave-html-full-screen", () => this.#leaveHtmlFullscreen(id, windowId));
   }
 
   #installWindowOpenHandler(id: string, windowId: string, contents: Electron.WebContents): void {
     contents.setWindowOpenHandler(details => {
-      const decision = decideWindowOpen(details.url, details.disposition);
+      const decision = decideWindowOpen(details.url, details.disposition, { features: details.features, frameName: details.frameName });
       if (decision.action === "deny") return { action: "deny" };
       if (decision.action === "tab") {
         const source = this.#tabs.get(id); if (!source) return { action: "deny" };
@@ -486,10 +496,38 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       this.requestPipeline?.attach(popup.webContents.session);
       this.#installPermissionHandler(popup.webContents.session);
       this.#installWindowOpenHandler(id, windowId, popup.webContents);
-      popup.webContents.on("will-navigate", event => { if (!isSafeWebPopupUrl(event.url)) event.preventDefault(); });
+      const keepPopupOnWeb = (event: Electron.Event & { readonly url: string }): void => { if (!isSafeWebPopupUrl(event.url)) event.preventDefault(); };
+      popup.webContents.on("will-navigate", keepPopupOnWeb);
+      popup.webContents.on("will-redirect", keepPopupOnWeb);
       popup.once("ready-to-show", () => { if (!popup.isDestroyed()) popup.show(); });
       popup.once("closed", () => { this.#auxiliaryWindows.delete(popup.id); });
     });
+  }
+
+  #recoverPage(id: string, windowId: string, reason: string): void {
+    const surface = this.#surfaces.get(id);
+    if (!surface || surface.view.webContents.isDestroyed()) return;
+    const attempts = (this.#recoveryAttempts.get(id) ?? 0) + 1;
+    this.#recoveryAttempts.set(id, attempts);
+    const previousTimer = this.#recoveryTimers.get(id);
+    if (previousTimer) clearTimeout(previousTimer);
+    this.#replaceTab(id, { loading: false });
+    if (!isRecoverableRendererExit(reason) && reason !== "unresponsive") {
+      this.#emitUpdate(id, "A página foi interrompida. Recarregue para tentar novamente.");
+      return;
+    }
+    if (attempts > 2) {
+      this.#emitUpdate(id, "A página continua instável. Feche outras abas e tente recarregar.");
+      return;
+    }
+    this.#emitUpdate(id, attempts === 1 ? "A página parou de responder. O Moon está recuperando a aba…" : "A página travou novamente. Fazendo a última tentativa de recuperação…");
+    const timer = setTimeout(() => {
+      this.#recoveryTimers.delete(id);
+      const current = this.#surfaces.get(id)?.view.webContents;
+      if (!current || current.isDestroyed()) return;
+      current.reload();
+    }, attempts * 350);
+    this.#recoveryTimers.set(id, timer);
   }
 
   #closeAuxiliaryWindows(tabId: string): void {

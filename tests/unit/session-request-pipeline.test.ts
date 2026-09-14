@@ -19,6 +19,18 @@ describe("SessionRequestPipeline", () => {
     expect(headersResponse.responseHeaders).toMatchObject({ "X-Moon-First": ["1"], "X-Moon-Second": ["2"] });
   });
 
+  it("fails open when a policy exceeds its deadline", async () => {
+    let before: ((details: Electron.OnBeforeRequestListenerDetails, callback: (response: Electron.CallbackResponse) => void) => void) | undefined;
+    const session = { webRequest: { onBeforeRequest: (_filter: unknown, listener: typeof before) => { before = listener; }, onHeadersReceived: vi.fn() } } as never;
+    const pipeline = new SessionRequestPipeline(5);
+    pipeline.register({ id: "stalled", beforeRequest: () => new Promise(() => undefined) });
+    pipeline.attach(session);
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    expect(await new Promise(resolve => before!({ url: "https://www.tiktok.com/" } as never, resolve))).toEqual({});
+    expect(spy).toHaveBeenCalledWith("Moon request policy timed out: stalled");
+    spy.mockRestore();
+  });
+
   it("fails open when a policy throws", async () => {
     let before: ((details: Electron.OnBeforeRequestListenerDetails, callback: (response: Electron.CallbackResponse) => void) => void) | undefined;
     const session = { webRequest: { onBeforeRequest: (_filter: unknown, listener: typeof before) => { before = listener; }, onHeadersReceived: vi.fn() } } as never;

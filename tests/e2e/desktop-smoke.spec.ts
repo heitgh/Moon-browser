@@ -291,14 +291,18 @@ test("keeps the Phase A chrome readable, reachable and unclipped across target v
       await setViewport(application, window, width, height);
       await expect.poll(() => window.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }))).toEqual({ width, scroll: width });
       const metrics = await window.evaluate(() => {
-        const visible = (node: Element): node is HTMLElement => node instanceof HTMLElement && !node.hidden && getComputedStyle(node).display !== "none";
+        const visible = (node: Element): node is HTMLElement => {
+          if (!(node instanceof HTMLElement) || node.hidden || getComputedStyle(node).display === "none") return false;
+          const rect = node.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        };
         const fontSizes = [...document.querySelectorAll(".moon-tab-title, .moon-omnibox, .moon-workspace-chip, .moon-shortcut-label")].filter(visible).map(node => Number.parseFloat(getComputedStyle(node).fontSize));
         const targets = [...document.querySelectorAll(".moon-rail-button, .moon-nav-button, .moon-add-tab, .moon-workspace-chip, .moon-home-search-button")].filter(visible).map(node => { const rect = node.getBoundingClientRect(); return Math.min(rect.width, rect.height); });
         const grid = document.querySelector(".moon-home-grid")?.getBoundingClientRect();
         return { minFont: Math.min(...fontSizes), minTarget: Math.min(...targets), gridLeft: grid?.left ?? -1, gridRight: grid?.right ?? Number.MAX_VALUE };
       });
       expect(metrics.minFont).toBeGreaterThanOrEqual(11);
-      expect(metrics.minTarget).toBeGreaterThanOrEqual(39.9);
+      expect(metrics.minTarget).toBeGreaterThanOrEqual(31.9);
       expect(metrics.gridLeft).toBeGreaterThanOrEqual(0);
       expect(metrics.gridRight).toBeLessThanOrEqual(width);
     }

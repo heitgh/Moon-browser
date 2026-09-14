@@ -21,6 +21,8 @@
 > [!IMPORTANT]
 > **Moon is experimental.** The public download is `v0.5.0-demo.2`. The `main` branch currently contains `0.6.0-alpha.1`, including work that is not yet available in the public demo. Do not use Moon as your only browser for critical data.
 
+A correção candidata foi validada na branch/PR separada: recuperação limitada de páginas travadas, compatibilidade de sessão/OAuth, sondas para Pinterest e TikTok e um padrão visual mais compacto. Quality, CodeQL, matriz de compatibilidade e builds de Windows/Linux passaram no commit `c0ca1ba`; login humano e publicação continuam pendentes. Consulte a [auditoria de compatibilidade](docs/audits/compatibility-stability-2026-09-14.md) e a [matriz de testes](docs/roadmap/compatibility.md). Isso **não altera os downloads públicos**.
+
 ## O que é o Moon?
 
 O Moon é um navegador desktop open source construído sobre **Electron + Chromium**. O projeto explora uma ideia simples:

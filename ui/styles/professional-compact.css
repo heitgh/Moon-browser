@@ -1,0 +1,149 @@
+/* Professional compact chrome.
+ * Visual controls are smaller on precise pointers while coarse pointers retain touch targets.
+ * Advanced customization remains authoritative through the existing data attributes.
+ */
+[data-moon-density="compact"] {
+  --moon-control-height: 34px;
+  --moon-tabs-height: 34px;
+  --moon-workspaces-height: 34px;
+  --moon-radius-sm: 7px;
+  --moon-radius-md: 10px;
+}
+
+[data-moon-density="compact"] .moon-rail {
+  gap: 3px;
+  padding: 8px 6px;
+}
+
+[data-moon-density="compact"] .moon-brand {
+  height: 34px;
+  margin-bottom: 2px;
+  width: 34px;
+}
+
+[data-moon-density="compact"] .moon-brand .moon-icon {
+  filter: none;
+  height: 20px;
+  width: 20px;
+}
+
+[data-moon-density="compact"] .moon-tabs-bar {
+  gap: 4px;
+  padding-inline: 8px;
+}
+
+[data-moon-density="compact"] .moon-tabs-list {
+  gap: 2px;
+}
+
+[data-moon-density="compact"] .moon-tab {
+  border-radius: 7px 7px 0 0;
+  gap: 6px;
+  height: 32px;
+  max-width: var(--moon-tabs-width);
+  min-width: 96px;
+  padding: 0 7px 0 9px;
+}
+
+[data-moon-density="compact"] .moon-tab-title {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+[data-moon-density="compact"] .moon-tab-close {
+  height: 24px;
+  min-width: 24px;
+  width: 24px;
+}
+
+[data-moon-density="compact"] .moon-tab:not(:hover):not(.is-active) .moon-tab-close {
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-moon-density="compact"] .moon-add-tab,
+[data-moon-density="compact"] .moon-nav-button,
+[data-moon-density="compact"] .moon-icon-button,
+[data-moon-density="compact"] .moon-rail-button {
+  height: 34px;
+  min-width: 34px;
+  width: 34px;
+}
+
+[data-moon-density="compact"] .moon-toolbar-v2 {
+  gap: 2px;
+  padding: 4px 8px;
+}
+
+[data-moon-density="compact"] .moon-address {
+  height: 34px;
+  margin-inline: 3px;
+  padding: 1px 4px 1px 8px;
+}
+
+[data-moon-density="compact"] .moon-address:not(:focus-within) {
+  background: color-mix(in srgb, var(--moon-surface) 72%, transparent);
+  border-color: color-mix(in srgb, var(--moon-border) 72%, transparent);
+}
+
+[data-moon-density="compact"] .moon-security-pill {
+  border: 0;
+  height: 28px;
+  justify-content: center;
+  padding: 0;
+  width: 28px;
+}
+
+[data-moon-density="compact"] .moon-security-text {
+  clip: rect(0 0 0 0);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+[data-moon-density="compact"] .moon-go-button {
+  background: transparent;
+  height: 28px;
+  min-width: 28px;
+}
+
+[data-moon-density="compact"] .moon-workspaces {
+  padding-inline: 8px;
+}
+
+[data-moon-density="compact"] .moon-workspaces-label {
+  display: none;
+}
+
+[data-moon-density="compact"] .moon-workspace-chip {
+  min-height: 28px;
+  padding-inline: 9px;
+}
+
+[data-moon-density="compact"] .moon-drawer-header {
+  height: 48px;
+}
+
+[data-moon-density="compact"] .moon-drawer-body {
+  height: calc(100vh - 48px);
+  padding: 12px;
+}
+
+@media (pointer: coarse) {
+  [data-moon-density="compact"] {
+    --moon-control-height: 44px;
+    --moon-tabs-height: 44px;
+    --moon-workspaces-height: 44px;
+  }
+
+  [data-moon-density="compact"] .moon-tab,
+  [data-moon-density="compact"] .moon-add-tab,
+  [data-moon-density="compact"] .moon-nav-button,
+  [data-moon-density="compact"] .moon-icon-button,
+  [data-moon-density="compact"] .moon-rail-button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
