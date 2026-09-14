@@ -9,8 +9,8 @@ Esta matriz separa garantias determinísticas de sondas externas sujeitas a rede
 | Queda do renderer | `forcefullyCrashRenderer()` e recarga limitada | obrigatório | não elimina falhas nativas do Chromium |
 | TikTok | navegação externa opt-in, crash, título e user-agent | semanal/manual, informativo | anti-bot, região e login podem variar |
 | Pinterest | tela de login externa opt-in, crash, título e user-agent | semanal/manual, informativo | OAuth completo exige credencial humana |
-| Build Linux | AppImage, deb, rpm e pacman no Quality/Release | aprovado no commit `c0ca1ba` | artefato de CI, publicação permanece manual |
-| Build Windows | setup, portátil e checksums no workflow de release | aprovado no commit `c0ca1ba` | artefato de CI; publicação foi ignorada |
+| Build Linux | AppImage, deb, rpm e pacman no Quality/Release | publicado em `v0.6.0-alpha.2` | prerelease x64; sem macOS |
+| Build Windows | setup, portátil e checksums no workflow de release | publicado em `v0.6.0-alpha.2` | prerelease x64 |
 
 Comandos:
 

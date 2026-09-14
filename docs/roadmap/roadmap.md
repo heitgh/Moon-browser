@@ -13,4 +13,4 @@ Features remain behind flags until their security and persistence behavior is ve
 2. Executar sondas externas de Pinterest e TikTok em mais de uma rede/plataforma.
 3. Fazer teste humano de login Google/Pinterest sem registrar credenciais, cookies ou tokens.
 4. Capturar comparação visual do chrome compacto nas mesmas dimensões do baseline.
-5. Somente após os quatro gates, decidir tag, binários e publicação.
+5. `v0.6.0-alpha.2` publicada após os gates; repetir o processo para cada próxima tag.

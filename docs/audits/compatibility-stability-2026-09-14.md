@@ -44,4 +44,4 @@ Status do commit de código `c0ca1ba`: **aprovado no GitHub Actions em 14 de set
 
 ## Distribuição
 
-Nenhuma tag, release ou asset foi criado. Downloads públicos permanecem em `v0.5.0-demo.2`.
+Após autorização, o PR #21 foi mesclado no commit `3084063` e a prerelease [`v0.6.0-alpha.2`](https://github.com/heitgh/Moon-browser/releases/tag/v0.6.0-alpha.2) foi publicada com seis instaladores/pacotes e dois arquivos de checksums. O workflow de publicação #33 foi aprovado.

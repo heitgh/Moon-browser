@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0-alpha.2 — validada no CI, não publicada (2026-09-14)
+## 0.6.0-alpha.2 — publicada como prerelease (2026-09-14)
 
 - Quality aprovado: TypeScript, lint, 141 unitários, 34 de integração, 20 Electron/SQLite, 11 E2E (2 probes externos separados), audit no nível alto e build Linux.
 - Matriz de compatibilidade aprovada: 1 cenário determinístico de cookie/redirect/OAuth/crash e 2 sondas externas, Pinterest e TikTok.
@@ -13,7 +13,7 @@
 - navegação principal e endpoints de identidade não são bloqueados pelo AdBlock;
 - modo Simples nasce compacto, com toolbar/abas/sidebar menores, drawer sobreposto e workspaces somente na Home;
 - matriz Electron para cookie, redirect, OAuth e crash; sondas reais de Pinterest/TikTok são opt-in e informativas;
-- downloads continuam em `v0.5.0-demo.2`; nenhuma release foi criada.
+- downloads Windows/Linux e checksums publicados em `v0.6.0-alpha.2` após aprovação dos gates.
 
 
 ## 0.6.0-alpha.1 — atualização local (2026-09-08)
