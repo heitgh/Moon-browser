@@ -51,8 +51,6 @@ test("keeps cookies through redirects and recovers a crashed site renderer", asy
     const skip = shell.getByLabel("Pular configuração inicial");
     if (await skip.waitFor({ state: "visible", timeout: 5_000 }).then(() => true).catch(() => false)) await skip.click();
     await shell.screenshot({ path: "test-results/compact-shell.png" });
-    const bridge = () => (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser;
-
     await shell.getByPlaceholder("Pesquise ou digite um endereço").fill(`${origin}/login`);
     await shell.getByLabel("Abrir endereço").click();
     await expect.poll(() => application.evaluate(({ webContents }, url) => {
@@ -67,7 +65,7 @@ test("keeps cookies through redirects and recovers a crashed site renderer", asy
     expect(sessionText).toContain("moon_session=authenticated");
 
     await shell.evaluate(async target => {
-      const api = bridge();
+      const api = (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser;
       const tab = await api.createTab(target, "research");
       await api.activateTab(tab.id);
     }, origin);
@@ -86,7 +84,7 @@ test("keeps cookies through redirects and recovers a crashed site renderer", asy
     }, `${origin}/`)).toBe("oauth-ok");
 
     await shell.evaluate(async target => {
-      const api = bridge();
+      const api = (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser;
       const tab = await api.createTab(target, "research");
       await api.activateTab(tab.id);
     }, `${origin}/heavy`);
