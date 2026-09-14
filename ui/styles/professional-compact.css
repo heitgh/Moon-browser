@@ -109,11 +109,6 @@
   min-width: 28px;
 }
 
-[data-moon-density="compact"] .moon-address:not(:focus-within) .moon-go-button {
-  opacity: 0;
-  pointer-events: none;
-}
-
 [data-moon-density="compact"] .moon-workspaces {
   padding-inline: 8px;
 }
