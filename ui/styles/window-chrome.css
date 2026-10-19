@@ -1,0 +1,18 @@
+/* Nexus Inc. — shared wallpaper and integrated window controls. */
+.moon-tabs-bar { -webkit-app-region: drag; }
+.moon-tabs-bar button, .moon-window-controls { -webkit-app-region: no-drag; }
+.moon-window-controls { align-self: stretch; display: flex; flex: 0 0 auto; margin-left: auto; }
+.moon-window-control { background: transparent; border: 0; color: var(--moon-text); cursor: pointer; font: 18px system-ui; min-width: 42px; }
+.moon-window-control:hover { background: color-mix(in srgb, var(--moon-text) 15%, transparent); }
+.moon-window-close:hover { background: #c42b1c; color: white; }
+:is([data-moon-tabs="left"], [data-moon-tabs="right"]) .moon-window-controls { position: fixed; right: 0; top: 0; height: var(--moon-toolbar-height); z-index: 50; }
+:is([data-moon-tabs="left"], [data-moon-tabs="right"]) .moon-toolbar-v2 { padding-right: 140px; }
+.moon-shell-wallpaper { display: none; }
+[data-moon-wallpaper-chrome="on"] .moon-browser-shell { isolation: isolate; position: relative; }
+[data-moon-wallpaper-chrome="on"] .moon-shell-wallpaper { display: block; position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+[data-moon-wallpaper-chrome="on"] .moon-shell-wallpaper::after { content: ""; position: absolute; inset: 0; background: rgb(0 0 0 / var(--moon-wallpaper-dim)); }
+[data-moon-wallpaper-chrome="on"] :is(.moon-browser-main, .moon-content, .moon-stage, .moon-home) { background: transparent; }
+[data-moon-wallpaper-chrome="on"] .moon-home::after { display: none; }
+[data-moon-wallpaper-chrome="on"] .moon-tabs-bar { background: color-mix(in srgb, var(--moon-region-tabs) 20%, transparent); }
+[data-moon-wallpaper-chrome="on"] .moon-toolbar-v2 { background: color-mix(in srgb, var(--moon-region-toolbar) 65%, transparent); }
+[data-moon-wallpaper-chrome="on"] .moon-workspaces { background: color-mix(in srgb, var(--moon-bg) 65%, transparent); }

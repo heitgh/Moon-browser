@@ -686,6 +686,8 @@ export class HomeView {
         }).format(now);
       });
   }
+  get wallpaperElement(): HTMLElement { return this.#wallpaper; }
+
   #applyWallpaper(settings: WallpaperSettings): void {
     this.#wallpaperSettings = settings;
     this.#renderWallpaper();

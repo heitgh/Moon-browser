@@ -103,6 +103,7 @@ class BrowserShell {
   readonly #focusPanel = new FocusPanel({ controller: () => this.#focus, workspaces: () => this.#workspaces, privateWindow: () => this.#windowPrivate, pendingNavigation: () => this.#pendingFocusNavigation, onProceedNavigation: url => { void this.#navigate(url, true); }, onDismissNavigation: () => { this.#pendingFocusNavigation = undefined; }, onEnd: () => this.#closeDrawer() });
   readonly #home = this.#homeView.element;
   readonly #viewport = el("div", "moon-browser-viewport");
+  readonly #chromeWallpaper = el("div", "moon-shell-wallpaper");
   readonly #stage = el("div", "moon-stage");
   readonly #railElement = el("aside", "moon-rail");
   readonly #tabsBar = el("header", "moon-tabs-bar");
@@ -224,10 +225,16 @@ class BrowserShell {
 
     const main = el("section", "moon-browser-main"); const tabsBar = this.#tabsBar; const mark = btn("moon-window-mark", "Gerenciar perfis", "moon"); mark.append(this.#profileName); mark.addEventListener("click", () => this.#toggleDrawer("profiles"));
     this.#addTab.addEventListener("click", () => void this.#createTab()); this.#privateBadge.hidden = true; this.#privateBadge.title = "O modo anônimo não oculta o tráfego do seu provedor, empresa, escola ou dos sites acessados."; tabsBar.append(mark, this.#tabStrip.element, this.#addTab, this.#privateBadge);
+    const windowControls = el("div", "moon-window-controls");
+    for (const [action, label, glyph] of [["minimize", "Minimizar janela", "−"], ["maximize", "Maximizar ou restaurar janela", "□"], ["close", "Fechar janela", "×"]] as const) {
+      const control = document.createElement("button"); control.className = `moon-window-control moon-window-${action}`; control.textContent = glyph; control.title = label; control.setAttribute("aria-label", label);
+      control.addEventListener("click", () => void this.#bridge?.windowAction?.(action)); windowControls.append(control);
+    }
+    tabsBar.append(windowControls);
 
     const content = el("div", "moon-content"); this.#renderHomeShortcuts(); this.#stage.append(this.#home, this.#viewport, this.#status); content.append(this.#stage);
     this.#zenExit.append(el("span", "", "Sair do Foco")); this.#zenExit.hidden = true; this.#zenExit.addEventListener("click", () => this.#focus?.end());
-    main.append(tabsBar, this.#toolbar.element, this.#workspaceBar.element, content); shell.append(rail, this.#drawer, main); this.container.replaceChildren(shell, this.#zenExit);
+    main.append(tabsBar, this.#toolbar.element, this.#workspaceBar.element, content); shell.append(this.#chromeWallpaper, rail, this.#drawer, main); this.container.replaceChildren(shell, this.#zenExit);
     this.#renderAdblock();
   }
 
@@ -692,6 +699,8 @@ class BrowserShell {
     this.#toolbar.applyLayout(config.layout);
     this.#placeNewTabButton(config.layout.tabs.newTabButton);
     this.#homeView.apply(config);
+    if (config.appearance.wallpaper.extendToChrome) this.#chromeWallpaper.append(this.#homeView.wallpaperElement);
+    else this.#home.prepend(this.#homeView.wallpaperElement);
     this.#refreshHomeData();
     requestAnimationFrame(() => this.#syncBounds());
   }

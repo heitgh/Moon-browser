@@ -27,6 +27,12 @@ jobs:
       - run: npm run native:electron
       - run: npm run test:electron-storage
       - run: xvfb-run -a npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-e2e-results-${{ github.run_attempt }}
+          path: test-results/**
+          if-no-files-found: ignore
       - run: npm audit --audit-level=high
       - run: sudo apt-get update && sudo apt-get install --no-install-recommends -y rpm libarchive-tools
       - run: npm run build:desktop

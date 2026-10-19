@@ -28,6 +28,13 @@ export function registerBrowserIpc(
     return payload.tabId;
   };
 
+  router.register("browser:window-action", (event, payload: unknown) => {
+    const window = windows.require(windowIdFor(event));
+    if (payload === "minimize") window.minimize();
+    else if (payload === "maximize") { if (window.isMaximized()) window.unmaximize(); else window.maximize(); }
+    else if (payload === "close") window.close();
+    else throw new TypeError("Invalid window action");
+  });
   router.register("browser:create-tab", (event, payload?: CreateTabPayload) => {
     const url = payload?.url;
     const workspaceId = payload?.workspaceId;
@@ -65,7 +72,8 @@ export function registerBrowserIpc(
     if (!payload || ![payload.x, payload.y, payload.width, payload.height].every(Number.isFinite)) {
       throw new TypeError("Invalid browser bounds");
     }
-    browser.setBounds(windowIdFor(event), payload);
+    const zoom = event.sender.getZoomFactor();
+    browser.setBounds(windowIdFor(event), { x: Math.round(payload.x * zoom), y: Math.round(payload.y * zoom), width: Math.round(payload.width * zoom), height: Math.round(payload.height * zoom) });
   });
   router.register("browser:set-content-visible", (event, payload?: { readonly visible?: boolean }) => {
     if (!payload || typeof payload.visible !== "boolean") {

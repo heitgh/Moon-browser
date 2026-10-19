@@ -109,6 +109,7 @@ export interface ThemeRegions {
 }
 
 export interface WallpaperSettings {
+  readonly extendToChrome: boolean;
   readonly type: WallpaperType;
   readonly source: string;
   readonly fit: "contain" | "cover" | "fill";
@@ -359,6 +360,7 @@ export const DEFAULT_CUSTOMIZATION: CustomizationConfig = {
       selection: "#8a5cf5",
     },
     wallpaper: {
+      extendToChrome: true,
       type: "local",
       source: LOCAL_WALLPAPER,
       animate: true,
@@ -912,6 +914,7 @@ function config(value: unknown, name: string): CustomizationConfig {
         selection: color(regionsValue.selection, "regions.selection"),
       },
       wallpaper: {
+        extendToChrome: wallpaperValue.extendToChrome === undefined ? true : bool(wallpaperValue.extendToChrome, "wallpaper.extendToChrome"),
         type: wallpaperType,
         source: wallpaperSource,
         ...(wallpaperValue.cachedData === undefined

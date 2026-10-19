@@ -489,3 +489,49 @@ test("research reads real sources, saves notes and opt-in memory, and recovers a
     })).toBe(true);
   } finally { await application.close(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(userData, { recursive: true, force: true }); }
 });
+
+test("page keyboard zoom is separate from Ctrl wheel UI zoom and the titlebar is integrated", async () => {
+  const { createServer } = await import("node:http");
+  const server = createServer((_request, response) => response.end("<!doctype html><h1>Zoom regression</h1>"));
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as { port: number }).port;
+  const url = `http://127.0.0.1:${port}/`;
+  const userData = await mkdtemp(join(tmpdir(), "moon-e2e-zoom-"));
+  const application = await electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData } });
+  try {
+    const shell = await shellWindow(application);
+    await dismissOnboarding(shell);
+    await expect(shell.getByLabel("Minimizar janela", { exact: true })).toBeVisible();
+    await shell.getByLabel("Configurações", { exact: true }).click();
+    await shell.getByLabel("Aparência", { exact: true }).click();
+    await shell.getByLabel("Usar Aurora", { exact: true }).click();
+    await shell.getByLabel("Aplicar personalização", { exact: true }).click();
+    await expect(shell.locator("html")).toHaveAttribute("data-moon-wallpaper-chrome", "on");
+    await shell.evaluate(async () => {
+      const background = getComputedStyle(document.querySelector(".moon-shell-wallpaper .moon-home-wallpaper")!).backgroundImage;
+      const image = new Image(); image.src = JSON.parse(background.slice(4, -1)) as string; await image.decode();
+    });
+    await shell.screenshot({ path: "test-results/continuous-wallpaper-initial.png" });
+    await shell.evaluate(async target => { await (window as unknown as { moonBrowser: { createTab(url: string): Promise<unknown> } }).moonBrowser.createTab(target); }, url);
+    const factors = () => application.evaluate(({ BrowserWindow, webContents }, target) => ({ shell: BrowserWindow.getAllWindows()[0]!.webContents.getZoomFactor(), page: webContents.getAllWebContents().find(contents => contents.getURL() === target)?.getZoomFactor() }), url);
+    await expect.poll(async () => (await factors()).page).toBe(1);
+    await application.evaluate(({ webContents }, target) => { const page = webContents.getAllWebContents().find(contents => contents.getURL() === target)!; page.sendInputEvent({ type: "keyDown", keyCode: "=", modifiers: ["control"] }); page.sendInputEvent({ type: "keyUp", keyCode: "=", modifiers: ["control"] }); }, url);
+    await expect.poll(async () => Math.round(((await factors()).page ?? 0) * 100) / 100).toBe(1.1);
+    expect((await factors()).shell).toBe(1);
+    const guest = application.context().pages().find(page => page.url() === url)!;
+    expect(guest).toBeDefined();
+    await guest.keyboard.down("Control");
+    await guest.mouse.move(40, 60);
+    await guest.mouse.wheel(0, -120);
+    await guest.keyboard.up("Control");
+    await expect.poll(() => shell.evaluate(() => window.devicePixelRatio)).not.toBe(1);
+    expect(Math.round(((await factors()).page ?? 0) * 100) / 100).toBe(1.1);
+    await shell.getByLabel("Página inicial", { exact: true }).click();
+    await expect(shell.locator(".moon-home")).toBeVisible();
+    const controls = await shell.getByLabel("Fechar janela", { exact: true }).boundingBox();
+    expect(controls!.x + controls!.width).toBeLessThanOrEqual(await shell.evaluate(() => window.innerWidth + 1));
+    const screenshot = await application.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0]!.webContents.capturePage()).toPNG().toString("base64"));
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile("test-results/continuous-wallpaper.png", Buffer.from(screenshot, "base64"));
+  } finally { await application.close(); server.close(); await rm(userData, { recursive: true, force: true }); }
+});

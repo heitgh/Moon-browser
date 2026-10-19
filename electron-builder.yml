@@ -9,6 +9,7 @@ files:
   - index.html
   - main.js
   - preload.cjs
+  - zoom-preload.cjs
   - package.json
 asar: true
 asarUnpack:
@@ -33,6 +34,7 @@ linux:
       arch:
         - x64
 win:
+  requestedExecutionLevel: asInvoker
   icon: assets/branding/Moon.png
   target:
     - target: nsis
@@ -42,6 +44,8 @@ win:
       arch:
         - x64
 nsis:
+  perMachine: false
+  allowElevation: false
   artifactName: Moon-Browser-${version}-Windows-x64-Setup.${ext}
   oneClick: false
   allowToChangeInstallationDirectory: true

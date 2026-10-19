@@ -17,6 +17,7 @@ export class CustomizationApplier {
       text: mix(appearance.colors.text, "#000000", .88), textMuted: mix(appearance.colors.textMuted, "#000000", .62), border: mix(appearance.colors.border, "#000000", .14)
     } : appearance.colors;
     const region = (value: string): string => resolvedMode === "light" ? mix(value, "#ffffff", .92) : value;
+    this.root.dataset.moonWallpaperChrome = appearance.wallpaper.extendToChrome ? "on" : "off";
     this.root.dataset.moonTheme = resolvedMode;
     this.root.dataset.moonThemeMode = appearance.mode;
     this.root.dataset.moonDensity = layout.density;

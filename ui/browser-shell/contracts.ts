@@ -49,6 +49,7 @@ export type { LocalProfileAvatar, LocalProfileSummary } from "../../packages/ipc
 import type { CreateLocalProfileRequest, DeleteLocalProfileRequest, LocalProfileSummary, UpdateLocalProfileRequest } from "../../packages/ipc/local-profile-contract.js";
 
 export interface MoonBrowserBridge {
+  windowAction?(action: "minimize" | "maximize" | "close"): Promise<void>;
   captureResearch?(workspaceId: string, tabIds: string[], consent: boolean): Promise<ResearchSource[]>;
   loadResearchMemory?(workspaceId: string): Promise<ResearchMemory>;
   saveResearchMemory?(workspaceId: string, value: ResearchMemory): Promise<ResearchMemory>;

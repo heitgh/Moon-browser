@@ -1,6 +1,7 @@
 import { DEFAULT_FEATURE_FLAGS, featureEnabled } from "../../../../config/feature-flags.js";
 import { registerResearchIpc } from "../ipc/research-ipc.js";
-import { app } from "electron";
+import { changeInterfaceZoom, installInterfaceWheel, installZoomShortcuts } from "./interface-zoom.js";
+import { app, ipcMain } from "electron";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { ElectronBrowserManager } from "../browser/browser-manager.js";
@@ -58,6 +59,8 @@ async function createMainWindow(privateMode = false, profileId = defaultProfileI
     }
   }, { private: privateMode, guest: localProfile.kind === "guest", profileId });
   const window = windows.require(id);
+  installZoomShortcuts(window.webContents, action => browser.zoomActivePage(id, action));
+  installInterfaceWheel(window.webContents, window.webContents);
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", event => {
@@ -85,7 +88,14 @@ app.whenReady().then(async () => {
   profiles = new LocalProfileManager(profilesDirectory, defaultDirectory);
   defaultProfileId = (await profiles.initialize()).id;
   application = new BrowserApplicationService(browser, windowId => profiles!.storage(windows.profileId(windowId)));
-  installApplicationMenu(() => { void createMainWindow(true, defaultProfileId); });
+  installApplicationMenu(() => { void createMainWindow(true, defaultProfileId); }, (window, action) => {
+    const id = windows.idForWebContents(window.webContents); if (id) browser.zoomActivePage(id, action);
+  });
+  ipcMain.on("browser:ui-wheel", (event, direction: unknown) => {
+    if (direction !== "in" && direction !== "out") return;
+    const id = browser.windowIdForContents(event.sender); const window = id ? windows.get(id) : undefined;
+    if (window) setImmediate(() => changeInterfaceZoom(window.webContents, direction));
+  });
   registerBrowserIpc(ipc, application, windows, profileId => createMainWindow(true, profileId));
   registerProductIpc(ipc, downloads, adblock, profiles, windows, app.getPath("home"), app.getVersion(), profileId => createMainWindow(false, profileId));
   if (featureEnabled(DEFAULT_FEATURE_FLAGS, "research")) registerResearchIpc(ipc, windows, browser, application, profiles);

@@ -15,6 +15,7 @@ export class WindowManager {
       minWidth: 760,
       minHeight: 520,
       show: false,
+      frame: false,
       autoHideMenuBar: true,
       title: "Moon Browser",
       backgroundColor: "#090a10",

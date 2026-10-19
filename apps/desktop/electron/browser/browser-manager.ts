@@ -13,7 +13,9 @@ import { ElectronBrowserSurface } from "./browser-surface.js";
 import { NavigationController } from "./navigation-controller.js";
 import type { ElectronAdblockService } from "../services/adblock-service.js";
 import type { ElectronDownloadManager } from "../services/download-manager.js";
-import type { Session } from "electron";
+import { app, type Session, type WebContents } from "electron";
+import { join } from "node:path";
+import { changeInterfaceZoom, installInterfaceWheel, installZoomShortcuts, type ZoomAction } from "../main/interface-zoom.js";
 import { openElectronContextMenu } from "./context-menu.js";
 import { isMoonSettingsUrl, MoonInternalHistory, normalizeMoonInternalUrl } from "../../../../packages/navigation/internal-routes.js";
 import type { SessionRequestPipeline } from "../security/session-request-pipeline.js";
@@ -99,6 +101,17 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     return () => this.#tabUpdateListeners.delete(listener);
   }
 
+  windowIdForContents(contents: WebContents): string | undefined {
+    const id = this.windows.idForWebContents(contents); if (id) return id;
+    for (const [tabId, surface] of this.#surfaces) if (surface.view.webContents.id === contents.id) return this.#tabWindows.get(tabId);
+    return undefined;
+  }
+
+  zoomActivePage(windowId: string, action: ZoomAction): void {
+    const id = this.#activeTabs.get(windowId); if (!id || this.#homeTabs.has(id)) return;
+    const contents = this.#surfaces.get(id)?.view.webContents; if (contents) changeInterfaceZoom(contents, action);
+  }
+
   async createWindow(options?: BrowserWindowOptions): Promise<string> {
     return this.windows.create(options);
   }
@@ -124,6 +137,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
         nodeIntegration: false,
         sandbox: true,
         disableHtmlFullscreenWindowResize: true,
+        preload: join(app.getAppPath(), "zoom-preload.cjs"),
         partition: options.private
           ? `private:${profileId}:${sessionId}`
           : guest
@@ -415,6 +429,8 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     surface: ElectronBrowserSurface
   ): void {
     const contents = surface.view.webContents;
+    installZoomShortcuts(contents, action => changeInterfaceZoom(contents, action));
+    installInterfaceWheel(contents, this.windows.require(windowId).webContents);
 
     this.#installWindowOpenHandler(id, windowId, contents);
     contents.on("context-menu", (_event, params) => {

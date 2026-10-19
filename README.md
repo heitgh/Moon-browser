@@ -9,8 +9,8 @@
 
 [![Quality](https://github.com/heitgh/Moon-browser/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/heitgh/Moon-browser/actions/workflows/quality.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-7C3AED.svg)](LICENSE)
-[![Current prerelease](https://img.shields.io/badge/prerelease-v0.6.0--alpha.2-7C3AED.svg)](https://github.com/heitgh/Moon-browser/releases/tag/v0.6.0-alpha.2)
-[![Alpha](https://img.shields.io/badge/main-0.6.0--alpha.1-9333EA.svg)](CHANGELOG.md)
+[![Current prerelease](https://img.shields.io/badge/prerelease-v0.6.0--alpha.3-7C3AED.svg)](https://github.com/heitgh/Moon-browser/releases/tag/v0.6.0-alpha.3)
+[![Alpha](https://img.shields.io/badge/main-0.6.0--alpha.3-9333EA.svg)](CHANGELOG.md)
 
 [**Download**](#download) · [**Website**](https://moon-browser.vercel.app) · [**See the product**](#o-que-o-moon-propoe) · [**Contribute**](CONTRIBUTING.md) · [**Report a bug**](https://github.com/heitgh/Moon-browser/issues)
 
@@ -19,9 +19,9 @@
 ![Moon Browser home with workspaces, search and shortcuts](assets/screenshots/update-home-dark.png)
 
 > [!IMPORTANT]
-> **Moon is experimental.** The current public prerelease is `v0.6.0-alpha.2`, built from the validated `main` branch. Do not use Moon as your only browser for critical data.
+> **Moon is experimental.** The current public prerelease is `v0.6.0-alpha.3`, built from the validated `main` branch. Do not use Moon as your only browser for critical data.
 
-A `v0.6.0-alpha.2` foi publicada após Quality, CodeQL, matriz de compatibilidade e builds de Windows/Linux aprovados. Ela inclui recuperação limitada de páginas travadas, correções de sessão/OAuth, sondas para Pinterest e TikTok e um padrão visual mais compacto. Login humano e macOS continuam pendentes. Consulte a [auditoria de compatibilidade](docs/audits/compatibility-stability-2026-09-14.md) e a [matriz de testes](docs/roadmap/compatibility.md). Os downloads oficiais desta prerelease estão na seção abaixo.
+A `v0.6.0-alpha.3` integra no repositório oficial as correções validadas no Moon-tests-1: **Ctrl++ / Ctrl+- / Ctrl+0 para os sites**, **Ctrl + scroll para a interface**, controles de janela na linha das guias e wallpaper contínuo até as guias. Perfis locais, modo anônimo, personalização V4, biblioteca de wallpapers, pesquisa e demais recursos oficiais foram preservados. A publicação dos pacotes segue os gates do workflow Desktop Releases. Consulte as [notas da versão](docs/releases/v0.6.0-alpha.3.md).
 
 ## O que é o Moon?
 
@@ -62,23 +62,23 @@ As capturas acima vêm da alpha e usam dados de teste. Elas mostram cenários re
 <a id="download"></a>
 ## Download
 
-### Prerelease pública — `v0.6.0-alpha.2`
+### Prerelease pública — `v0.6.0-alpha.3`
 
 | Sistema | Download | Integridade |
 | --- | --- | --- |
-| **Windows x64** | [Instalador `.exe`](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.2/Moon-Browser-0.6.0-alpha.2-Windows-x64-Setup.exe) · [Portátil `.exe`](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.2/Moon-Browser-0.6.0-alpha.2-Windows-x64-Portable.exe) | [SHA-256](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.2/SHA256SUMS-windows.txt) |
-| **Linux x64** | [AppImage](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.2/Moon-Browser-0.6.0-alpha.2-Linux-x64.AppImage) · [DEB](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.2/Moon-Browser-0.6.0-alpha.2-Linux-x64.deb) · [RPM](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.2/Moon-Browser-0.6.0-alpha.2-Linux-x64.rpm) · [pacman](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.2/Moon-Browser-0.6.0-alpha.2-Linux-x64.pacman) | [SHA-256](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.2/SHA256SUMS-linux.txt) |
+| **Windows x64** | [Instalador `.exe`](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.3/Moon-Browser-0.6.0-alpha.3-Windows-x64-Setup.exe) · [Portátil `.exe`](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.3/Moon-Browser-0.6.0-alpha.3-Windows-x64-Portable.exe) | [SHA-256](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.3/SHA256SUMS-windows.txt) |
+| **Linux x64** | [AppImage](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.3/Moon-Browser-0.6.0-alpha.3-Linux-x64.AppImage) · [DEB](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.3/Moon-Browser-0.6.0-alpha.3-Linux-x64.deb) · [RPM](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.3/Moon-Browser-0.6.0-alpha.3-Linux-x64.rpm) · [pacman](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.3/Moon-Browser-0.6.0-alpha.3-Linux-x64.pacman) | [SHA-256](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.3/SHA256SUMS-linux.txt) |
 
 [**Ver todas as releases →**](https://github.com/heitgh/Moon-browser/releases)
 
 Para AppImage:
 
 ```bash
-chmod +x Moon-Browser-0.6.0-alpha.2-Linux-x64.AppImage
-./Moon-Browser-0.6.0-alpha.2-Linux-x64.AppImage
+chmod +x Moon-Browser-0.6.0-alpha.3-Linux-x64.AppImage
+./Moon-Browser-0.6.0-alpha.3-Linux-x64.AppImage
 ```
 
-> A `v0.6.0-alpha.2` é uma prerelease pública. Windows e Linux possuem instaladores oficiais e checksums; macOS ainda não possui build publicado.
+> A `v0.6.0-alpha.3` é uma prerelease pública. Windows e Linux possuem instaladores oficiais e checksums; macOS ainda não possui build publicado.
 
 ## Estado do projeto
 

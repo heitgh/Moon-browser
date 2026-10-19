@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0-alpha.3 — integração oficial (2026-10-19)
+
+- Ctrl++/Ctrl+-/Ctrl+0 alteram somente o site ativo; Ctrl + scroll altera a UI.
+- Barra de título integrada às guias, com minimizar, maximizar/restaurar e fechar.
+- Wallpaper compartilhado entre Home e guias, preservando filtros, biblioteca, animação e fallback estático.
+- Compatibilidade com configurações V4 existentes e preview reversível.
+- Instalador Windows por usuário, sem exigir elevação, e versão portátil.
+- Electron e ferramentas de teste atualizados; publicação oficial Windows/Linux com checksums pelos gates existentes.
+
 ## 0.6.0-alpha.2 — publicada como prerelease (2026-09-14)
 
 - Quality aprovado: TypeScript, lint, 141 unitários, 34 de integração, 20 Electron/SQLite, 11 E2E (2 probes externos separados), audit no nível alto e build Linux.

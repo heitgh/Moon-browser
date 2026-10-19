@@ -30,6 +30,7 @@ const mutateProfileData = vi.fn(async (mutation: { type: string; id?: string; co
   if (mutation.type === "workspace:delete") profileData.workspaces = profileData.workspaces.filter(item => item.id !== mutation.id);
 });
 const bridge = {
+  windowAction: vi.fn(async () => undefined),
   createTab, getWindowContext: vi.fn(async () => ({ private: false, guest: false, profileId: "default" })), createPrivateWindow: vi.fn(async () => undefined), getTabs: vi.fn(async () => []), closeTab: vi.fn(async () => undefined), activateTab: vi.fn(async () => undefined), showHome: vi.fn(async () => undefined), showInternalPage, navigate,
   back: vi.fn(async () => undefined), forward: vi.fn(async () => undefined), reload: vi.fn(async () => undefined), stop: vi.fn(async () => undefined), setBounds: vi.fn(async () => undefined), setContentVisible, respondToPermission: vi.fn(async () => undefined), listSitePermissions: vi.fn(async () => sitePermissions), clearSitePermission: vi.fn(async (origin: string, permission: string) => { sitePermissions = sitePermissions.filter(item => item.origin !== origin || item.permission !== permission); }),
   getDownloads: vi.fn(async () => []), pauseDownload: vi.fn(async () => undefined), resumeDownload: vi.fn(async () => undefined), cancelDownload: vi.fn(async () => undefined), openDownload: vi.fn(async () => undefined), showDownloadInFolder: vi.fn(async () => undefined), clearFinishedDownloads: vi.fn(async () => undefined),
@@ -415,4 +416,18 @@ describe("Moon browser shell", () => {
     (document.querySelector('[aria-label^="Esquecer geolocation"]') as HTMLButtonElement).click(); await flush();
     expect(bridge.clearSitePermission).toHaveBeenCalledWith("https://maps.example", "geolocation");
   });
+  it("shares the existing wallpaper with chrome and restores its parent when preview is cancelled", async () => {
+    const wallpaper = document.querySelector(".moon-home-wallpaper")!;
+    expect(wallpaper.parentElement?.classList.contains("moon-shell-wallpaper")).toBe(true);
+    (document.querySelector('[aria-label="Minimizar janela"]') as HTMLButtonElement).click();
+    expect(bridge.windowAction).toHaveBeenCalledWith("minimize");
+    (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
+    (document.querySelector('[data-section="appearance"]') as HTMLButtonElement).click(); await flush();
+    const label = [...document.querySelectorAll("label")].find(node => node.textContent?.includes("Estender wallpaper até as guias"))!;
+    const toggle = label.querySelector("input")!; toggle.checked = false; toggle.dispatchEvent(new Event("change", { bubbles: true })); await flush();
+    expect(wallpaper.parentElement?.classList.contains("moon-home")).toBe(true);
+    (document.querySelector('[aria-label="Cancelar mudanças"]') as HTMLButtonElement).click(); await flush();
+    expect(document.querySelector(".moon-shell-wallpaper .moon-home-wallpaper")).toBe(wallpaper);
+  });
+
 });
