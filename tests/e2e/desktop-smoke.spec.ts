@@ -1,6 +1,6 @@
 import { _electron as electron, expect, test } from "@playwright/test";
 import type { ElectronApplication, Page } from "@playwright/test";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { existsSync } from "node:fs";
@@ -425,6 +425,7 @@ test("research reads real sources, saves notes and opt-in memory, and recovers a
     let page = await shellWindow(application); await dismissOnboarding(page);
     await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.unmaximize());
     await setViewport(application, page, 1440, 900);
+    await application.evaluate(async ({ session }) => { await session.fromPartition("persist:profile:default:workspace:area-a").cookies.set({ url: "https://example.com", name: "workspace-cookie", value: "preserved", expirationDate: Math.floor(Date.now() / 1000) + 86400 }); await session.fromPartition("persist:profile:default:workspace:area-a").cookies.flushStore(); });
     await page.evaluate(async () => {
       const bridge = (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser;
       const config = structuredClone(await bridge.loadCustomization());
@@ -557,6 +558,7 @@ test("manages workspace metadata and deletes populated areas without orphan tabs
   let application = await launch();
   try {
     const page = await shellWindow(application); await dismissOnboarding(page);
+    await application.evaluate(async ({ session }) => { await session.fromPartition("persist:profile:default:workspace:area-a").cookies.set({ url: "https://example.com", name: "workspace-cookie", value: "preserved", expirationDate: Math.floor(Date.now() / 1000) + 86400 }); await session.fromPartition("persist:profile:default:workspace:area-a").cookies.flushStore(); });
     await page.evaluate(async () => {
       const bridge = (window as unknown as { moonBrowser: {
         mutateProfileData(value: unknown): Promise<void>; createTab(url: string, area: string): Promise<unknown>;
@@ -575,5 +577,43 @@ test("manages workspace metadata and deletes populated areas without orphan tabs
     const first = await readState(page); expect(first.areas.some(area => area.id === "area-a")).toBe(false); expect(first.tabs.some(tab => tab.workspaceId === "area-b")).toBe(true); expect(first.tabs.some(tab => tab.workspaceId === "area-a")).toBe(false);
     await application.close(); application = await launch(); const restored = await readState(await shellWindow(application));
     expect(restored.tabs.every(tab => restored.areas.some(area => area.id === tab.workspaceId))).toBe(true);
+    const cookies = await application.evaluate(async ({ webContents }) => {
+      const contents = webContents.getAllWebContents().find(contents => contents.getURL().startsWith("https://example.com"));
+      return contents ? contents.session.cookies.get({ name: "workspace-cookie" }) : [];
+    });
+    expect(cookies.some(cookie => cookie.value === "preserved")).toBe(true);
   } finally { await application.close(); await rm(userData, { recursive: true, force: true }); }
+});
+
+test("shows checked release notes, defers updates and opens only the checked release", async () => {
+  const userData = await mkdtemp(join(tmpdir(), "moon-updates-"));
+  const application = await electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData } });
+  try {
+    const page = await shellWindow(application); await dismissOnboarding(page);
+    await application.evaluate(({ shell }) => {
+      globalThis.fetch = () => Promise.resolve(new Response(JSON.stringify([{ tag_name: "v99.0.0", html_url: "https://github.com/heitgh/Moon-browser/releases/tag/v99.0.0", body: "Novidades de teste", draft: false }])));
+      Object.defineProperty(shell, "openExternal", { configurable: true, value: (url: string) => { (globalThis as unknown as { checkedUpdateUrl: string }).checkedUpdateUrl = url; return Promise.resolve(); } });
+    });
+    await page.getByLabel("Configurações", { exact: true }).click(); await page.getByLabel("Workspaces e dados", { exact: true }).click();
+    await page.getByLabel("Verificar atualizações", { exact: true }).click();
+    const notice = page.getByLabel("Atualização disponível", { exact: true }); await expect(notice).toContainText("v99.0.0"); await expect(notice).toContainText("Novidades de teste");
+    await page.getByLabel("Adiar atualização", { exact: true }).click(); await expect(notice).toHaveCount(0);
+    await page.getByLabel("Verificar atualizações", { exact: true }).click(); await page.getByLabel("Baixar atualização", { exact: true }).click();
+    expect(await application.evaluate(() => (globalThis as unknown as { checkedUpdateUrl: string }).checkedUpdateUrl)).toBe("https://github.com/heitgh/Moon-browser/releases/tag/v99.0.0");
+  } finally { await application.close(); await rm(userData, { recursive: true, force: true }); }
+});
+
+test("records a local many-tab memory sample without crashing renderers", async () => {
+  const userData = await mkdtemp(join(tmpdir(), "moon-many-tabs-")); const fixture = await startBrowserLifecycleFixture();
+  const application = await electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData, MOON_LOCAL_DIAGNOSTICS: "1", MOON_TEST_OFFLINE: "1" } });
+  try {
+    const page = await shellWindow(application); await dismissOnboarding(page);
+    const before = await application.evaluate(({ app }) => app.getAppMetrics().reduce((sum, item) => sum + item.memory.workingSetSize, 0));
+    await page.evaluate(async url => { const bridge = (window as unknown as { moonBrowser: { createTab(url: string, workspaceId: string): Promise<unknown> } }).moonBrowser; for (let i = 0; i < 20; i++) await bridge.createTab(`${url}/?tab=${i}`, "research"); }, fixture.origin);
+    const sample = await application.evaluate(({ app, webContents }) => ({ workingSetKiB: app.getAppMetrics().reduce((sum, item) => sum + item.memory.workingSetSize, 0), contents: webContents.getAllWebContents().length, crashed: webContents.getAllWebContents().some(contents => contents.isCrashed()) }));
+    expect(sample.crashed).toBe(false); expect(sample.contents).toBeGreaterThanOrEqual(21);
+    const samplePath = test.info().outputPath("memory-sample.json");
+    await writeFile(samplePath, JSON.stringify({ beforeKiB: before, ...sample }));
+    await test.info().attach("local-memory-sample", { path: samplePath, contentType: "application/json" });
+  } finally { await application.close(); await fixture.close(); await rm(userData, { recursive: true, force: true }); }
 });

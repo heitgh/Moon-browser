@@ -86,8 +86,9 @@ async function createMainWindow(privateMode = false, profileId = defaultProfileI
 
 app.whenReady().then(async () => {
   installLocalDiagnostics(app);
+  const offlineTest = process.env.NODE_ENV === "test" && process.env.MOON_TEST_OFFLINE === "1";
   const updates = new UpdateChecker(app.getVersion());
-  ipc.register("updates:check", () => updates.check());
+  ipc.register("updates:check", () => offlineTest ? null : updates.check());
   ipc.register("updates:download", async () => { if (!updates.available) throw new Error("No checked update is available"); await shell.openExternal(updates.available.url); });
   const testProfileDirectory = process.env.NODE_ENV === "test" ? process.env.MOON_TEST_PROFILE_DIR : undefined;
   const defaultDirectory = testProfileDirectory ?? join(app.getPath("userData"), "profile");
@@ -142,7 +143,7 @@ app.whenReady().then(async () => {
   if (featureEnabled(DEFAULT_FEATURE_FLAGS, "research")) registerResearchIpc(ipc, windows, browser, application, profiles);
   registerApplicationLifecycle(windows, createMainWindow);
   await createMainWindow();
-  void adblock.initialize();
+  if (!offlineTest) void adblock.initialize();
 }).catch(error => {
   console.error("Moon failed to start", error);
   app.exit(1);
