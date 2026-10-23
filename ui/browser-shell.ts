@@ -1,3 +1,4 @@
+import { builtinSiteIcon } from "./browser-shell/site-icons.js";
 import { ResearchPanel } from "./research/research-panel.js";
 import { MoonApp } from "./app/app.js";
 import { resolveNavigationInput } from "./browser/navigation-input.js";
@@ -755,19 +756,22 @@ class BrowserShell {
   }
   async #hydrateFavicon(tab: Tab): Promise<void> {
     const source = tab.faviconUrl; const settings = this.#customization.config.favicons;
-    if (!settings.enabled || !source) { this.#favicons.delete(tab.id); return; }
+    if (!settings.enabled) { this.#favicons.delete(tab.id); return; }
+    const saved = this.#faviconCache.getSite(tab.url); if (saved) this.#rememberFavicon(tab, saved);
+    if (!source) return;
     const cached = this.#faviconCache.get(source); if (cached) { this.#rememberFavicon(tab, cached); return; }
     if (!this.#bridge || this.#pendingFavicons.has(tab.id) || !/^https:\/\//i.test(source)) return;
     const request = this.#bridge.fetchFavicon(source).then(data => {
       if (this.#tabs.get(tab.id)?.faviconUrl !== source) return;
       if (tab.private) { const safe = this.#faviconCache.get(data); if (safe) this.#rememberFavicon(tab, safe); return; }
-      if (!this.#faviconCache.set(source, data)) return; this.#rememberFavicon(tab, data);
+      if (!this.#faviconCache.set(source, data)) return; this.#faviconCache.setSite(tab.url, source, data); this.#rememberFavicon(tab, data);
     }).catch(() => undefined).finally(() => this.#pendingFavicons.delete(tab.id));
     this.#pendingFavicons.set(tab.id, request); await request;
   }
-  #rememberFavicon(tab: Tab, data: string): void { this.#favicons.set(tab.id, data); if (!tab.private) { try { this.#siteFavicons.set(new URL(tab.url).origin, data); } catch { /* internal tab */ } } this.#renderTabs(); this.#refreshHomeData(); this.#renderDrawer(); }
-  #faviconForUrl(url: string): string | undefined { try { return this.#siteFavicons.get(new URL(url).origin); } catch { return undefined; } }
+  #rememberFavicon(tab: Tab, data: string): void { this.#favicons.set(tab.id, data); if (!tab.private) { try { this.#siteFavicons.set(new URL(tab.url).origin, data); } catch { /* internal tab */ } } this.#renderTabs(); const active = this.#activeTabId ? this.#tabs.get(this.#activeTabId) : undefined; if (!active || active.url === "moon://newtab") this.#refreshHomeData(); this.#renderDrawer(); }
+  #faviconForUrl(url: string): string | undefined { try { return builtinSiteIcon(url) ?? this.#siteFavicons.get(new URL(url).origin) ?? this.#faviconCache.getSite(url); } catch { return undefined; } }
   #refreshHomeData(): void {
+    if (this.#customization.config.favicons.enabled) for (const item of [...this.#shortcuts, ...this.#bookmarks, ...this.#history]) { const data = this.#faviconCache.getSite(item.url); if (data) { try { this.#siteFavicons.set(new URL(item.url).origin, data); } catch { /* malformed URL */ } } }
     this.#homeView.updateData({ shortcuts: this.#shortcuts, bookmarks: this.#bookmarks, history: this.#history, tabs: [...this.#tabs.values()], workspaces: this.#workspaces, downloads: this.#downloads, notes: this.#notes, favicons: Object.fromEntries(this.#siteFavicons) });
   }
   #placeNewTabButton(position: CustomizationConfig["layout"]["tabs"]["newTabButton"]): void {

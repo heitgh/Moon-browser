@@ -1,3 +1,4 @@
+import { builtinSiteIcon } from "../site-icons.js";
 import type { Tab } from "../contracts.js";
 import { button, element, icon } from "../dom.js";
 
@@ -17,8 +18,8 @@ export class TabStrip {
       const label = tab.title || "Nova aba";
       const tabButton = button(`moon-tab${tab.id === activeTabId ? " is-active" : ""}`, label);
       const favicon = element("span", `moon-tab-favicon${tab.loading ? " is-loading" : ""}`);
-      const faviconData = favicons.get(tab.id);
-      if (faviconData) { const image = document.createElement("img"); image.src = faviconData; image.alt = ""; image.draggable = false; favicon.append(image); }
+      const faviconData = builtinSiteIcon(tab.url) ?? favicons.get(tab.id);
+      if (faviconData) { const image = document.createElement("img"); image.src = faviconData; image.alt = ""; image.draggable = false; image.addEventListener("error", () => favicon.replaceChildren(icon("globe")), { once: true }); favicon.append(image); }
       else favicon.append(icon(tab.url === "moon://newtab" ? "moon" : "globe"));
 
       const close = button("moon-tab-close", `Fechar ${tab.title || "aba"}`, "close");

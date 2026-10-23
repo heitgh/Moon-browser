@@ -1,3 +1,4 @@
+import { builtinSiteIcon } from "../site-icons.js";
 import type {
   CustomizationConfig,
   HomeWidgetId,
@@ -648,12 +649,13 @@ export class HomeView {
     className = "moon-site-mark",
   ): HTMLElement {
     const mark = element("span", className);
-    const source = this.#data.favicons[origin(url)];
+    const source = builtinSiteIcon(url) ?? this.#data.favicons[origin(url)];
     if (source) {
       const image = document.createElement("img");
       image.src = source;
       image.alt = "";
       image.draggable = false;
+      image.addEventListener("error", () => { mark.textContent = fallback; }, { once: true });
       mark.append(image);
     } else mark.textContent = fallback;
     return mark;

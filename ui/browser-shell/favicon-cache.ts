@@ -9,14 +9,23 @@ interface FaviconEntry { readonly source: string; readonly data: string; readonl
 
 export class FaviconCache {
   readonly #entries = new Map<string, FaviconEntry>();
+  readonly #sites = new Map<string, string>();
   #settings: FaviconSettings = { enabled: true, persist: true, ttlDays: 30 };
 
-  constructor(readonly storage: Storage = localStorage, readonly now: () => number = Date.now) { this.#load(); }
+  constructor(readonly storage: Storage = localStorage, readonly now: () => number = Date.now) {
+    this.#load();
+    try { const values = JSON.parse(storage.getItem("moon:site-favicon-sources:v1") ?? "[]"); if (Array.isArray(values)) for (const pair of values.slice(0, MAX_ENTRIES)) if (Array.isArray(pair) && typeof pair[0] === "string" && typeof pair[1] === "string" && this.#entries.has(pair[1])) this.#sites.set(new URL(pair[0]).origin, pair[1]); } catch { /* invalid cache is ignored */ }
+  }
+  getSite(url: string): string | undefined { try { const source = this.#sites.get(new URL(url).origin); return source ? this.get(source) : undefined; } catch { return; } }
+  setSite(url: string, source: string, data: string): void {
+    if (!this.set(source, data)) return;
+    try { this.#sites.set(new URL(url).origin, source); if (this.#sites.size > MAX_ENTRIES) this.#sites.delete(this.#sites.keys().next().value!); if (this.#settings.persist) this.storage.setItem("moon:site-favicon-sources:v1", JSON.stringify([...this.#sites])); } catch { /* browsing never depends on cache writes */ }
+  }
 
   configure(settings: FaviconSettings): void {
     this.#settings = settings;
     this.#prune();
-    if (!settings.persist) { try { this.storage.removeItem(STORAGE_KEY); } catch { /* memory cache remains available */ } }
+    if (!settings.persist) { try { this.storage.removeItem(STORAGE_KEY); this.storage.removeItem("moon:site-favicon-sources:v1"); } catch { /* memory cache remains available */ } }
     else this.#persist();
   }
 
@@ -34,7 +43,7 @@ export class FaviconCache {
     this.#prune(); this.#persist(); return true;
   }
 
-  clear(): void { this.#entries.clear(); try { this.storage.removeItem(STORAGE_KEY); } catch { /* best effort */ } }
+  clear(): void { this.#entries.clear(); try { this.storage.removeItem(STORAGE_KEY); this.storage.removeItem("moon:site-favicon-sources:v1"); } catch { /* best effort */ } }
 
   #load(): void {
     try {
