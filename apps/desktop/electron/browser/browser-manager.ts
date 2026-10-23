@@ -486,6 +486,14 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     contents.on("leave-html-full-screen", () => this.#leaveHtmlFullscreen(id, windowId));
   }
 
+  moveWorkspaceTabs(windowId: string, sourceId: string, targetId: string): void {
+    for (const tab of this.#tabs.values()) {
+      if (this.#tabWindows.get(tab.id) !== windowId || tab.workspaceId !== sourceId) continue;
+      // Preserve the existing session/partition: moving an area never erases site data.
+      this.#replaceTab(tab.id, { workspaceId: targetId }); this.#emitUpdate(tab.id);
+    }
+  }
+
   #installWindowOpenHandler(id: string, windowId: string, contents: Electron.WebContents): void {
     contents.setWindowOpenHandler(details => {
       const decision = decideWindowOpen(details.url, details.disposition, { features: details.features, frameName: details.frameName });

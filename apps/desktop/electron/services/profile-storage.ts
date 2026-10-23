@@ -205,6 +205,11 @@ export class ProfileStorage {
       }
       tabs.push({ ...candidate, url: normalizedUrl });
     }
+    const areas = await this.#workspaces.list(true);
+    if (areas.length) {
+      const fallback = areas.find(area => !area.archived) ?? areas[0]!;
+      return tabs.map(tab => areas.some(area => area.id === tab.workspaceId) ? tab : { ...tab, workspaceId: fallback.id });
+    }
     return tabs;
   }
 
@@ -213,7 +218,7 @@ export class ProfileStorage {
       this.#bookmarks.list(),
       this.#history.recent(500),
       this.#notes.list(undefined, true),
-      this.#workspaces.list()
+      this.#workspaces.list(true)
     ]);
     const scratchpad = notes.find(note => note.id === "moon-scratchpad") ?? notes.find(note => note.id === "legacy-notes") ?? notes[0];
     return {
@@ -221,7 +226,7 @@ export class ProfileStorage {
       history: history.map(item => ({ schemaVersion: 2, id: item.id, title: item.title, url: item.url, time: item.firstVisitedAt, startedAt: item.firstVisitedAt, ...(item.endedAt === undefined ? {} : { endedAt: item.endedAt }), ...(item.durationMs === undefined ? {} : { durationMs: item.durationMs }), ...(item.faviconUrl ? { faviconUrl: item.faviconUrl } : {}), ...(item.profileId ? { profileId: item.profileId } : {}), ...(item.workspaceId ? { workspaceId: item.workspaceId } : {}), ...(item.sessionId ? { sessionId: item.sessionId } : {}), ...(item.tabId ? { tabId: item.tabId } : {}), source: item.source ?? "legacy", navigationType: item.navigationType ?? "other" })),
       notes: scratchpad?.content ?? "",
       noteDocuments: notes.map(profileNote),
-      workspaces: workspaces.map(item => ({ id: item.id, name: item.name, position: item.position }))
+      workspaces: workspaces.map(item => ({ id: item.id, name: item.name, position: item.position, ...item.appearance, ...(item.archived ? { archived: true } : {}) }))
     };
   }
 
@@ -281,11 +286,26 @@ export class ProfileStorage {
       }
       case "workspace:save": {
         const existing = await this.#workspaces.get(mutation.value.id);
+        if (mutation.value.archived && !(await this.#workspaces.list()).some(area => area.id !== mutation.value.id)) throw new Error("Keep at least one active workspace");
         const current = existing ?? (await this.#workspaces.list())[0];
-        await this.#workspaces.save({ id: mutation.value.id, name: mutation.value.name, position: mutation.value.position, layout: existing?.layout ?? "standard", appearance: existing?.appearance ?? {}, default: existing?.default ?? !current, archived: false, createdAt: existing?.createdAt ?? now, updatedAt: now, lastAccessedAt: now });
+        await this.#workspaces.save({ id: mutation.value.id, name: mutation.value.name, position: mutation.value.position, layout: existing?.layout ?? "standard", appearance: { ...existing?.appearance, ...(mutation.value.color ? { color: mutation.value.color } : {}), ...(mutation.value.icon ? { icon: mutation.value.icon } : {}) }, default: existing?.default ?? !current, archived: mutation.value.archived ?? existing?.archived ?? false, createdAt: existing?.createdAt ?? now, updatedAt: now, lastAccessedAt: now });
         return;
       }
-      case "workspace:delete": await this.#workspaces.delete(mutation.id); return;
+      case "workspace:delete": {
+        const areas = await this.#workspaces.list(true);
+        const target = areas.find(area => area.id === mutation.targetId && area.id !== mutation.id && !area.archived);
+        if (!areas.some(area => area.id === mutation.id)) throw new Error("Workspace does not exist");
+        if (!areas.some(area => area.id !== mutation.id && !area.archived)) throw new Error("Keep at least one active workspace");
+        const tabs = await this.loadBrowserSession();
+        const affected = tabs.some(tab => tab.workspaceId === mutation.id);
+        if (affected && !mutation.tabs) throw new Error("Choose whether to move or close tabs");
+        if (mutation.tabs === "move" && !target) throw new Error("Select an active destination workspace");
+        await this.#database.transaction(async () => {
+          await this.#settings.setValue("browser-session", { version: 1, savedAt: now, tabs: tabs.flatMap(tab => tab.workspaceId !== mutation.id ? [tab] : mutation.tabs === "close" ? [] : [{ ...tab, workspaceId: target!.id }]) });
+          await this.#workspaces.delete(mutation.id);
+        });
+        return;
+      }
     }
   }
 

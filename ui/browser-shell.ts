@@ -137,7 +137,8 @@ class BrowserShell {
   #themes = load<SavedTheme[]>(KEYS.themes, []);
   #adblock: AdblockStatus = { phase: "loading", enabled: true, blockedCount: 0 };
   #sitePermissions: readonly SitePermissionRecord[] = [];
-  #workspaceId = this.#workspaces[0]?.id ?? "research";
+  #workspaceDeleting = false;
+  #workspaceId = this.#workspaces.find(workspace => !workspace.archived)?.id ?? "research";
   #windowPrivate = false;
   #windowGuest = false;
   #activeProfile: LocalProfileSummary | undefined;
@@ -172,6 +173,8 @@ class BrowserShell {
     this.#build(); this.#customization.setWorkspace(this.#workspaceId); this.#customization.subscribe(change => this.#applyCustomization(change.config)); this.#bindShortcuts(); this.#observe(); this.#startClock();
     if (this.#customization.loadResult.message) this.#flash(this.#customization.loadResult.message);
     if (!this.#bridge) { this.#status.textContent = "Prévia da interface — use npm run dev:desktop para navegar."; return; }
+    this.#bridge.onWorkspaceDeleting?.(({ source, target }) => { this.#workspaceDeleting = true; if (this.#workspaceId === source) this.#workspaceId = target; });
+    this.#bridge.onWorkspaceChanged?.(() => { this.#workspaceDeleting = false; void this.#reloadProfileData(); });
     this.#bridge.onTabUpdated(update => this.#applyUpdate(update));
     this.#bridge.onTabClosed(({ tabId }) => { void this.#handleClosed(tabId); });
     this.#bridge.onFullscreenChanged?.(state => { document.documentElement.dataset.moonHtmlFullscreen = state.active ? "true" : "false"; });
@@ -241,7 +244,7 @@ class BrowserShell {
   async #createTab(url?: string): Promise<void> { if (!this.#bridge) return; try { const tab = await this.#bridge.createTab(url, this.#workspaceId); this.#tabs.set(tab.id, tab); this.#activeTabId = tab.id; this.#render(); } catch (error) { this.#showError(error); } }
   async #activate(tabId: string): Promise<void> { if (!this.#bridge || !this.#tabs.has(tabId)) return; if (tabId !== this.#activeTabId && this.#settingsCenter?.presentation === "page") await this.#dismissSettings(false); this.#activeTabId = tabId; for (const [id, tab] of this.#tabs) this.#tabs.set(id, { ...tab, active: id === tabId }); this.#render(); try { await this.#bridge.activateTab(tabId); } catch (error) { this.#showError(error); } }
   async #close(tabId: string): Promise<void> { if (!this.#bridge) return; try { await this.#bridge.closeTab(tabId); } catch (error) { this.#showError(error); } }
-  async #handleClosed(tabId: string): Promise<void> { this.#tabs.delete(tabId); this.#navigation.delete(tabId); this.#favicons.delete(tabId); this.#pendingFavicons.delete(tabId); const tabs = this.#workspaceTabs(); const active = tabs.find(tab => tab.active) ?? tabs.at(-1); this.#activeTabId = active?.id; if (!active) await this.#createTab(); else await this.#activate(active.id); this.#renderDrawer(); }
+  async #handleClosed(tabId: string): Promise<void> { this.#tabs.delete(tabId); this.#navigation.delete(tabId); this.#favicons.delete(tabId); this.#pendingFavicons.delete(tabId); const tabs = this.#workspaceTabs(); const active = tabs.find(tab => tab.active) ?? tabs.at(-1); this.#activeTabId = active?.id; if (!active && !this.#workspaceDeleting) await this.#createTab(); else if (active) await this.#activate(active.id); this.#renderDrawer(); }
   async #showHome(): Promise<void> { this.#closeDrawer(); if (!this.#bridge) return; if (this.#settingsCenter?.presentation === "page") await this.#dismissSettings(false); if (!this.#activeTabId) return this.#createTab(); try { await this.#bridge.showHome(this.#activeTabId); } catch (error) { this.#showError(error); } }
   async #navigate(value: string, bypassFocus = false): Promise<void> { if (!this.#bridge || !value.trim()) return; const url = this.#resolveInput(value); if (url === "moon://newtab") return this.#showHome(); if (!bypassFocus && this.#focus && !this.#focus.isAllowed(url, this.#workspaceId)) { this.#focus.interrupt(); this.#pendingFocusNavigation = url; this.#toggleDrawer("focus"); return; } this.#pendingFocusNavigation = undefined; this.#closeDrawer(); if (this.#settingsCenter?.presentation === "page") await this.#dismissSettings(false); if (!this.#activeTabId) return this.#createTab(url); this.#status.textContent = ""; try { const internal = normalizeMoonInternalUrl(url); if (internal) await this.#bridge.showInternalPage(this.#activeTabId, internal); else await this.#bridge.navigate(this.#activeTabId, url); } catch (error) { this.#showError(error); } }
   #resolveInput(value: string): string {
@@ -276,7 +279,7 @@ class BrowserShell {
   }
 
   #renderWorkspaces(): void {
-    this.#workspaceBar.render(this.#workspaces, [...this.#tabs.values()], this.#workspaceId);
+    this.#workspaceBar.render(this.#workspaces.filter(workspace => !workspace.archived), [...this.#tabs.values()], this.#workspaceId);
   }
   #renderHomeShortcuts(): void {
     this.#refreshHomeData();
@@ -356,9 +359,40 @@ class BrowserShell {
     } catch (error) { this.#showError(error); }
   }
   #workspaceDrawer(): void {
-    this.#drawerBody.append(el("p", "moon-drawer-description", "Separe abas e sessões por contexto.")); const list = el("div", "moon-panel-list");
-    this.#workspaces.forEach(workspace => { const count = [...this.#tabs.values()].filter(tab => (tab.workspaceId ?? "research") === workspace.id).length; const wrapper = el("div", "moon-workspace-manage-row"); const row = btn(`moon-workspace-row${workspace.id === this.#workspaceId ? " is-active" : ""}`, `Abrir ${workspace.name}`); const copy = el("span", "moon-list-copy"); copy.append(el("strong", "", workspace.name), el("small", "", `${count} ${count === 1 ? "aba" : "abas"}`)); row.append(el("span", "moon-workspace-mark", workspace.name[0]?.toUpperCase()), copy, svg("chevron")); row.addEventListener("click", () => void this.#switchWorkspace(workspace.id)); wrapper.append(row); if (this.#workspaces.length > 1 && count === 0) { const remove = btn("moon-icon-button", `Excluir ${workspace.name}`, "trash"); remove.addEventListener("click", () => { void this.#removeWorkspace(workspace.id); }); wrapper.append(remove); } list.append(wrapper); });
-    const create = el("form", "moon-custom-form"); const name = el("input", "moon-settings-input"); name.placeholder = "Nome do workspace"; const add = btn("moon-primary-button", "Criar novo workspace", "plus"); add.type = "submit"; add.append(el("span", "", "Criar")); create.append(name, add); create.addEventListener("submit", event => { event.preventDefault(); const value = name.value.trim(); if (value) void this.#createWorkspace(value); }); this.#drawerBody.append(list, create);
+    this.#drawerBody.append(el("p", "moon-drawer-description", "Organize áreas. Excluir uma área não apaga cookies ou dados dos sites."));
+    const list = el("div", "moon-panel-list");
+    this.#workspaces.forEach((workspace, index) => {
+      const row = el("form", "moon-custom-form");
+      const name = el("input", "moon-settings-input"); name.value = workspace.name; name.required = true; name.maxLength = 200; name.setAttribute("aria-label", `Nome de ${workspace.name}`);
+      const color = el("input"); color.type = "color"; color.value = workspace.color ?? "#7c5cff"; color.setAttribute("aria-label", `Cor de ${workspace.name}`);
+      const icon = el("select", "moon-settings-input"); icon.setAttribute("aria-label", `Ícone de ${workspace.name}`);
+      for (const value of ["📚", "🔎", "💼", "🌙", "💻", "🎮"]) { const option = el("option", "", value); option.value = value; icon.append(option); } icon.value = workspace.icon ?? "🌙";
+      const saveButton = btn("moon-text-button", `Salvar ${workspace.name}`); saveButton.type = "submit"; saveButton.textContent = "Salvar";
+      row.addEventListener("submit", event => { event.preventDefault(); void this.#saveWorkspace({ ...workspace, name: name.value.trim(), color: color.value, icon: icon.value }); });
+      const open = btn("moon-text-button", `Abrir ${workspace.name}`); open.textContent = workspace.archived ? "Restaurar" : "Abrir";
+      open.addEventListener("click", () => { if (workspace.archived) void this.#saveWorkspace({ ...workspace, archived: false }); else void this.#switchWorkspace(workspace.id); });
+      row.append(name, color, icon, saveButton, open);
+      for (const delta of [-1, 1]) { const move = btn("moon-text-button", `${delta < 0 ? "Subir" : "Descer"} ${workspace.name}`); move.textContent = delta < 0 ? "↑" : "↓"; move.disabled = index + delta < 0 || index + delta >= this.#workspaces.length; move.addEventListener("click", () => { void this.#reorderWorkspace(index, delta); }); row.append(move); }
+      if (!workspace.archived && this.#workspaces.filter(area => !area.archived).length > 1) { const archive = btn("moon-text-button", `Arquivar ${workspace.name}`); archive.textContent = "Arquivar"; archive.addEventListener("click", () => { void this.#saveWorkspace({ ...workspace, archived: true }); }); row.append(archive); }
+      if (this.#workspaces.some(area => area.id !== workspace.id && !area.archived)) {
+        const destination = el("select", "moon-settings-input"); destination.setAttribute("aria-label", `Destino das abas de ${workspace.name}`);
+        for (const area of this.#workspaces.filter(area => area.id !== workspace.id && !area.archived)) { const option = el("option", "", area.name); option.value = area.id; destination.append(option); }
+        const remove = btn("moon-text-button", `Mover abas e excluir ${workspace.name}`); remove.textContent = "Mover abas e excluir"; remove.addEventListener("click", () => { if (window.confirm(`Excluir “${workspace.name}” e mover suas abas? Cookies e dados serão mantidos.`)) void this.#removeWorkspace(workspace.id, "move", destination.value); });
+        const close = btn("moon-text-button", `Fechar abas e excluir ${workspace.name}`); close.textContent = "Fechar abas e excluir"; close.addEventListener("click", () => { if (window.confirm(`Fechar todas as abas de “${workspace.name}” e excluir a área? Cookies e dados serão mantidos.`)) void this.#removeWorkspace(workspace.id, "close"); }); row.append(destination, remove, close);
+      }
+      list.append(row);
+    });
+    const create = el("form", "moon-custom-form"); const name = el("input", "moon-settings-input"); name.placeholder = "Nome do workspace"; name.required = true; name.maxLength = 200;
+    const add = btn("moon-primary-button", "Criar novo workspace", "plus"); add.type = "submit"; add.append(el("span", "", "Criar")); create.append(name, add); create.addEventListener("submit", event => { event.preventDefault(); if (name.value.trim()) void this.#createWorkspace(name.value.trim()); }); this.#drawerBody.append(list, create);
+  }
+  async #saveWorkspace(workspace: Workspace): Promise<void> {
+    if (!workspace.name.trim()) return;
+    if (await this.#mutateProfileData({ type: "workspace:save", value: { ...workspace, position: workspace.position ?? this.#workspaces.findIndex(area => area.id === workspace.id) } })) await this.#reloadProfileData();
+  }
+  async #reorderWorkspace(index: number, delta: number): Promise<void> {
+    const areas = [...this.#workspaces]; [areas[index], areas[index + delta]] = [areas[index + delta]!, areas[index]!];
+    for (const [position, area] of areas.entries()) if (!await this.#mutateProfileData({ type: "workspace:save", value: { ...area, position } })) return;
+    await this.#reloadProfileData();
   }
   #bookmarksDrawer(): void {
     const summary = el("div", "moon-panel-summary"); summary.append(el("span", "", `${this.#bookmarks.length} salvos`)); const current = btn("moon-text-button", "Favoritar página atual", "star"); current.append(el("span", "", "Página atual")); current.addEventListener("click", () => { void this.#toggleBookmark(); }); summary.append(current); this.#drawerBody.append(summary);
@@ -614,8 +648,8 @@ class BrowserShell {
     this.#history = [...snapshot.history];
     this.#notes = snapshot.notes;
     this.#noteDocuments = [...(snapshot.noteDocuments ?? [])];
-    if (snapshot.workspaces.length > 0) this.#workspaces = snapshot.workspaces.map(({ id, name }) => ({ id, name }));
-    if (!this.#workspaces.some(workspace => workspace.id === this.#workspaceId)) this.#workspaceId = this.#workspaces[0]?.id ?? "research";
+    if (snapshot.workspaces.length > 0) this.#workspaces = snapshot.workspaces.map(workspace => ({ ...workspace }));
+    if (!this.#workspaces.some(workspace => workspace.id === this.#workspaceId && !workspace.archived)) this.#workspaceId = this.#workspaces.find(workspace => !workspace.archived)?.id ?? "research";
     this.#render();
     const editingNote = this.#openDrawer === "notes" && this.#drawerBody.contains(document.activeElement) && (document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement);
     if (editingNote) this.#notesPanel.update(this.#noteDocuments, this.#notes, this.#windowPrivate);
@@ -643,16 +677,16 @@ class BrowserShell {
     else if (mutation.type.startsWith("workspace:")) save(KEYS.workspaces, this.#workspaces);
   }
   async #createWorkspace(name: string): Promise<void> {
-    const workspace = { id: `workspace-${Date.now()}`, name };
+    const workspace = { id: `workspace-${crypto.randomUUID()}`, name };
     this.#workspaces = [...this.#workspaces, workspace];
     const saved = await this.#mutateProfileData({ type: "workspace:save", value: { ...workspace, position: this.#workspaces.length - 1 } });
     if (saved) await this.#switchWorkspace(workspace.id);
   }
-  async #removeWorkspace(id: string): Promise<void> {
-    this.#workspaces = this.#workspaces.filter(item => item.id !== id);
-    if (this.#workspaceId === id) this.#workspaceId = this.#workspaces[0]?.id ?? "research";
-    await this.#mutateProfileData({ type: "workspace:delete", id });
-    this.#render(); this.#renderDrawer();
+  async #removeWorkspace(id: string, tabs: "move" | "close", targetId?: string): Promise<void> {
+    await this.#mutateProfileData({ type: "workspace:delete", id, tabs, ...(targetId ? { targetId } : {}) });
+    await this.#reloadProfileData();
+    if (this.#bridge) { this.#tabs.clear(); for (const tab of await this.#bridge.getTabs()) this.#tabs.set(tab.id, tab); }
+    await this.#switchWorkspace(this.#workspaceId);
   }
   async #removeBookmark(id: string): Promise<void> {
     this.#bookmarks = this.#bookmarks.filter(saved => saved.id !== id);

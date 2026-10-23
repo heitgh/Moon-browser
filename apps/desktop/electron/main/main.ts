@@ -1,3 +1,4 @@
+import { parseProfileDataMutation } from "../../../../packages/ipc/profile-data-contract.js";
 import { installLocalDiagnostics } from "../services/local-diagnostics.js";
 import { DEFAULT_FEATURE_FLAGS, featureEnabled } from "../../../../config/feature-flags.js";
 import { registerResearchIpc } from "../ipc/research-ipc.js";
@@ -100,6 +101,39 @@ app.whenReady().then(async () => {
     if (window) setImmediate(() => changeInterfaceZoom(window.webContents, direction));
   });
   registerBrowserIpc(ipc, application, windows, profileId => createMainWindow(true, profileId));
+  ipc.register("workspace:delete", async (event, payload: unknown) => {
+    const mutation = parseProfileDataMutation(payload);
+    if (mutation.type !== "workspace:delete") throw new TypeError("Invalid workspace command");
+    const source = windows.idForWebContents(event.sender)!;
+    if (windows.isPrivate(source) || windows.isGuest(source)) throw new Error("Use a normal window to delete areas");
+    const profileId = windows.profileId(source);
+    const storage = await profiles!.storage(profileId);
+    const areas = (await storage.loadProfileData()).workspaces;
+    if (!areas.some(area => area.id === mutation.id) || !areas.some(area => area.id !== mutation.id && !area.archived)) throw new Error("Keep at least one active workspace");
+    if (!mutation.tabs || (mutation.tabs === "move" && !areas.some(area => area.id === mutation.targetId && area.id !== mutation.id && !area.archived))) throw new Error("Choose how to handle the tabs and an active destination");
+    if (application!.deletingAreas.has(mutation.id)) throw new Error("Workspace deletion in progress");
+    application!.deletingAreas.add(mutation.id);
+    try {
+    for (const window of windows.list()) {
+      const id = windows.idForWebContents(window.webContents)!;
+      if (windows.profileId(id) === profileId) window.webContents.send("workspace:deleting", { source: mutation.id, target: mutation.targetId ?? areas.find(area => area.id !== mutation.id && !area.archived)!.id });
+    }
+    for (const window of windows.list()) {
+      const id = windows.idForWebContents(window.webContents)!;
+      if (windows.profileId(id) !== profileId) continue;
+      if (mutation.tabs === "move") browser.moveWorkspaceTabs(id, mutation.id, mutation.targetId!);
+      else for (const tab of await application!.getTabs(id)) if (tab.workspaceId === mutation.id) await application!.closeTab(tab.id);
+      await application!.flushWindow(id);
+    }
+    await storage.applyProfileMutation(mutation);
+    } finally {
+    application!.deletingAreas.delete(mutation.id);
+    for (const window of windows.list()) {
+      const id = windows.idForWebContents(window.webContents)!;
+      if (windows.profileId(id) === profileId) window.webContents.send("workspace:changed");
+    }
+    }
+  });
   registerProductIpc(ipc, downloads, adblock, profiles, windows, app.getPath("home"), app.getVersion(), profileId => createMainWindow(false, profileId));
   if (featureEnabled(DEFAULT_FEATURE_FLAGS, "research")) registerResearchIpc(ipc, windows, browser, application, profiles);
   registerApplicationLifecycle(windows, createMainWindow);

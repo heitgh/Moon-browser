@@ -176,6 +176,7 @@ export function registerProductIpc(
     const windowId = windows.idForWebContents(event.sender);
     if (!windowId) throw new Error("Browser window is not registered");
     const mutation = parseProfileDataMutation(payload);
+    if (mutation.type === "workspace:delete") throw new Error("Use the workspace lifecycle command to delete an area");
     if (windows.isPrivate(windowId) && (mutation.type === "history:record" || mutation.type === "notes:save" || mutation.type.startsWith("note:"))) throw new Error("Private windows cannot persist history or notes");
     return (await profileFor(event)).applyProfileMutation(mutation);
   });

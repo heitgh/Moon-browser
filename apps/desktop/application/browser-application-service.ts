@@ -22,6 +22,7 @@ export class BrowserApplicationService {
   readonly #persistenceTimers = new Map<string, NodeJS.Timeout>();
   readonly #restoringWindows = new Set<string>();
   #shuttingDown = false;
+  readonly deletingAreas = new Set<string>();
 
   constructor(
     readonly browser: ElectronBrowserManager,
@@ -61,6 +62,7 @@ export class BrowserApplicationService {
   }
 
   async createTab(windowId: string, options: BrowserTabOptions = {}): Promise<BrowserTab> {
+    if (this.deletingAreas.has(options.workspaceId ?? "")) throw new Error("Workspace deletion in progress");
     const model = await this.tabs.create({ id: options.id, windowId, url: options.url, active: options.active, private: options.private, workspaceId: options.workspaceId, sessionId: options.sessionId });
     const tab = await this.browser.getTab(model.id);
     if (!tab) throw new Error(`Created tab is unavailable: ${model.id}`);
