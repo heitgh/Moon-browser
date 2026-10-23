@@ -1,3 +1,4 @@
+import { UPDATE_FEED_EPOCH } from "../../../../config/update-channel.js";
 // Nexus Inc. — advisory updates only; no automatic installation or profile changes.
 export interface AvailableUpdate { readonly version: string; readonly notes: string; readonly url: string; }
 function version(value: string): { parts: number[]; channel: string; sequence: number } | undefined {
@@ -6,10 +7,15 @@ function version(value: string): { parts: number[]; channel: string; sequence: n
 }
 export function selectUpdate(current: string, releases: unknown): AvailableUpdate | null {
   const installed = version(current); if (!installed || !Array.isArray(releases)) return null;
+  const installedRelease = releases.find(item => item && typeof item === "object" && typeof item.tag_name === "string" && item.tag_name.replace(/^v/, "") === current.replace(/^v/, ""));
+  const installedDate = Date.parse(installedRelease?.published_at ?? "");
+  const minimumDate = Number.isFinite(installedDate) ? Math.max(UPDATE_FEED_EPOCH, installedDate) : UPDATE_FEED_EPOCH;
   const candidates: AvailableUpdate[] = [];
   for (const item of releases.slice(0, 100)) {
     if (!item || typeof item !== "object" || item.draft || typeof item.tag_name !== "string" || typeof item.html_url !== "string") continue;
     const next = version(item.tag_name); if (!next) continue;
+    const published = typeof item.published_at === "string" ? Date.parse(item.published_at) : NaN;
+    if (!Number.isFinite(published) || published < minimumDate) continue;
     if (installed.channel === "stable" && next.channel !== "stable") continue;
     if (installed.channel === "beta" && next.channel === "alpha") continue;
     let url: URL; try { url = new URL(item.html_url); } catch { continue; }
