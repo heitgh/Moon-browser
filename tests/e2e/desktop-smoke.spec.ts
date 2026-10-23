@@ -589,14 +589,13 @@ test("shows checked release notes, defers updates and opens only the checked rel
   const userData = await mkdtemp(join(tmpdir(), "moon-updates-"));
   const application = await electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData } });
   try {
-    const page = await shellWindow(application); await dismissOnboarding(page);
     await application.evaluate(({ shell }) => {
       globalThis.fetch = () => Promise.resolve(new Response(JSON.stringify([{ tag_name: "v99.0.0", html_url: "https://github.com/heitgh/Moon-browser/releases/tag/v99.0.0", body: "Novidades de teste", draft: false }])));
       Object.defineProperty(shell, "openExternal", { configurable: true, value: (url: string) => { (globalThis as unknown as { checkedUpdateUrl: string }).checkedUpdateUrl = url; return Promise.resolve(); } });
     });
-    await page.getByLabel("Configurações", { exact: true }).click(); await page.getByLabel("Workspaces e dados", { exact: true }).click();
-    await page.getByLabel("Verificar atualizações", { exact: true }).click();
+    const page = await shellWindow(application); await dismissOnboarding(page);
     const notice = page.getByLabel("Atualização disponível", { exact: true }); await expect(notice).toContainText("v99.0.0"); await expect(notice).toContainText("Novidades de teste");
+    await page.getByLabel("Configurações", { exact: true }).click(); await page.getByLabel("Workspaces e dados", { exact: true }).click();
     await page.getByLabel("Adiar atualização", { exact: true }).click(); await expect(notice).toHaveCount(0);
     await page.getByLabel("Verificar atualizações", { exact: true }).click(); await page.getByLabel("Baixar atualização", { exact: true }).click();
     expect(await application.evaluate(() => (globalThis as unknown as { checkedUpdateUrl: string }).checkedUpdateUrl)).toBe("https://github.com/heitgh/Moon-browser/releases/tag/v99.0.0");

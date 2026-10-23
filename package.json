@@ -1,6 +1,6 @@
 {
   "name": "moon-browser",
-  "version": "0.6.0-alpha.3",
+  "version": "0.6.0-alpha.4",
   "description": "Moon Browser — ergonomic, privacy-conscious and highly customizable desktop browser.",
   "desktopName": "moon-browser.desktop",
   "private": true,

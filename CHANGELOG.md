@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — preparação em 2026-10-23
+## 0.6.0-alpha.4 — preparação para publicação (2026-10-23)
 
 - Fronteira central do IPC com validação de janela, WebContents, documento, frame e limites de argumentos.
 - Permissões usam a origem do frame solicitante; imagens usam conexão fixada ao IP público validado por salto.

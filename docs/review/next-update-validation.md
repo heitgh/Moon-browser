@@ -44,7 +44,7 @@ O ensaio de muitas abas retornou `beforeKiB=0` e `workingSetKiB=0` neste ambient
 - Sessões simultâneas em várias janelas e importações concorrentes merecem homologação adicional. Os testes novos cobrem exclusão/restauração em uma janela e preservação de cookie persistente.
 - Criptografia em repouso, novo sistema de backups e instalação automática assinada não foram implementados neste pacote.
 - **IA local:** a flag existente `ai` continua desativada e bloqueada para release. Motor local, gerenciador de modelos, importação/download com progresso, cancelamento e avaliação em hardware modesto **ainda não foram implementados**. O protótipo permanece fora desta entrega; não há alegação de funcionamento offline de IA.
-- README/BUGS/CHANGELOG foram atualizados após os testes. A versão do pacote continua `0.6.0-alpha.3`: estas mudanças são Unreleased. Não há novos instaladores, checksums de instaladores, merge ou release publicada.
+- README/BUGS/CHANGELOG foram atualizados após os testes. O relatório inicial foi produzido com `0.6.0-alpha.3`; a preparação posterior da `0.6.0-alpha.4` está registrada abaixo. Não há novos instaladores, checksums de instaladores, merge ou release publicada.
 
 ## Commits e revisão proposta
 
@@ -67,3 +67,12 @@ As branches locais formam uma pilha; cada PR deverá ter como base a entrega ant
 Antes de cada PR efetivo, executar os gates no respectivo head e registrar o resultado, além dos resultados agregados acima. Descrições devem citar problema, causa, solução, risco, testes e limitações; nenhuma branch deve ser marcada pronta para release enquanto Windows e testes humanos estiverem pendentes.
 
 O envio das branches foi bloqueado pela revisão automática por exigir autorização explícita de publicação de código. Não se tentou contornar a rejeição por outro meio. Nenhum PR foi criado.
+
+
+## Preparação da release v0.6.0-alpha.4
+
+Após autorização de publicação do usuário, a entrega foi reunida na branch `release/v0.6.0-alpha.4`, preservando os commits focados. O envio em lote das 13 branches foi recusado pela revisão automática; a publicação proposta foi reduzida à branch da release no destino confirmado `heitgh/Moon-browser`.
+
+Validação repetida na versão alpha.4: typecheck e lint passaram, 204 unitários, 35 integração, 22 Electron/SQLite e 16 E2E passaram. Os dois probes externos permaneceram desativados nessa execução local. O cenário de atualização valida também o aviso automático ao iniciar, além de Depois, consulta manual e abertura da release conferida.
+
+A alpha.3 não possui verificador de atualização instalado; precisa receber a alpha.4 manualmente uma vez. O novo verificador só pode avisar sobre futuras releases em aplicativos que já contenham esse código. Instalação automática continua fora do escopo.
