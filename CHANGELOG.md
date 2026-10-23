@@ -7,7 +7,8 @@
 - Diagnóstico local opt-in, matriz Windows/Linux e regressões adicionais.
 - Gerenciamento de áreas com arquivamento e exclusão com mover/fechar abas; partição de cookies preservada na restauração.
 - Ícones locais YouTube/GitHub, cache de favicons por site e aviso assíncrono de nova versão.
-- Evidências locais: 204 unitários, 35 integração, 22 Electron/SQLite, 15 E2E da suíte e um cenário local de 20 abas. Windows/login real/GPU física pendentes.
+- Feed de atualização diferencia versões atuais de tags históricas antigas; teste de caminhos compatível com Windows.
+- Evidências locais: 205 unitários, 35 integração, 22 Electron/SQLite, 15 E2E da suíte e um cenário local de 20 abas. Windows/login real/GPU física pendentes.
 - IA local, instalação automática, novos binários e publicação não fazem parte desta entrega. Veja [relatório](docs/review/next-update-validation.md).
 
 ## 0.6.0-alpha.3 — integração oficial (2026-10-19)

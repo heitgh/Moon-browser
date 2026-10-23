@@ -76,3 +76,11 @@ Após autorização de publicação do usuário, a entrega foi reunida na branch
 Validação repetida na versão alpha.4: typecheck e lint passaram, 204 unitários, 35 integração, 22 Electron/SQLite e 16 E2E passaram. Os dois probes externos permaneceram desativados nessa execução local. O cenário de atualização valida também o aviso automático ao iniciar, além de Depois, consulta manual e abertura da release conferida.
 
 A alpha.3 não possui verificador de atualização instalado; precisa receber a alpha.4 manualmente uma vez. O novo verificador só pode avisar sobre futuras releases em aplicativos que já contenham esse código. Instalação automática continua fora do escopo.
+
+
+## Correções encontradas no CI da release
+
+- Windows encontrou uma asserção antiga que comparava caminhos com separador Unix. A descoberta de perfis estava correta; a asserção passou a usar `path.join`.
+- O feed real contém uma tag histórica `v1.0.0` de agosto. A comparação passou a exigir data de publicação compatível com a época do feed e com a versão instalada, além da ordem semântica. Uma nova regressão cobre essa tag e datas inválidas/anteriores. Validação local atualizada: 205 unitários, 35 integração, 22 SQLite/Electron e 16 E2E passaram.
+- CodeQL sinalizou a comparação de prefixo `https://example.com` no teste de cookie restaurado. O teste agora compara a origem URL exata. Os probes externos também exigem hostname exato ou subdomínio com fronteira de ponto; nenhum alerta foi suprimido.
+- A suíte determinística utiliza o modo offline de teste, exceto o cenário de aviso de atualização com feed controlado; o feed público permanece exercitado nos probes separados. Builds antigos de PR podem ser cancelados por uma revisão mais recente, enquanto pipelines de publicação em main não são cancelados.
