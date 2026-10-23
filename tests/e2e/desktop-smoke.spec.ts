@@ -10,7 +10,7 @@ import type { AddressInfo } from "node:net";
 const runtimeDirectory = process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid?.() ?? 1000}`;
 const detectedWayland = process.env.MOON_HEADLESS === "1" ? undefined : process.env.WAYLAND_DISPLAY ?? (existsSync(join(runtimeDirectory, "wayland-1")) ? "wayland-1" : undefined);
 const detectedDisplay = process.env.DISPLAY ?? (existsSync("/tmp/.X11-unix/X0") ? ":0" : undefined);
-const desktopEnv = { ...process.env, ...(detectedWayland ? { WAYLAND_DISPLAY: detectedWayland, XDG_RUNTIME_DIR: runtimeDirectory } : {}), ...(detectedDisplay ? { DISPLAY: detectedDisplay } : {}) };
+const desktopEnv = { ...process.env, MOON_TEST_OFFLINE: "1", ...(detectedWayland ? { WAYLAND_DISPLAY: detectedWayland, XDG_RUNTIME_DIR: runtimeDirectory } : {}), ...(detectedDisplay ? { DISPLAY: detectedDisplay } : {}) };
 const platformArguments = process.env.MOON_HEADLESS === "1" ? ["--ozone-platform=headless"] : detectedWayland
   ? ["--ozone-platform=wayland"]
   : [];
@@ -460,9 +460,9 @@ test("research reads real sources, saves notes and opt-in memory, and recovers a
       const tab = (await bridge.getTabs()).find(t => t.url === target); if (tab) await bridge.closeTab(tab.id);
     }, url);
     await page.getByLabel("Retomar Sessão de biologia", { exact: true }).click();
-    await expect(page.getByRole("status")).toContainText("1 abas restauradas");
+    await expect(page.locator(".moon-research-status")).toContainText("1 abas restauradas");
     await page.getByLabel("Retomar Sessão de biologia", { exact: true }).click();
-    await expect(page.getByRole("status")).toContainText("0 abas restauradas");
+    await expect(page.locator(".moon-research-status")).toContainText("0 abas restauradas");
     await page.locator(".moon-drawer").screenshot({ path: "assets/screenshots/update-memory.png" });
     const crossWorkspace = await page.evaluate(async () => {
       const bridge = (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser;
@@ -578,7 +578,7 @@ test("manages workspace metadata and deletes populated areas without orphan tabs
     await application.close(); application = await launch(); const restored = await readState(await shellWindow(application));
     expect(restored.tabs.every(tab => restored.areas.some(area => area.id === tab.workspaceId))).toBe(true);
     const cookies = await application.evaluate(async ({ webContents }) => {
-      const contents = webContents.getAllWebContents().find(contents => contents.getURL().startsWith("https://example.com"));
+      const contents = webContents.getAllWebContents().find(contents => { try { return new URL(contents.getURL()).origin === "https://example.com"; } catch { return false; } });
       return contents ? contents.session.cookies.get({ name: "workspace-cookie" }) : [];
     });
     expect(cookies.some(cookie => cookie.value === "preserved")).toBe(true);
@@ -587,10 +587,10 @@ test("manages workspace metadata and deletes populated areas without orphan tabs
 
 test("shows checked release notes, defers updates and opens only the checked release", async () => {
   const userData = await mkdtemp(join(tmpdir(), "moon-updates-"));
-  const application = await electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData } });
+  const application = await electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData, MOON_TEST_OFFLINE: "0" } });
   try {
     await application.evaluate(({ shell }) => {
-      globalThis.fetch = () => Promise.resolve(new Response(JSON.stringify([{ tag_name: "v99.0.0", html_url: "https://github.com/heitgh/Moon-browser/releases/tag/v99.0.0", body: "Novidades de teste", draft: false }])));
+      globalThis.fetch = () => Promise.resolve(new Response(JSON.stringify([{ tag_name: "v99.0.0", html_url: "https://github.com/heitgh/Moon-browser/releases/tag/v99.0.0", body: "Novidades de teste", draft: false, published_at: "2030-01-01T00:00:00Z" }])));
       Object.defineProperty(shell, "openExternal", { configurable: true, value: (url: string) => { (globalThis as unknown as { checkedUpdateUrl: string }).checkedUpdateUrl = url; return Promise.resolve(); } });
     });
     const page = await shellWindow(application); await dismissOnboarding(page);

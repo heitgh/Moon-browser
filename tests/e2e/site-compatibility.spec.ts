@@ -44,7 +44,7 @@ test("keeps cookies through redirects and recovers a crashed site renderer", asy
   const application = await electron.launch({
     args: [...(process.env.MOON_HEADLESS === "1" ? ["--ozone-platform=headless"] : []), `--user-data-dir=${userData}`, "."],
     cwd: process.cwd(),
-    env: { ...process.env, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData }
+    env: { ...process.env, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData, MOON_TEST_OFFLINE: "1" }
   });
   try {
     const shell = await shellWindow(application);
