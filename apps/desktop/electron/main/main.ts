@@ -1,9 +1,10 @@
+import { UpdateChecker } from "../services/update-checker.js";
 import { parseProfileDataMutation } from "../../../../packages/ipc/profile-data-contract.js";
 import { installLocalDiagnostics } from "../services/local-diagnostics.js";
 import { DEFAULT_FEATURE_FLAGS, featureEnabled } from "../../../../config/feature-flags.js";
 import { registerResearchIpc } from "../ipc/research-ipc.js";
 import { changeInterfaceZoom, installInterfaceWheel, installZoomShortcuts } from "./interface-zoom.js";
-import { app, ipcMain } from "electron";
+import { app, ipcMain, shell } from "electron";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { ElectronBrowserManager } from "../browser/browser-manager.js";
@@ -85,6 +86,9 @@ async function createMainWindow(privateMode = false, profileId = defaultProfileI
 
 app.whenReady().then(async () => {
   installLocalDiagnostics(app);
+  const updates = new UpdateChecker(app.getVersion());
+  ipc.register("updates:check", () => updates.check());
+  ipc.register("updates:download", async () => { if (!updates.available) throw new Error("No checked update is available"); await shell.openExternal(updates.available.url); });
   const testProfileDirectory = process.env.NODE_ENV === "test" ? process.env.MOON_TEST_PROFILE_DIR : undefined;
   const defaultDirectory = testProfileDirectory ?? join(app.getPath("userData"), "profile");
   const profilesDirectory = testProfileDirectory ? join(testProfileDirectory, "profiles") : join(app.getPath("userData"), "profiles");

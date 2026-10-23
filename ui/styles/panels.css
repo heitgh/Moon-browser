@@ -114,3 +114,6 @@
 .moon-research-memory-item { border-top: 1px solid var(--moon-border); padding: 12px 0; }
 .moon-research-memory-item summary { cursor: pointer; padding: 8px 0; }
 .moon-research-memory-item[open] { display: grid; gap: 10px; }
+
+.moon-update-notice { position: fixed; right: 16px; bottom: 16px; z-index: 10000; width: min(380px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 18px; border: 1px solid var(--moon-user-accent, #7c5cff); border-radius: 14px; background: var(--moon-surface, #181922); color: var(--moon-text, #fff); box-shadow: 0 8px 32px #0005; }
+.moon-update-notice p { white-space: pre-wrap; font-size: 12px; }

@@ -32,6 +32,7 @@ export interface CustomizationCenterOptions {
   readonly onExport: (content: string) => Promise<boolean>;
   readonly onExportDiagnostic: (content: string) => Promise<boolean>;
   readonly onImport: () => Promise<string | null>;
+  readonly onCheckUpdates?: () => Promise<void>;
   readonly onFetchWallpaper: (url: string) => Promise<string>;
   readonly onImportMoonTheme: () => Promise<MoonThemePreview | null>;
   readonly onConfirmMoonTheme: (intentId: string) => Promise<MoonThemeSummary>;
@@ -358,6 +359,7 @@ export class CustomizationCenter {
   }
 
   #data(config: CustomizationConfig): void {
+    if (this.options.onCheckUpdates) { const check = button("moon-secondary-button", "Verificar atualizações", "download"); check.append(element("span", "", "Verificar atualizações")); check.addEventListener("click", () => { void this.options.onCheckUpdates?.(); }); this.#content.append(check); }
     this.#intro("Workspaces e dados", "Escopo global ou por workspace, JSON V4 validado e recuperação segura.");
     const portability = this.#group("Portabilidade", "Exporte apenas aparência, o workspace atual ou tudo. Cookies e senhas nunca entram no arquivo.", "importar exportar json aparência workspace tudo preview"); const actions = element("div", "moon-portability-grid");
     for (const [scope, label] of [["appearance", "Exportar aparência"], ["workspace", "Exportar workspace"], ["all", "Exportar tudo"]] as const) { const action = button("moon-secondary-button", label, "download"); action.append(element("span", "", label)); action.addEventListener("click", () => void this.#export(scope)); actions.append(action); }

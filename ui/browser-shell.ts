@@ -203,8 +203,22 @@ class BrowserShell {
       const active = tabs.find(tab => tab.active);
       this.#activeTabId = active?.id; this.#workspaceId = active?.workspaceId ?? this.#workspaceId;
       if (tabs.length === 0) await this.#createTab(); else this.#render();
+      if (!this.#windowPrivate && !this.#windowGuest) setTimeout(() => { void this.#checkUpdates(false); }, 1000);
       if (!this.#windowPrivate && shouldShowOnboarding()) await this.#openOnboarding();
     } catch (error) { this.#showError(error); }
+  }
+
+  async #checkUpdates(manual = true): Promise<void> {
+    try {
+      const update = await this.#bridge?.checkUpdates?.();
+      if (!update) { if (manual) this.#flash("Você está usando a versão mais recente deste canal."); return; }
+      if (!manual && sessionStorage.getItem("moon:update-later") === update.version) return;
+      document.querySelector(".moon-update-notice")?.remove();
+      const notice = el("section", "moon-update-notice"); notice.setAttribute("aria-label", "Atualização disponível"); notice.setAttribute("role", "status");
+      notice.append(el("strong", "", `Moon ${update.version} disponível`), el("p", "", update.notes));
+      const download = btn("moon-primary-button", "Baixar atualização"); download.textContent = "Baixar"; download.addEventListener("click", () => { void this.#bridge?.downloadUpdate?.().catch(error => this.#showError(error)); });
+      const later = btn("moon-secondary-button", "Adiar atualização"); later.textContent = "Depois"; later.addEventListener("click", () => { sessionStorage.setItem("moon:update-later", update.version); notice.remove(); }); notice.append(download, later); this.container.append(notice);
+    } catch (error) { if (manual) this.#showError(error); }
   }
 
   #build(): void {
@@ -508,6 +522,7 @@ class BrowserShell {
       onExport: content => this.#bridge?.exportCustomization(content) ?? Promise.resolve(false),
       onExportDiagnostic: content => this.#bridge?.exportSettingsDiagnostic(content) ?? Promise.resolve(false),
       onImport: () => this.#bridge?.importCustomization() ?? Promise.resolve(null),
+      onCheckUpdates: () => this.#checkUpdates(),
       onFetchWallpaper: url => this.#bridge?.fetchWallpaper(url) ?? Promise.reject(new Error("Wallpapers HTTPS exigem o aplicativo desktop.")),
       onImportMoonTheme: () => this.#bridge?.importMoonTheme() ?? Promise.reject(new Error("Moon Themes exigem o aplicativo desktop.")),
       onConfirmMoonTheme: intentId => this.#bridge?.confirmMoonTheme(intentId) ?? Promise.reject(new Error("Moon Themes exigem o aplicativo desktop.")),

@@ -10,6 +10,8 @@ const subscribe = (channel, listener) => {
 };
 
 contextBridge.exposeInMainWorld("moonBrowser", Object.freeze({
+  checkUpdates: () => invoke("updates:check"),
+  downloadUpdate: () => invoke("updates:download"),
   windowAction: action => invoke("browser:window-action", action),
   createTab: (url, workspaceId) => invoke("browser:create-tab", {
     ...(url ? { url } : {}),

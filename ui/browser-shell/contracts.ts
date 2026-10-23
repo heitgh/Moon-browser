@@ -56,6 +56,8 @@ export interface MoonBrowserBridge {
   researchSessionUrls?(workspaceId: string): Promise<string[]>;
   restoreResearchSession?(workspaceId: string, id: string, urls: string[]): Promise<number>;
   exportResearch?(content: string): Promise<boolean>;
+  checkUpdates?(): Promise<{ version: string; notes: string; url: string } | null>;
+  downloadUpdate?(): Promise<void>;
   createTab(url?: string, workspaceId?: string): Promise<Tab>;
   getWindowContext(): Promise<{ readonly private: boolean; readonly guest: boolean; readonly profileId: string }>;
   createPrivateWindow(): Promise<void>;
