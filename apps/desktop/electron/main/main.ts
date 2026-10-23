@@ -24,7 +24,7 @@ const requestPipeline = new SessionRequestPipeline();
 const permissions = new Map<string, SitePermissionService>();
 const adblock = new ElectronAdblockService(windows, requestPipeline);
 const browser = new ElectronBrowserManager(windows, downloads, adblock, requestPipeline, windowId => permissions.get(windows.profileId(windowId)));
-const ipc = new IpcRouter();
+const ipc = new IpcRouter(windows);
 let profiles: LocalProfileManager | undefined;
 let application: BrowserApplicationService | undefined;
 let defaultProfileId = "default";
@@ -93,6 +93,7 @@ app.whenReady().then(async () => {
   });
   ipcMain.on("browser:ui-wheel", (event, direction: unknown) => {
     if (direction !== "in" && direction !== "out") return;
+    if (event.sender.isDestroyed() || !event.senderFrame || event.senderFrame !== event.sender.mainFrame || event.senderFrame.detached) return;
     const id = browser.windowIdForContents(event.sender); const window = id ? windows.get(id) : undefined;
     if (window) setImmediate(() => changeInterfaceZoom(window.webContents, direction));
   });
