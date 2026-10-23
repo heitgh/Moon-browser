@@ -185,6 +185,7 @@ jobs:
       - name: Download installers
         uses: actions/download-artifact@v4
         with:
+          pattern: moon-browser-*-x64
           path: release
           merge-multiple: true
 
@@ -194,20 +195,26 @@ jobs:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         shell: bash
         run: |
+          shopt -s nullglob
+          assets=( release/*.exe release/*.AppImage release/*.deb release/*.rpm release/*.pacman release/SHA256SUMS-*.txt )
+          if (( ${#assets[@]} != 8 )); then
+            echo "Expected six installers and two checksum files; refusing incomplete publication." >&2
+            exit 1
+          fi
           notes_file="docs/releases/${RELEASE_TAG}.md"
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release já existe. Use uma nova versão; artefatos publicados são imutáveis." >&2
             exit 1
           else
             if [[ -f "$notes_file" ]]; then
-              gh release create "$RELEASE_TAG" release/* \
+              gh release create "$RELEASE_TAG" "${assets[@]}" \
                 --repo "$GITHUB_REPOSITORY" \
                 --target "$GITHUB_SHA" \
                 --title "Moon Browser $RELEASE_TAG" \
                 --notes-file "$notes_file" \
                 --prerelease
             else
-              gh release create "$RELEASE_TAG" release/* \
+              gh release create "$RELEASE_TAG" "${assets[@]}" \
                 --repo "$GITHUB_REPOSITORY" \
                 --target "$GITHUB_SHA" \
                 --title "Moon Browser $RELEASE_TAG" \
