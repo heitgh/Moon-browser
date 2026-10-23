@@ -11,7 +11,7 @@ const runtimeDirectory = process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.get
 const detectedWayland = process.env.MOON_HEADLESS === "1" ? undefined : process.env.WAYLAND_DISPLAY ?? (existsSync(join(runtimeDirectory, "wayland-1")) ? "wayland-1" : undefined);
 const detectedDisplay = process.env.DISPLAY ?? (existsSync("/tmp/.X11-unix/X0") ? ":0" : undefined);
 const desktopEnv = { ...process.env, ...(detectedWayland ? { WAYLAND_DISPLAY: detectedWayland, XDG_RUNTIME_DIR: runtimeDirectory } : {}), ...(detectedDisplay ? { DISPLAY: detectedDisplay } : {}) };
-const platformArguments = detectedWayland
+const platformArguments = process.env.MOON_HEADLESS === "1" ? ["--ozone-platform=headless"] : detectedWayland
   ? ["--ozone-platform=wayland"]
   : [];
 

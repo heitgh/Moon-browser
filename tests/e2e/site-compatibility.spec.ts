@@ -42,7 +42,7 @@ test("keeps cookies through redirects and recovers a crashed site renderer", asy
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const userData = await mkdtemp(join(tmpdir(), "moon-compat-"));
   const application = await electron.launch({
-    args: [`--user-data-dir=${userData}`, "."],
+    args: [...(process.env.MOON_HEADLESS === "1" ? ["--ozone-platform=headless"] : []), `--user-data-dir=${userData}`, "."],
     cwd: process.cwd(),
     env: { ...process.env, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData }
   });

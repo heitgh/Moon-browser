@@ -12,7 +12,7 @@ for (const site of [
   test(`${site.name} opens without a renderer crash or internal error leak`, async () => {
     const userData = await mkdtemp(join(tmpdir(), `moon-external-${site.name.toLowerCase()}-`));
     const application = await electron.launch({
-      args: [`--user-data-dir=${userData}`, "."],
+      args: [...(process.env.MOON_HEADLESS === "1" ? ["--ozone-platform=headless"] : []), `--user-data-dir=${userData}`, "."],
       cwd: process.cwd(),
       env: { ...process.env, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData }
     });
