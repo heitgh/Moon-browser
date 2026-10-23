@@ -101,7 +101,7 @@ describe("BrowserProfileImportService", () => {
     const sources = await service.discover();
     expect(sources).toHaveLength(2);
     expect(sources.map(source => source.name).sort()).toEqual(["Chromium (Snap) — Default", "Chromium (Snap) — Profile 2"]);
-    expect(sources.every(source => source.detectedPath.includes("snap/chromium"))).toBe(true);
+    expect(sources.every(source => source.detectedPath.includes(join("snap", "chromium")))).toBe(true);
   });
 
   it("returns an empty discovery result when no compatible browser exists", async () => {
