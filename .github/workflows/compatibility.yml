@@ -23,7 +23,7 @@ jobs:
       - run: npm run native:electron
       - run: xvfb-run -a npm run test:compat
       - if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: moon-compact-ui-and-compatibility
           path: test-results
@@ -44,7 +44,7 @@ jobs:
       - run: npm run native:electron
       - run: xvfb-run -a npm run test:compat:external
       - if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: moon-external-compatibility-results
           path: test-results
