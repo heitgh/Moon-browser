@@ -28,6 +28,6 @@ Ao reportar regressão, registre SO, versão do Moon, URL, horário, passos, com
 | MB-013 | Atualização exige consulta manual ao repositório | Aviso e consulta nas configurações implementados e testados com release simulada. Instalação automática permanece fora. |
 | MB-014 | Consumo de memória e crash prolongado | Aberto: 20 abas locais sem crash; métricas de memória retornaram zero no ambiente e são inconclusivas. GPU física/TikTok pendentes. |
 | MB-015 | Protótipo de IA local | Não implementado; flag ai desativada, fora do primeiro pacote. |
-| MB-016 | Timeout intermitente ao encerrar Electron no E2E | Aberto: workflow independente encontrou timeout em Close context no Linux e no ensaio de perfis Windows; a mesma árvore passou no workflow de release. Causa raiz não comprovada; repetição isolada em análise. |
+| MB-016 | Timeout intermitente ao encerrar Electron no E2E | Aberto: workflow independente encontrou timeout em Close context no Linux e no ensaio de perfis Windows; a mesma árvore passou no workflow de release. A repetição completa passou em Windows/Linux; causa raiz não comprovada, investigação permanece aberta. |
 
 Detalhes: [relatório de validação](docs/review/next-update-validation.md).

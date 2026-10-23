@@ -49,6 +49,8 @@ A [primeira tentativa oficial](https://github.com/heitgh/Moon-browser/actions/ru
 
 O workflow independente [Quality](https://github.com/heitgh/Moon-browser/actions/runs/39998001705) encontrou timeout em dois cenários E2E, enquanto a mesma árvore passou na validação incorporada à release. O trace Linux mostra que a navegação e a asserção da URL passaram; `application.close()`/Close context ficou pendente antes do reinício. No Windows, o ensaio de isolamento de perfis passou na repetição interna, mas houve timeout do worker no encerramento. Não atribuímos a causa a rede, hardware ou produto sem evidência adicional. A falha permanece MB-016; os jobs que falharam foram repetidos uma vez, sem desativar testes ou aumentar timeouts.
 
+Resultado final da repetição: os dois jobs concluíram com sucesso, incluindo typecheck, lint, 205 testes unitários, 35 de integração, 22 de armazenamento, 16 E2E, auditoria de dependências e empacotamento por sistema. Esse resultado não comprova a causa dos timeouts anteriores nem encerra MB-016. Nenhum teste foi removido e nenhum timeout foi aumentado.
+
 O primeiro ensaio local sem servidor gráfico falhou no X11; com Xvfb a suíte passou. Um diálogo nativo também impede executar toda a suíte em headless neste ambiente. Esses limites do ambiente não foram classificados como bugs resolvidos no produto.
 
 A amostra local de muitas abas retornou métricas de memória zero/indisponíveis. **Não é uma medição válida de memória** nem prova ausência de vazamentos. Nenhuma política automática nova de hibernação foi adicionada.
