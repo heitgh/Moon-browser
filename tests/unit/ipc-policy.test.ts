@@ -1,8 +1,10 @@
+import { pathToFileURL } from "node:url";
+import { resolve, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { assertBoundedPayload, assertShellCaller } from "../../apps/desktop/electron/ipc/ipc-policy.js";
 import type { WindowManager } from "../../apps/desktop/electron/main/window-manager.js";
 function fixture() {
-  const frame = { url: "file:///moon/index.html", detached: false };
+  const frame = { url: pathToFileURL(join(resolve("/moon"), "index.html")).href, detached: false };
   const sender = { isDestroyed: () => false, mainFrame: frame, getURL: () => frame.url };
   const window = { webContents: sender, isDestroyed: () => false };
   const windows = { idForWebContents: () => "registered", get: () => window };

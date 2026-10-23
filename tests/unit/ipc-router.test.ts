@@ -1,10 +1,12 @@
+import { pathToFileURL } from "node:url";
+import { resolve, join } from "node:path";
 import { expect, it, vi } from "vitest";
 const electron = vi.hoisted(() => ({ handle: vi.fn(), removeHandler: vi.fn() }));
 vi.mock("electron", () => ({ ipcMain: electron, app: { getAppPath: () => "/moon" } }));
 import { IpcRouter } from "../../apps/desktop/electron/ipc/ipc-router.js";
 import type { WindowManager } from "../../apps/desktop/electron/main/window-manager.js";
 it("guards registered handlers before dispatching any command", async () => {
-  const mainFrame = { url: "file:///moon/index.html", detached: false };
+  const mainFrame = { url: pathToFileURL(join(resolve("/moon"), "index.html")).href, detached: false };
   const sender = { isDestroyed: () => false, mainFrame, getURL: () => mainFrame.url };
   const window = { isDestroyed: () => false, webContents: sender };
   const windows = { idForWebContents: () => "shell", get: () => window } as unknown as WindowManager;

@@ -43,7 +43,7 @@
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/browser-shell.integration.test.ts",
-    "test:electron-storage": "ELECTRON_RUN_AS_NODE=1 electron node_modules/vitest/vitest.mjs run --config vitest.electron.config.ts",
+    "test:electron-storage": "node scripts/development/test-electron-storage.cjs",
     "test:e2e": "npm run compile && playwright test",
     "test:compat": "npm run compile && playwright test tests/e2e/site-compatibility.spec.ts",
     "test:compat:external": "npm run compile && MOON_EXTERNAL_COMPAT=1 playwright test tests/e2e/external-compatibility.spec.ts",

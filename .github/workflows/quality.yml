@@ -11,7 +11,11 @@ permissions:
 
 jobs:
   quality:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
@@ -27,12 +31,16 @@ jobs:
       - run: npm run native:electron
       - run: npm run test:electron-storage
       - run: xvfb-run -a npm run test:e2e
+        if: runner.os == 'Linux'
+      - run: npm run test:e2e
+        if: runner.os == 'Windows'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: desktop-e2e-results-${{ github.run_attempt }}
+          name: desktop-e2e-results-${{ matrix.os }}-${{ github.run_attempt }}
           path: test-results/**
           if-no-files-found: ignore
       - run: npm audit --audit-level=high
       - run: sudo apt-get update && sudo apt-get install --no-install-recommends -y rpm libarchive-tools
+        if: runner.os == 'Linux'
       - run: npm run build:desktop
