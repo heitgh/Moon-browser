@@ -1,3 +1,4 @@
+import { installLocalDiagnostics } from "../services/local-diagnostics.js";
 import { DEFAULT_FEATURE_FLAGS, featureEnabled } from "../../../../config/feature-flags.js";
 import { registerResearchIpc } from "../ipc/research-ipc.js";
 import { changeInterfaceZoom, installInterfaceWheel, installZoomShortcuts } from "./interface-zoom.js";
@@ -82,6 +83,7 @@ async function createMainWindow(privateMode = false, profileId = defaultProfileI
 }
 
 app.whenReady().then(async () => {
+  installLocalDiagnostics(app);
   const testProfileDirectory = process.env.NODE_ENV === "test" ? process.env.MOON_TEST_PROFILE_DIR : undefined;
   const defaultDirectory = testProfileDirectory ?? join(app.getPath("userData"), "profile");
   const profilesDirectory = testProfileDirectory ? join(testProfileDirectory, "profiles") : join(app.getPath("userData"), "profiles");
