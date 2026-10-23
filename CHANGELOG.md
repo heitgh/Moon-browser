@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0-alpha.4 — preparação para publicação (2026-10-23)
+## 0.6.0-alpha.4 — publicada como pré-release (2026-10-23)
 
 - Fronteira central do IPC com validação de janela, WebContents, documento, frame e limites de argumentos.
 - Permissões usam a origem do frame solicitante; imagens usam conexão fixada ao IP público validado por salto.
@@ -8,8 +8,9 @@
 - Gerenciamento de áreas com arquivamento e exclusão com mover/fechar abas; partição de cookies preservada na restauração.
 - Ícones locais YouTube/GitHub, cache de favicons por site e aviso assíncrono de nova versão.
 - Feed de atualização diferencia versões atuais de tags históricas antigas; teste de caminhos compatível com Windows.
-- Evidências locais: 205 unitários, 35 integração, 22 Electron/SQLite, 15 E2E da suíte e um cenário local de 20 abas. Windows/login real/GPU física pendentes.
-- IA local, instalação automática, novos binários e publicação não fazem parte desta entrega. Veja [relatório](docs/review/next-update-validation.md).
+- Evidências no workflow de release Windows/Linux: typecheck/lint, 205 unitários, 35 integração, 22 Electron/SQLite, 16 E2E e CodeQL passaram. Timeouts de encerramento em um workflow independente estão registrados em MB-016. Login real e GPU física continuam pendentes.
+- Pacotes Windows/Linux e checksums publicados na [release oficial](https://github.com/heitgh/Moon-browser/releases/tag/v0.6.0-alpha.4). A seleção de anexos exclui relatórios E2E e rejeita conjuntos incompletos.
+- IA local e instalação automática ficam fora desta entrega. A alpha.3 requer uma instalação manual inicial para receber o novo verificador. Veja [relatório](docs/review/next-update-validation.md).
 
 ## 0.6.0-alpha.3 — integração oficial (2026-10-19)
 

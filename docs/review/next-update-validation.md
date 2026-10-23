@@ -1,6 +1,8 @@
-# Moon Browser — próxima atualização: implementação e evidências
+# Moon Browser v0.6.0-alpha.4 — implementação e evidências
 
-Nexus Inc. · 23/10/2026 · pacote em preparação, não publicado.
+Nexus Inc. · 23/10/2026 · pré-release publicada.
+
+A implementação foi integrada pelo [PR #30](https://github.com/heitgh/Moon-browser/pull/30), preservando commits focados. O ajuste de publicação foi integrado pelo [PR #31](https://github.com/heitgh/Moon-browser/pull/31). O commit publicado é `6316fe8dc757fb591d3813a3483efa6763077fb7`.
 
 ## Escopo implementado
 
@@ -13,30 +15,46 @@ Nexus Inc. · 23/10/2026 · pacote em preparação, não publicado.
 - Ícones: YouTube/GitHub empacotados localmente, fallback de imagem e cache por site persistente. Respeita as opções existentes de cache. A Home oculta não é reconstruída ao hidratar favicon.
 - Windows: matriz Linux/Windows e runner de armazenamento sem sintaxe exclusiva de shell Unix. E2E tem modo headless explícito para ambientes sem desktop.
 
-## Evidência de testes executados em Linux
 
-| Verificação | Resultado observado |
-| --- | --- |
-| `npm run typecheck` | passou |
-| `npm run lint` | passou |
-| `npm run test:unit` | 204 passaram em 45 arquivos |
-| `npm run test:integration` | 35 passaram |
-| `npm run native:electron` | rebuild concluiu |
-| `npm run test:electron-storage` | 22 passaram em 4 arquivos |
-| E2E com Xvfb | 15 passaram; 2 sondas externas opt-in não executadas |
-| E2E adicional de 20 abas locais | passou; 22 WebContents, nenhum marcado como crashed |
-| `npm audit --audit-level=high` | 0 vulnerabilidades reportadas pelo serviço nesta execução |
-| `git diff --check` | passou |
+## Validação e publicação
 
-A suíte E2E cobre zoom de página versus UI, Ctrl++/Ctrl+-/Ctrl+0, Ctrl+scroll, popup OAuth local, cookies/redirect, fullscreen, wallpapers, personalização, restauração, isolamento de perfis, recuperação de renderer, IPC remoto, áreas e aviso de atualização. O teste adicional local foi executado separadamente após a inclusão do cenário de muitas abas.
+O [workflow oficial final](https://github.com/heitgh/Moon-browser/actions/runs/39998001695) passou e publicou a [v0.6.0-alpha.4](https://github.com/heitgh/Moon-browser/releases/tag/v0.6.0-alpha.4). A API confirmou release pública, não draft, marcada como pré-release, com seis instaladores e dois arquivos de checksum, todos no estado uploaded. Nenhum relatório E2E foi anexado.
 
-O primeiro ensaio sem desktop falhou ao inicializar o X11. Em headless, o diálogo nativo de importação encerrou o processo; com Xvfb o mesmo teste passou. Não classificamos essa falha do ambiente como correção de bug do produto.
+| Verificação no workflow de release | Windows | Linux |
+| --- | --- | --- |
+| Typecheck e lint | passaram | passaram |
+| Unitários | 205 passaram | 205 passaram |
+| Integração | 35 passaram | 35 passaram |
+| Rebuild nativo Electron | passou | passou |
+| Armazenamento Electron/SQLite | 22 passaram | 22 passaram |
+| E2E determinísticos | 16 passaram | 16 passaram com Xvfb |
+| Auditoria de dependências | passou | passou |
+| Pacotes | Setup e Portable | AppImage, DEB, RPM e pacman |
 
-O ensaio de muitas abas retornou `beforeKiB=0` e `workingSetKiB=0` neste ambiente, portanto **não é uma medição válida de memória**. Não demonstra ausência de vazamento, comportamento sob carga real nem estabilidade prolongada. Nenhuma política automática nova de hibernação foi adicionada.
+O [CodeQL do commit publicado](https://github.com/heitgh/Moon-browser/actions/runs/39998001724) passou. Também passaram antes do merge os gates de [qualidade do PR #30](https://github.com/heitgh/Moon-browser/actions/runs/39993255633), [builds](https://github.com/heitgh/Moon-browser/actions/runs/39993255775), [CodeQL](https://github.com/heitgh/Moon-browser/actions/runs/39993255759) e [compatibilidade](https://github.com/heitgh/Moon-browser/actions/runs/39993255969). O log dos probes externos registra dois testes aprovados, separados e opt-in na suíte padrão. Não validam autenticação com contas.
 
-## Limites e gates pendentes
+A suíte E2E cobre zoom de página versus UI, Ctrl++/Ctrl+-/Ctrl+0, Ctrl+scroll, popup OAuth local, cookies/redirect, fullscreen, wallpapers, personalização, restauração, isolamento de perfis, recuperação de renderer, IPC remoto, áreas, aviso de atualização e 20 abas locais. O fullscreen usa o evento Electron no fixture; não comprova combinações de mídia, monitor e driver físico.
 
-- Windows não foi executado localmente nem em CI nesta entrega; a matriz precisa rodar após publicação autorizada dos PRs.
+## Regressões encontradas no CI
+
+- Caminhos de perfis: asserção com separador Unix substituída por `path.join` para Windows.
+- Feed: a tag histórica `v1.0.0` não pode disparar atualização da linha atual. A seleção exige data compatível com a época do feed e com a versão instalada, além da ordem semântica; regressões cobrem datas inválidas e antigas.
+- CodeQL: comparação de prefixo no teste substituída por origem URL exata; probes exigem hostname exato ou fronteira de subdomínio. Nenhum alerta foi suprimido.
+- OAuth no Windows: metadados de aba precediam o documento carregado. O teste aguarda o DOM real e verifica popup nativo, opener, retorno e fechamento, respeitando WebContents destruído durante o fechamento. Passou no Windows e Linux.
+- Os testes determinísticos desativam rede externa em modo de teste, exceto o cenário de atualização com feed controlado. A distribuição normal mantém suas consultas de atualização.
+
+A [primeira tentativa oficial](https://github.com/heitgh/Moon-browser/actions/runs/39994668671) passou em testes/builds, mas falhou ao anexar um diretório de relatório E2E. Não deixou release/tag pública. O PR #31 restringiu o download a `moon-browser-*-x64` e a publicação a seis instaladores e dois checksums; um conjunto incompleto é rejeitado. A etapa Bash real passou em fixture com relatórios extras e com instalador ausente. Typecheck/lint e todos os gates Windows/Linux passaram novamente no [CI do ajuste](https://github.com/heitgh/Moon-browser/actions/runs/39996615271). A execução oficial posterior publicou somente os oito anexos esperados.
+
+## Timeout de encerramento em investigação
+
+O workflow independente [Quality](https://github.com/heitgh/Moon-browser/actions/runs/39998001705) encontrou timeout em dois cenários E2E, enquanto a mesma árvore passou na validação incorporada à release. O trace Linux mostra que a navegação e a asserção da URL passaram; `application.close()`/Close context ficou pendente antes do reinício. No Windows, o ensaio de isolamento de perfis passou na repetição interna, mas houve timeout do worker no encerramento. Não atribuímos a causa a rede, hardware ou produto sem evidência adicional. A falha permanece MB-016; os jobs que falharam foram repetidos uma vez, sem desativar testes ou aumentar timeouts.
+
+O primeiro ensaio local sem servidor gráfico falhou no X11; com Xvfb a suíte passou. Um diálogo nativo também impede executar toda a suíte em headless neste ambiente. Esses limites do ambiente não foram classificados como bugs resolvidos no produto.
+
+A amostra local de muitas abas retornou métricas de memória zero/indisponíveis. **Não é uma medição válida de memória** nem prova ausência de vazamentos. Nenhuma política automática nova de hibernação foi adicionada.
+
+## Limites conhecidos
+
 - Login real Google/Pinterest, CAPTCHA e sessões de conta não foram validados. O fixture OAuth local não substitui esses testes.
 - TikTok real/prolongado, reprodução de mídia e GPU física/driver permanecem pendentes. Nenhuma causa raiz de crash de TikTok foi comprovada ou declarada resolvida.
 - Classificação de IPs é conservadora. Testes mockados cobrem DNS rebinding/redirect e classificação; não equivalem a uma auditoria independente ou teste de todas as redes possíveis.
@@ -44,43 +62,11 @@ O ensaio de muitas abas retornou `beforeKiB=0` e `workingSetKiB=0` neste ambient
 - Sessões simultâneas em várias janelas e importações concorrentes merecem homologação adicional. Os testes novos cobrem exclusão/restauração em uma janela e preservação de cookie persistente.
 - Criptografia em repouso, novo sistema de backups e instalação automática assinada não foram implementados neste pacote.
 - **IA local:** a flag existente `ai` continua desativada e bloqueada para release. Motor local, gerenciador de modelos, importação/download com progresso, cancelamento e avaliação em hardware modesto **ainda não foram implementados**. O protótipo permanece fora desta entrega; não há alegação de funcionamento offline de IA.
-- README/BUGS/CHANGELOG foram atualizados após os testes. O relatório inicial foi produzido com `0.6.0-alpha.3`; a preparação posterior da `0.6.0-alpha.4` está registrada abaixo. Não há novos instaladores, checksums de instaladores, merge ou release publicada.
 
-## Commits e revisão proposta
+O preview Vercel possui falha também no main anterior; é independente dos instaladores Electron.
 
-As branches locais formam uma pilha; cada PR deverá ter como base a entrega anterior, para evitar diffs duplicados. Não misturar IA no pacote inicial.
+## Como atualizar
 
-1. `security/ipc-hardening` — fronteira central e regressões unitárias.
-2. `security/permission-origin` — origem real das permissões.
-3. `security/image-download` — transporte fixado ao DNS validado.
-4. `stability/local-diagnostics` — logs locais opt-in.
-5. `test/windows-regressions` — matriz e runners portáveis.
-6. `workspaces/management` — ciclo de vida das áreas.
-7. `app/update-check` — consulta/aviso sem instalação automática.
-8. `ui/favicon-icons` — ícones locais e cache.
-9. `test/release-security-regressions` — E2E de IPC e áreas.
-10. `workspaces/preserve-partitions` — restauração da partição das abas movidas.
-11. `security/image-ipv6-normalization` — formas equivalentes de IPv6.
-12. `test/release-validation` — cookies, avisos e amostra local de muitas abas.
-13. `docs/next-update-validation` — documentação das evidências e limites.
+A alpha.3 e anteriores não contêm verificador de atualização; precisam de uma instalação manual inicial. A alpha.4 oferece aviso assíncrono para futuras versões compatíveis, novidades, Baixar/Depois e consulta manual. Baixar abre a página oficial conferida. Não há instalação automática nem promessa de assinatura digital.
 
-Antes de cada PR efetivo, executar os gates no respectivo head e registrar o resultado, além dos resultados agregados acima. Descrições devem citar problema, causa, solução, risco, testes e limitações; nenhuma branch deve ser marcada pronta para release enquanto Windows e testes humanos estiverem pendentes.
-
-O envio das branches foi bloqueado pela revisão automática por exigir autorização explícita de publicação de código. Não se tentou contornar a rejeição por outro meio. Nenhum PR foi criado.
-
-
-## Preparação da release v0.6.0-alpha.4
-
-Após autorização de publicação do usuário, a entrega foi reunida na branch `release/v0.6.0-alpha.4`, preservando os commits focados. O envio em lote das 13 branches foi recusado pela revisão automática; a publicação proposta foi reduzida à branch da release no destino confirmado `heitgh/Moon-browser`.
-
-Validação repetida na versão alpha.4: typecheck e lint passaram, 204 unitários, 35 integração, 22 Electron/SQLite e 16 E2E passaram. Os dois probes externos permaneceram desativados nessa execução local. O cenário de atualização valida também o aviso automático ao iniciar, além de Depois, consulta manual e abertura da release conferida.
-
-A alpha.3 não possui verificador de atualização instalado; precisa receber a alpha.4 manualmente uma vez. O novo verificador só pode avisar sobre futuras releases em aplicativos que já contenham esse código. Instalação automática continua fora do escopo.
-
-
-## Correções encontradas no CI da release
-
-- Windows encontrou uma asserção antiga que comparava caminhos com separador Unix. A descoberta de perfis estava correta; a asserção passou a usar `path.join`.
-- O feed real contém uma tag histórica `v1.0.0` de agosto. A comparação passou a exigir data de publicação compatível com a época do feed e com a versão instalada, além da ordem semântica. Uma nova regressão cobre essa tag e datas inválidas/anteriores. Validação local atualizada: 205 unitários, 35 integração, 22 SQLite/Electron e 16 E2E passaram.
-- CodeQL sinalizou a comparação de prefixo `https://example.com` no teste de cookie restaurado. O teste agora compara a origem URL exata. Os probes externos também exigem hostname exato ou subdomínio com fronteira de ponto; nenhum alerta foi suprimido.
-- A suíte determinística utiliza o modo offline de teste, exceto o cenário de aviso de atualização com feed controlado; o feed público permanece exercitado nos probes separados. Builds antigos de PR podem ser cancelados por uma revisão mais recente, enquanto pipelines de publicação em main não são cancelados.
+README, BUGS e CHANGELOG foram atualizados após os testes e a confirmação dos oito anexos publicados.
