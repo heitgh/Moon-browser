@@ -1,3 +1,4 @@
+import { permissionOrigin, permissionRequestOrigin } from "../security/permission-origin.js";
 import { EXTRACT_PAGE_SCRIPT } from "../../../../packages/research/extract-page.js";
 import { researchUrl, parseSources, type ResearchSource } from "../../../../packages/research/research.js";
 import { randomUUID } from "node:crypto";
@@ -131,6 +132,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     const window = this.windows.require(windowId);
     const profileId = this.windows.profileId(windowId);
     const guest = this.windows.isGuest(windowId);
+    const partitionArea = options.partitionWorkspaceId ?? options.workspaceId;
     const surface = new ElectronBrowserSurface(`surface-${id}`, id, window, {
       webPreferences: {
         contextIsolation: true,
@@ -141,9 +143,9 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
         partition: options.private
           ? `private:${profileId}:${sessionId}`
           : guest
-            ? `guest:${profileId}:${options.workspaceId ?? "default"}`
-          : options.workspaceId
-            ? `persist:profile:${profileId}:workspace:${options.workspaceId}`
+            ? `guest:${profileId}:${partitionArea ?? "default"}`
+          : partitionArea
+            ? `persist:profile:${profileId}:workspace:${partitionArea}`
             : `persist:profile:${profileId}:default`
       }
     });
@@ -161,6 +163,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       active: false,
       loading: !isHome,
       workspaceId: options.workspaceId,
+      ...(options.partitionWorkspaceId ? { partitionWorkspaceId: options.partitionWorkspaceId } : {}),
       sessionId,
       private: options.private ?? false
     };
@@ -435,7 +438,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     this.#installWindowOpenHandler(id, windowId, contents);
     contents.on("context-menu", (_event, params) => {
       const tab = this.#requireTab(id); const window = this.windows.get(windowId); if (!window || contents.isDestroyed()) return;
-      openElectronContextMenu({ windowId, window, contents, params, tab: { id, workspaceId: tab.workspaceId, sessionId: tab.sessionId, private: tab.private }, searchUrl: selection => (this.#searchTemplates.get(windowId) ?? "https://duckduckgo.com/?q={query}").replace("{query}", encodeURIComponent(selection)), createTab: (url, source) => this.createTab(windowId, { url, active: true, workspaceId: source.workspaceId, sessionId: source.sessionId, private: source.private }), navigate: (tabId, url) => this.navigate(tabId, url) });
+      openElectronContextMenu({ windowId, window, contents, params, tab: { id, workspaceId: tab.workspaceId, partitionWorkspaceId: tab.partitionWorkspaceId, sessionId: tab.sessionId, private: tab.private }, searchUrl: selection => (this.#searchTemplates.get(windowId) ?? "https://duckduckgo.com/?q={query}").replace("{query}", encodeURIComponent(selection)), createTab: (url, source) => this.createTab(windowId, { url, active: true, workspaceId: source.workspaceId, partitionWorkspaceId: source.partitionWorkspaceId, sessionId: source.sessionId, private: source.private }), navigate: (tabId, url) => this.navigate(tabId, url) });
     });
 
     contents.on("will-navigate", event => {
@@ -485,13 +488,21 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     contents.on("leave-html-full-screen", () => this.#leaveHtmlFullscreen(id, windowId));
   }
 
+  moveWorkspaceTabs(windowId: string, sourceId: string, targetId: string): void {
+    for (const tab of this.#tabs.values()) {
+      if (this.#tabWindows.get(tab.id) !== windowId || tab.workspaceId !== sourceId) continue;
+      // Preserve the existing session/partition: moving an area never erases site data.
+      this.#replaceTab(tab.id, { workspaceId: targetId, partitionWorkspaceId: tab.partitionWorkspaceId ?? sourceId }); this.#emitUpdate(tab.id);
+    }
+  }
+
   #installWindowOpenHandler(id: string, windowId: string, contents: Electron.WebContents): void {
     contents.setWindowOpenHandler(details => {
       const decision = decideWindowOpen(details.url, details.disposition, { features: details.features, frameName: details.frameName });
       if (decision.action === "deny") return { action: "deny" };
       if (decision.action === "tab") {
         const source = this.#tabs.get(id); if (!source) return { action: "deny" };
-        void this.createTab(windowId, { url: details.url, active: decision.active, workspaceId: source.workspaceId, sessionId: source.sessionId, private: source.private }).catch(() => undefined);
+        void this.createTab(windowId, { url: details.url, active: decision.active, workspaceId: source.workspaceId, partitionWorkspaceId: source.partitionWorkspaceId, sessionId: source.sessionId, private: source.private }).catch(() => undefined);
         return { action: "deny" };
       }
       const parent = this.windows.get(windowId); if (!parent) return { action: "deny" };
@@ -598,13 +609,13 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     this.#permissionSessions.add(session);
     session.setPermissionCheckHandler((contents, permission, requestingOrigin) => {
       if (["clipboard-sanitized-write", "fullscreen"].includes(permission)) return true;
-      const origin = this.#permissionOrigin(requestingOrigin || contents?.getURL()); if (!origin) return false;
+      const origin = permissionOrigin(requestingOrigin); if (!origin) return false;
       const tab = contents ? this.#tabForContents(contents.id) : undefined;
       const windowId = tab ? this.#tabWindows.get(tab.id) : undefined;
       const decision = tab?.private ? this.#privatePermissions.get(session)?.get(this.#permissionKey(origin, permission)) : windowId ? this.permissionsForWindow?.(windowId)?.get(origin, permission) : undefined;
       return decision === "allow";
     });
-    session.setPermissionRequestHandler((contents, permission, callback) => {
+    session.setPermissionRequestHandler((contents, permission, callback, details) => {
       const surfaceEntry = [...this.#surfaces.entries()].find(([, surface]) => surface.view.webContents.id === contents.id);
       const windowId = surfaceEntry ? this.#tabWindows.get(surfaceEntry[0]) : undefined;
       const tab = surfaceEntry ? this.#tabs.get(surfaceEntry[0]) : undefined;
@@ -613,7 +624,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
         callback(false);
         return;
       }
-      const origin = this.#permissionOrigin(contents.getURL()); if (!origin) { callback(false); return; }
+      const origin = permissionRequestOrigin(details); if (!origin) { callback(false); return; }
       const cached = tab?.private ? this.#privatePermissions.get(session)?.get(this.#permissionKey(origin, permission)) : this.permissionsForWindow?.(windowId)?.get(origin, permission);
       if (cached) { callback(cached === "allow"); return; }
       const id = randomUUID();
@@ -630,7 +641,6 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
   }
 
   #tabForContents(contentsId: number): BrowserTab | undefined { const entry = [...this.#surfaces.entries()].find(([, surface]) => surface.view.webContents.id === contentsId); return entry ? this.#tabs.get(entry[0]) : undefined; }
-  #permissionOrigin(value: string | undefined): string | undefined { try { const url = new URL(value ?? ""); return ["http:", "https:"].includes(url.protocol) ? url.origin : undefined; } catch { return undefined; } }
   #permissionKey(origin: string, permission: string): string { return `${origin}\0${permission}`; }
 
   #syncFromContents(id: string, historyEntry?: ProfileHistoryEntry): void {

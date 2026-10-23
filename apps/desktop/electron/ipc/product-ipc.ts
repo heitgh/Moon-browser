@@ -5,8 +5,7 @@ import { dialog } from "electron";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { basename, extname } from "node:path";
 import { randomUUID } from "node:crypto";
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
+import { fetchPublicImage } from "../security/public-image-download.js";
 import { parseMoonProfileBackup } from "../../../../packages/storage/backup/profile-backup.js";
 import { createDefaultCustomization, parseCustomizationImport } from "../../../../ui/customization/customization-schema.js";
 import { parseMoonHome, serializeMoonHome } from "../../../../ui/customization/moon-home-contract.js";
@@ -177,6 +176,7 @@ export function registerProductIpc(
     const windowId = windows.idForWebContents(event.sender);
     if (!windowId) throw new Error("Browser window is not registered");
     const mutation = parseProfileDataMutation(payload);
+    if (mutation.type === "workspace:delete") throw new Error("Use the workspace lifecycle command to delete an area");
     if (windows.isPrivate(windowId) && (mutation.type === "history:record" || mutation.type === "notes:save" || mutation.type.startsWith("note:"))) throw new Error("Private windows cannot persist history or notes");
     return (await profileFor(event)).applyProfileMutation(mutation);
   });
@@ -234,47 +234,9 @@ const WALLPAPER_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_FAVICON_BYTES = 250_000;
 const FAVICON_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/x-icon", "image/vnd.microsoft.icon"]);
 
-async function fetchSafeWallpaper(input: string): Promise<string> {
-  let url = new URL(input);
-  for (let redirect = 0; redirect <= 3; redirect += 1) {
-    await assertPublicHttpsUrl(url, "Wallpaper");
-    const response = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(12_000), headers: { accept: "image/png,image/jpeg,image/webp" } });
-    if (response.status >= 300 && response.status < 400) { const location = response.headers.get("location"); if (!location || redirect === 3) throw new Error("Wallpaper has too many redirects"); url = new URL(location, url); continue; }
-    if (!response.ok) throw new Error(`Wallpaper request failed (${response.status})`);
-    const mime = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase(); if (!mime || !WALLPAPER_TYPES.has(mime)) throw new Error("Wallpaper must be PNG, JPEG or WebP");
-    const declared = Number(response.headers.get("content-length") ?? "0"); if (declared > MAX_WALLPAPER_BYTES) throw new Error("Wallpaper exceeds 1.5 MB");
-    if (!response.body) throw new Error("Wallpaper response has no body");
-    const chunks: Uint8Array[] = []; let total = 0; const reader = response.body.getReader();
-    while (true) { const { done, value } = await reader.read(); if (done) break; if (!value) continue; total += value.byteLength; if (total > MAX_WALLPAPER_BYTES) { await reader.cancel(); throw new Error("Wallpaper exceeds 1.5 MB"); } chunks.push(value); }
-    const bytes = Buffer.concat(chunks.map(chunk => Buffer.from(chunk))); return `data:${mime};base64,${bytes.toString("base64")}`;
-  }
-  throw new Error("Wallpaper could not be loaded");
+function fetchSafeWallpaper(input: string): Promise<string> {
+  return fetchPublicImage(input, WALLPAPER_TYPES, MAX_WALLPAPER_BYTES, 12_000, 3);
 }
-
-async function fetchSafeFavicon(input: string): Promise<string> {
-  let url = new URL(input);
-  for (let redirect = 0; redirect <= 2; redirect += 1) {
-    await assertPublicHttpsUrl(url, "Favicon");
-    const response = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(8_000), headers: { accept: "image/png,image/jpeg,image/webp,image/gif,image/x-icon" } });
-    if (response.status >= 300 && response.status < 400) { const location = response.headers.get("location"); if (!location || redirect === 2) throw new Error("Favicon has too many redirects"); url = new URL(location, url); continue; }
-    if (!response.ok) throw new Error(`Favicon request failed (${response.status})`);
-    const mime = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase(); if (!mime || !FAVICON_TYPES.has(mime)) throw new Error("Favicon has an unsupported image type");
-    const declared = Number(response.headers.get("content-length") ?? "0"); if (declared > MAX_FAVICON_BYTES) throw new Error("Favicon exceeds 250 KB");
-    if (!response.body) throw new Error("Favicon response has no body");
-    const chunks: Uint8Array[] = []; let total = 0; const reader = response.body.getReader();
-    while (true) { const { done, value } = await reader.read(); if (done) break; if (!value) continue; total += value.byteLength; if (total > MAX_FAVICON_BYTES) { await reader.cancel(); throw new Error("Favicon exceeds 250 KB"); } chunks.push(value); }
-    return `data:${mime};base64,${Buffer.concat(chunks.map(chunk => Buffer.from(chunk))).toString("base64")}`;
-  }
-  throw new Error("Favicon could not be loaded");
-}
-
-async function assertPublicHttpsUrl(url: URL, resource: "Wallpaper" | "Favicon"): Promise<void> {
-  if (url.protocol !== "https:" || url.username || url.password || (url.port && url.port !== "443")) throw new Error(`${resource} URL must use public HTTPS on port 443`);
-  const addresses = await lookup(url.hostname, { all: true, verbatim: true }); if (!addresses.length || addresses.some(({ address }) => !isPublicAddress(address))) throw new Error(`Private or local ${resource.toLowerCase()} hosts are not allowed`);
-}
-
-function isPublicAddress(address: string): boolean {
-  const version = isIP(address); if (version === 4) { const [a, b] = address.split(".").map(Number); return !(a === 0 || a === 10 || a === 127 || a! >= 224 || (a === 100 && b! >= 64 && b! <= 127) || (a === 169 && b === 254) || (a === 172 && b! >= 16 && b! <= 31) || (a === 192 && b === 168) || (a === 198 && (b === 18 || b === 19))); }
-  if (version === 6) { const value = address.toLowerCase(); return !(value === "::" || value === "::1" || value.startsWith("fc") || value.startsWith("fd") || /^fe[89ab]/.test(value) || value.startsWith("::ffff:127.") || value.startsWith("::ffff:10.") || value.startsWith("::ffff:192.168.")); }
-  return false;
+function fetchSafeFavicon(input: string): Promise<string> {
+  return fetchPublicImage(input, FAVICON_TYPES, MAX_FAVICON_BYTES, 8_000, 2);
 }

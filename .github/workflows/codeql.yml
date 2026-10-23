@@ -22,3 +22,22 @@ jobs:
           languages: javascript-typescript
       - uses: github/codeql-action/autobuild@v4
       - uses: github/codeql-action/analyze@v4
+        with:
+          output: codeql-results
+      - name: Summarize scanner findings
+        if: always()
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          if (!fs.existsSync('codeql-results')) process.exit(0);
+          for (const file of fs.readdirSync('codeql-results').filter(file => file.endsWith('.sarif'))) {
+            const report = JSON.parse(fs.readFileSync(`codeql-results/${file}`, 'utf8'));
+            for (const run of report.runs ?? []) {
+              for (const result of (run.results ?? []).slice(0, 50)) {
+                const location = result.locations?.[0]?.physicalLocation;
+                console.log(JSON.stringify({ rule: result.ruleId, file: location?.artifactLocation?.uri, line: location?.region?.startLine, message: result.message?.text }));
+              }
+            }
+          }
+          NODE

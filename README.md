@@ -16,6 +16,15 @@
 
 </div>
 
+## Próxima atualização — em preparação
+
+Segurança de IPC, origem de permissões, downloads de imagens com DNS fixado, gerenciamento de áreas, ícones locais e aviso de atualização estão implementados nas branches de preparação. Não constituem uma nova release publicada.
+
+Validação local: typecheck/lint, 204 unitários, 35 de integração, 22 de armazenamento Electron, 15 E2E da suíte e um cenário adicional de 20 abas locais. Windows, autenticação real e GPU física continuam pendentes. A IA permanece desativada; seu protótipo local não está implementado neste pacote.
+
+Consulte [evidências, limites e sequência de revisão](docs/review/next-update-validation.md). Logs locais opcionais podem ser habilitados com `MOON_LOCAL_DIAGNOSTICS=1`; não contêm URLs nem são enviados automaticamente.
+
+
 ![Moon Browser home with workspaces, search and shortcuts](assets/screenshots/update-home-dark.png)
 
 > [!IMPORTANT]

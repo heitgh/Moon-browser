@@ -13,13 +13,14 @@ export class WorkspaceBar {
 
   render(workspaces: readonly Workspace[], tabs: readonly Tab[], activeWorkspaceId: string): void {
     this.element.replaceChildren(element("span", "moon-workspaces-label", "WORKSPACES"));
-    for (const workspace of workspaces) {
+    for (const workspace of workspaces.filter(area => !area.archived)) {
       const count = tabs.filter(tab => (tab.workspaceId ?? "research") === workspace.id).length;
       const item = button(
         `moon-workspace-chip${workspace.id === activeWorkspaceId ? " is-active" : ""}`,
         `Abrir ${workspace.name}`
       );
-      item.append(element("span", "", workspace.name), element("span", "moon-workspace-count", String(count)));
+      item.append(element("span", "", `${workspace.icon ?? ""} ${workspace.name}`.trim()), element("span", "moon-workspace-count", String(count)));
+      if (workspace.color) item.style.borderColor = workspace.color;
       item.addEventListener("click", () => this.actions.onSelect(workspace.id));
       this.element.append(item);
     }

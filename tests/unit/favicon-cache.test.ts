@@ -23,3 +23,10 @@ describe("FaviconCache", () => {
     const cache = new FaviconCache(localStorage); cache.set("https://moon.test/favicon.png", PNG); cache.configure({ enabled: false, persist: true, ttlDays: 30 }); expect(cache.get("https://moon.test/favicon.png")).toBeUndefined();
   });
 });
+
+it("restores cached icons by site after restarting without an open tab", () => {
+  localStorage.clear(); const first = new FaviconCache(localStorage);
+  first.setSite("https://example.com/page", "https://example.com/icon.png", PNG);
+  expect(new FaviconCache(localStorage).getSite("https://example.com/other")).toBe(PNG);
+  first.clear(); expect(new FaviconCache(localStorage).getSite("https://example.com")).toBeUndefined();
+});

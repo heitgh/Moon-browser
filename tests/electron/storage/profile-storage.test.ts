@@ -203,3 +203,27 @@ describe("Research memory persistence", () => {
     await first.storage.close(); await second.storage.close();
   });
 });
+
+it("preserves workspace metadata and atomically moves or closes saved tabs without touching permissions", async () => {
+  const { storage, directory } = await profile();
+  await storage.applyProfileMutation({ type: "workspace:save", value: { id: "a", name: "Estudos", position: 1, color: "#112233", icon: "📚" } });
+  await storage.applyProfileMutation({ type: "workspace:save", value: { id: "b", name: "Trabalho", position: 0 } });
+  await storage.saveSitePermissions([{ origin: "https://example.com", permission: "media", decision: "allow", updatedAt: 1 }]);
+  await storage.saveBrowserSession([{ id: "t", title: "T", url: "https://example.com", workspaceId: "a", active: true, loading: false, private: false }]);
+  await expect(storage.applyProfileMutation({ type: "workspace:delete", id: "a" })).rejects.toThrow();
+  await storage.applyProfileMutation({ type: "workspace:save", value: { id: "a", name: "Pesquisa", position: 1, archived: true } });
+  expect((await storage.loadProfileData()).workspaces.find(area => area.id === "a")).toMatchObject({ archived: true, color: "#112233", icon: "📚" });
+  await storage.applyProfileMutation({ type: "workspace:delete", id: "a", tabs: "move", targetId: "b" });
+  expect((await storage.loadBrowserSession())[0]).toMatchObject({ workspaceId: "b", partitionWorkspaceId: "a" });
+  expect(await storage.loadSitePermissions()).toHaveLength(1);
+  await expect(storage.applyProfileMutation({ type: "workspace:delete", id: "b", tabs: "close" })).rejects.toThrow();
+  await storage.close(); const reopened = new ProfileStorage(directory); await reopened.open();
+  expect((await reopened.loadProfileData()).workspaces.map(area => area.id)).toEqual(["b"]);
+  expect((await reopened.loadBrowserSession())[0]?.workspaceId).toBe("b"); await reopened.close();
+});
+it("repairs orphan workspace IDs when restoring a session", async () => {
+  const { storage } = await profile();
+  await storage.applyProfileMutation({ type: "workspace:save", value: { id: "safe", name: "Safe", position: 0 } });
+  await storage.saveBrowserSession([{ id: "t", url: "https://example.com", title: "T", active: true, loading: false, private: false, workspaceId: "missing" }]);
+  expect((await storage.loadBrowserSession())[0]?.workspaceId).toBe("safe"); await storage.close();
+});

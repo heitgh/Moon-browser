@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0-alpha.4 — preparação para publicação (2026-10-23)
+
+- Fronteira central do IPC com validação de janela, WebContents, documento, frame e limites de argumentos.
+- Permissões usam a origem do frame solicitante; imagens usam conexão fixada ao IP público validado por salto.
+- Diagnóstico local opt-in, matriz Windows/Linux e regressões adicionais.
+- Gerenciamento de áreas com arquivamento e exclusão com mover/fechar abas; partição de cookies preservada na restauração.
+- Ícones locais YouTube/GitHub, cache de favicons por site e aviso assíncrono de nova versão.
+- Feed de atualização diferencia versões atuais de tags históricas antigas; teste de caminhos compatível com Windows.
+- Evidências locais: 205 unitários, 35 integração, 22 Electron/SQLite, 15 E2E da suíte e um cenário local de 20 abas. Windows/login real/GPU física pendentes.
+- IA local, instalação automática, novos binários e publicação não fazem parte desta entrega. Veja [relatório](docs/review/next-update-validation.md).
+
 ## 0.6.0-alpha.3 — integração oficial (2026-10-19)
 
 - Ctrl++/Ctrl+-/Ctrl+0 alteram somente o site ativo; Ctrl + scroll altera a UI.

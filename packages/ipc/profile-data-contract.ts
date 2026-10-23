@@ -25,6 +25,9 @@ export interface ProfileWorkspace {
   readonly id: string;
   readonly name: string;
   readonly position: number;
+  readonly color?: string;
+  readonly icon?: string;
+  readonly archived?: boolean;
 }
 
 export interface ProfileNoteVersion { readonly revision: number; readonly title: string; readonly content: string; readonly updatedAt: number; }
@@ -73,7 +76,7 @@ export type ProfileDataMutation =
   | { readonly type: "note:restore"; readonly id: string }
   | { readonly type: "note:purge"; readonly id: string }
   | { readonly type: "workspace:save"; readonly value: ProfileWorkspace }
-  | { readonly type: "workspace:delete"; readonly id: string };
+  | { readonly type: "workspace:delete"; readonly id: string; readonly tabs?: "move" | "close"; readonly targetId?: string };
 
 const MAX_NOTES_LENGTH = 1_000_000;
 
@@ -92,7 +95,10 @@ export function parseProfileDataMutation(value: unknown): ProfileDataMutation {
     case "note:restore": return { type: input.type, id: identifier(input.id) };
     case "note:purge": return { type: input.type, id: identifier(input.id) };
     case "workspace:save": return { type: input.type, value: workspace(input.value) };
-    case "workspace:delete": return { type: input.type, id: identifier(input.id) };
+    case "workspace:delete": {
+      if (input.tabs !== undefined && input.tabs !== "move" && input.tabs !== "close") throw new TypeError("Invalid tab deletion choice");
+      return { type: input.type, id: identifier(input.id), ...(input.tabs ? { tabs: input.tabs as "move" | "close" } : {}), ...(input.targetId ? { targetId: identifier(input.targetId) } : {}) };
+    }
     default: throw new TypeError("Unsupported profile mutation");
   }
 }
@@ -153,7 +159,10 @@ function workspace(value: unknown): ProfileWorkspace {
   const input = record(value, "workspace");
   const position = input.position;
   if (typeof position !== "number" || !Number.isSafeInteger(position) || position < 0 || position > 10_000) throw new TypeError("Invalid workspace position");
-  return { id: identifier(input.id), name: text(input.name, "workspace name", 200), position };
+  if (input.color !== undefined && (typeof input.color !== "string" || !/^#[0-9a-f]{6}$/i.test(input.color))) throw new TypeError("Invalid workspace color");
+  if (input.icon !== undefined && !["📚", "🔎", "💼", "🌙", "💻", "🎮"].includes(String(input.icon))) throw new TypeError("Invalid workspace icon");
+  if (input.archived !== undefined && typeof input.archived !== "boolean") throw new TypeError("Invalid archive state");
+  return { id: identifier(input.id), name: text(input.name, "workspace name", 200), position, ...(input.color ? { color: input.color as string } : {}), ...(input.icon ? { icon: input.icon as string } : {}), ...(input.archived !== undefined ? { archived: input.archived as boolean } : {}) };
 }
 
 function identifier(value: unknown): string {

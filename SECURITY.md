@@ -38,3 +38,10 @@ Pedimos tempo razoável para investigar e corrigir a falha antes de qualquer div
 ## Limites atuais
 
 O Moon Browser é software experimental e não deve ser usado como único navegador para dados críticos ou ambientes que exijam garantias formais de segurança. Recursos marcados como experimentais ou fundação técnica podem ter riscos e limitações adicionais.
+
+
+## Preparação da próxima atualização (2026-10-23)
+
+O router verifica a identidade do shell e rejeita frames remotos/subframes; downloads de imagens fixam o destino DNS e validam cada salto. A origem das permissões vem do frame solicitante. Essas barreiras possuem regressões automatizadas, com limites descritos no [relatório de validação](docs/review/next-update-validation.md).
+
+O shell continua sendo um contexto privilegiado: XSS nesse documento exige análise própria. Dados de perfil não ganharam criptografia nesta entrega. Diagnóstico local é opt-in e sem envio automático. Não há instalador automático nem IA local habilitada.

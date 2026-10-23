@@ -1,7 +1,10 @@
+import { UpdateChecker } from "../services/update-checker.js";
+import { parseProfileDataMutation } from "../../../../packages/ipc/profile-data-contract.js";
+import { installLocalDiagnostics } from "../services/local-diagnostics.js";
 import { DEFAULT_FEATURE_FLAGS, featureEnabled } from "../../../../config/feature-flags.js";
 import { registerResearchIpc } from "../ipc/research-ipc.js";
 import { changeInterfaceZoom, installInterfaceWheel, installZoomShortcuts } from "./interface-zoom.js";
-import { app, ipcMain } from "electron";
+import { app, ipcMain, shell } from "electron";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { ElectronBrowserManager } from "../browser/browser-manager.js";
@@ -24,7 +27,7 @@ const requestPipeline = new SessionRequestPipeline();
 const permissions = new Map<string, SitePermissionService>();
 const adblock = new ElectronAdblockService(windows, requestPipeline);
 const browser = new ElectronBrowserManager(windows, downloads, adblock, requestPipeline, windowId => permissions.get(windows.profileId(windowId)));
-const ipc = new IpcRouter();
+const ipc = new IpcRouter(windows);
 let profiles: LocalProfileManager | undefined;
 let application: BrowserApplicationService | undefined;
 let defaultProfileId = "default";
@@ -82,6 +85,11 @@ async function createMainWindow(privateMode = false, profileId = defaultProfileI
 }
 
 app.whenReady().then(async () => {
+  installLocalDiagnostics(app);
+  const offlineTest = process.env.NODE_ENV === "test" && process.env.MOON_TEST_OFFLINE === "1";
+  const updates = new UpdateChecker(app.getVersion());
+  ipc.register("updates:check", () => offlineTest ? null : updates.check());
+  ipc.register("updates:download", async () => { if (!updates.available) throw new Error("No checked update is available"); await shell.openExternal(updates.available.url); });
   const testProfileDirectory = process.env.NODE_ENV === "test" ? process.env.MOON_TEST_PROFILE_DIR : undefined;
   const defaultDirectory = testProfileDirectory ?? join(app.getPath("userData"), "profile");
   const profilesDirectory = testProfileDirectory ? join(testProfileDirectory, "profiles") : join(app.getPath("userData"), "profiles");
@@ -93,15 +101,49 @@ app.whenReady().then(async () => {
   });
   ipcMain.on("browser:ui-wheel", (event, direction: unknown) => {
     if (direction !== "in" && direction !== "out") return;
+    if (event.sender.isDestroyed() || !event.senderFrame || event.senderFrame !== event.sender.mainFrame || event.senderFrame.detached) return;
     const id = browser.windowIdForContents(event.sender); const window = id ? windows.get(id) : undefined;
     if (window) setImmediate(() => changeInterfaceZoom(window.webContents, direction));
   });
   registerBrowserIpc(ipc, application, windows, profileId => createMainWindow(true, profileId));
+  ipc.register("workspace:delete", async (event, payload: unknown) => {
+    const mutation = parseProfileDataMutation(payload);
+    if (mutation.type !== "workspace:delete") throw new TypeError("Invalid workspace command");
+    const source = windows.idForWebContents(event.sender)!;
+    if (windows.isPrivate(source) || windows.isGuest(source)) throw new Error("Use a normal window to delete areas");
+    const profileId = windows.profileId(source);
+    const storage = await profiles!.storage(profileId);
+    const areas = (await storage.loadProfileData()).workspaces;
+    if (!areas.some(area => area.id === mutation.id) || !areas.some(area => area.id !== mutation.id && !area.archived)) throw new Error("Keep at least one active workspace");
+    if (!mutation.tabs || (mutation.tabs === "move" && !areas.some(area => area.id === mutation.targetId && area.id !== mutation.id && !area.archived))) throw new Error("Choose how to handle the tabs and an active destination");
+    if (application!.deletingAreas.has(mutation.id)) throw new Error("Workspace deletion in progress");
+    application!.deletingAreas.add(mutation.id);
+    try {
+    for (const window of windows.list()) {
+      const id = windows.idForWebContents(window.webContents)!;
+      if (windows.profileId(id) === profileId) window.webContents.send("workspace:deleting", { source: mutation.id, target: mutation.targetId ?? areas.find(area => area.id !== mutation.id && !area.archived)!.id });
+    }
+    for (const window of windows.list()) {
+      const id = windows.idForWebContents(window.webContents)!;
+      if (windows.profileId(id) !== profileId) continue;
+      if (mutation.tabs === "move") browser.moveWorkspaceTabs(id, mutation.id, mutation.targetId!);
+      else for (const tab of await application!.getTabs(id)) if (tab.workspaceId === mutation.id) await application!.closeTab(tab.id);
+      await application!.flushWindow(id);
+    }
+    await storage.applyProfileMutation(mutation);
+    } finally {
+    application!.deletingAreas.delete(mutation.id);
+    for (const window of windows.list()) {
+      const id = windows.idForWebContents(window.webContents)!;
+      if (windows.profileId(id) === profileId) window.webContents.send("workspace:changed");
+    }
+    }
+  });
   registerProductIpc(ipc, downloads, adblock, profiles, windows, app.getPath("home"), app.getVersion(), profileId => createMainWindow(false, profileId));
   if (featureEnabled(DEFAULT_FEATURE_FLAGS, "research")) registerResearchIpc(ipc, windows, browser, application, profiles);
   registerApplicationLifecycle(windows, createMainWindow);
   await createMainWindow();
-  void adblock.initialize();
+  if (!offlineTest) void adblock.initialize();
 }).catch(error => {
   console.error("Moon failed to start", error);
   app.exit(1);

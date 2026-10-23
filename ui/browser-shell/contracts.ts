@@ -22,7 +22,7 @@ export interface TabUpdate {
   readonly historyEntry?: import("../../packages/ipc/profile-data-contract.js").ProfileHistoryEntry;
 }
 
-export interface Workspace { readonly id: string; readonly name: string; }
+export interface Workspace { readonly id: string; readonly name: string; readonly position?: number; readonly color?: string; readonly icon?: string; readonly archived?: boolean; }
 export interface SavedLink { readonly id: string; readonly title: string; readonly url: string; readonly time: number; }
 export interface Shortcut { readonly id: string; readonly name: string; readonly url: string; readonly openIn?: "current" | "new"; }
 export interface SavedTheme { readonly id: string; readonly name: string; readonly accent: string; readonly wallpaper: string; readonly glassHome: boolean; }
@@ -56,6 +56,8 @@ export interface MoonBrowserBridge {
   researchSessionUrls?(workspaceId: string): Promise<string[]>;
   restoreResearchSession?(workspaceId: string, id: string, urls: string[]): Promise<number>;
   exportResearch?(content: string): Promise<boolean>;
+  checkUpdates?(): Promise<{ version: string; notes: string; url: string } | null>;
+  downloadUpdate?(): Promise<void>;
   createTab(url?: string, workspaceId?: string): Promise<Tab>;
   getWindowContext(): Promise<{ readonly private: boolean; readonly guest: boolean; readonly profileId: string }>;
   createPrivateWindow(): Promise<void>;
@@ -127,6 +129,8 @@ export interface MoonBrowserBridge {
   rollbackMoonTheme(packageId: string): Promise<MoonThemePayload>;
   removeMoonTheme(id: string): Promise<void>;
   exportMoonTheme(id: string): Promise<boolean>;
+  onWorkspaceChanged?(listener: () => void): () => void;
+  onWorkspaceDeleting?(listener: (value: { source: string; target: string }) => void): () => void;
   onTabUpdated(listener: (update: TabUpdate) => void): () => void;
   onTabClosed(listener: (event: { readonly tabId: string }) => void): () => void;
   onFullscreenChanged?(listener: (state: FullscreenState) => void): () => void;

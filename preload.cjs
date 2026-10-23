@@ -10,6 +10,8 @@ const subscribe = (channel, listener) => {
 };
 
 contextBridge.exposeInMainWorld("moonBrowser", Object.freeze({
+  checkUpdates: () => invoke("updates:check"),
+  downloadUpdate: () => invoke("updates:download"),
   windowAction: action => invoke("browser:window-action", action),
   createTab: (url, workspaceId) => invoke("browser:create-tab", {
     ...(url ? { url } : {}),
@@ -61,7 +63,7 @@ contextBridge.exposeInMainWorld("moonBrowser", Object.freeze({
   loadCustomization: legacy => invoke("customization:load", { legacy }),
   commitCustomization: document => invoke("customization:commit", { document }),
   getProfileData: () => invoke("profile:get-data"),
-  mutateProfileData: mutation => invoke("profile:mutate", mutation),
+  mutateProfileData: mutation => invoke(mutation?.type === "workspace:delete" ? "workspace:delete" : "profile:mutate", mutation),
   listLocalProfiles: () => invoke("local-profile:list"),
   createLocalProfile: profile => invoke("local-profile:create", profile),
   updateLocalProfile: profile => invoke("local-profile:update", profile),
@@ -91,6 +93,8 @@ contextBridge.exposeInMainWorld("moonBrowser", Object.freeze({
   rollbackMoonTheme: packageId => invoke("theme:rollback", { packageId }),
   removeMoonTheme: id => invoke("theme:remove", { id }),
   exportMoonTheme: id => invoke("theme:export", { id }),
+  onWorkspaceChanged: listener => subscribe("workspace:changed", listener),
+  onWorkspaceDeleting: listener => subscribe("workspace:deleting", listener),
   onTabUpdated: listener => subscribe("browser:tab-updated", listener),
   onTabClosed: listener => subscribe("browser:tab-closed", listener),
   onFullscreenChanged: listener => subscribe("browser:fullscreen-changed", listener),
