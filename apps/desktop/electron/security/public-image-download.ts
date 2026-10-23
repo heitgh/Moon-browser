@@ -14,8 +14,8 @@ export function isPublicAddress(address: string): boolean {
   }
   // Conservative IPv6 global-unicast policy; excludes mapped, NAT64 and tunnels.
   if (isIP(address) !== 6) return false;
-  const value = address.toLowerCase();
-  return /^[23][0-9a-f]{3}:/.test(value) && !/^2001:(?:0:|db8:|2:|1[0-9a-f]:|2[0-9a-f]:)/.test(value) && !value.startsWith("2002:") && !value.startsWith("3fff:");
+  const value = new URL(`http://[${address}]/`).hostname.slice(1, -1).toLowerCase();
+  return /^[23][0-9a-f]{3}:/.test(value) && !value.startsWith("2001::") && !/^2001:(?:0:|db8:|2:|1[0-9a-f]:|2[0-9a-f]:)/.test(value) && !value.startsWith("2002:") && !value.startsWith("3fff:");
 }
 
 export async function resolvePublicImage(url: URL): Promise<{ address: string; family: number }> {

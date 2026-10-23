@@ -16,7 +16,8 @@ beforeEach(() => {
   });
 });
 describe("image SSRF protection", () => {
-  it.each(["127.0.0.1", "10.0.0.1", "172.16.0.1", "192.168.0.1", "169.254.169.254", "100.64.0.1", "0.0.0.0", "224.0.0.1", "::1", "fe80::1", "fd00::1", "::ffff:7f00:1", "::ffff:a00:1", "64:ff9b::a00:1", "2002:7f00:1::"])("blocks %s", address => expect(isPublicAddress(address)).toBe(false));
+  it("accepts public IPv6 resolver addresses", () => expect(isPublicAddress("2001:4860:4860::8888")).toBe(true));
+  it.each(["127.0.0.1", "10.0.0.1", "172.16.0.1", "192.168.0.1", "169.254.169.254", "100.64.0.1", "0.0.0.0", "224.0.0.1", "::1", "fe80::1", "fd00::1", "::ffff:7f00:1", "::ffff:a00:1", "64:ff9b::a00:1", "2002:7f00:1::", "2001:0db8::1", "2001:0000::1"])("blocks %s", address => expect(isPublicAddress(address)).toBe(false));
   it.each(["http://example.com", "file:///tmp/x", "https://user:pass@example.com", "https://example.com:8443", "https://127.1", "https://[::1]"])("rejects %s before connecting", async url => {
     await expect(resolvePublicImage(new URL(url))).rejects.toThrow(); expect(mocks.request).not.toHaveBeenCalled();
   });
