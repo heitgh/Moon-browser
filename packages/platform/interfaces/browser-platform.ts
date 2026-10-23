@@ -3,6 +3,7 @@ export interface BrowserTabOptions {
   readonly url?: string;
   readonly active?: boolean;
   readonly workspaceId?: string;
+  readonly partitionWorkspaceId?: string;
   readonly sessionId?: string;
   readonly private?: boolean;
 }
@@ -15,6 +16,7 @@ export interface BrowserTab {
   readonly loading: boolean;
   readonly faviconUrl?: string;
   readonly workspaceId?: string;
+  readonly partitionWorkspaceId?: string;
   readonly sessionId?: string;
   readonly private: boolean;
 }

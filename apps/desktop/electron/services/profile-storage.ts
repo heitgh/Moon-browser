@@ -26,6 +26,7 @@ export interface RestorableBrowserTab {
   readonly url: string;
   readonly active: boolean;
   readonly workspaceId?: string;
+  readonly partitionWorkspaceId?: string;
   readonly sessionId?: string;
 }
 
@@ -187,7 +188,7 @@ export class ProfileStorage {
       savedAt: Date.now(),
       tabs: tabs
         .filter(tab => !tab.private)
-        .map(tab => ({ id: tab.id, url: tab.url, active: tab.active, workspaceId: tab.workspaceId, sessionId: tab.sessionId }))
+        .map(tab => ({ id: tab.id, url: tab.url, active: tab.active, workspaceId: tab.workspaceId, ...(tab.partitionWorkspaceId ? { partitionWorkspaceId: tab.partitionWorkspaceId } : {}), sessionId: tab.sessionId }))
     };
     await this.#settings.setValue("browser-session", record);
   }
@@ -198,6 +199,7 @@ export class ProfileStorage {
     const tabs: RestorableBrowserTab[] = [];
     for (const candidate of value.tabs) {
       if (!candidate || typeof candidate.id !== "string" || candidate.id.length > 100 || typeof candidate.url !== "string" || candidate.url.length > 16_384 || typeof candidate.active !== "boolean") return [];
+      if ([candidate.workspaceId, candidate.partitionWorkspaceId].some(id => id !== undefined && (typeof id !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,99}$/.test(id)))) return [];
       const normalizedUrl = normalizeMoonInternalUrl(candidate.url) ?? candidate.url;
       if (!normalizeMoonInternalUrl(normalizedUrl)) {
         try { if (!["http:", "https:"].includes(new URL(normalizedUrl).protocol)) return []; }
@@ -301,7 +303,7 @@ export class ProfileStorage {
         if (affected && !mutation.tabs) throw new Error("Choose whether to move or close tabs");
         if (mutation.tabs === "move" && !target) throw new Error("Select an active destination workspace");
         await this.#database.transaction(async () => {
-          await this.#settings.setValue("browser-session", { version: 1, savedAt: now, tabs: tabs.flatMap(tab => tab.workspaceId !== mutation.id ? [tab] : mutation.tabs === "close" ? [] : [{ ...tab, workspaceId: target!.id }]) });
+          await this.#settings.setValue("browser-session", { version: 1, savedAt: now, tabs: tabs.flatMap(tab => tab.workspaceId !== mutation.id ? [tab] : mutation.tabs === "close" ? [] : [{ ...tab, workspaceId: target!.id, partitionWorkspaceId: tab.partitionWorkspaceId ?? mutation.id }]) });
           await this.#workspaces.delete(mutation.id);
         });
         return;

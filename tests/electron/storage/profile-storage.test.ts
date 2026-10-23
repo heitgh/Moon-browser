@@ -214,7 +214,7 @@ it("preserves workspace metadata and atomically moves or closes saved tabs witho
   await storage.applyProfileMutation({ type: "workspace:save", value: { id: "a", name: "Pesquisa", position: 1, archived: true } });
   expect((await storage.loadProfileData()).workspaces.find(area => area.id === "a")).toMatchObject({ archived: true, color: "#112233", icon: "📚" });
   await storage.applyProfileMutation({ type: "workspace:delete", id: "a", tabs: "move", targetId: "b" });
-  expect((await storage.loadBrowserSession())[0]?.workspaceId).toBe("b");
+  expect((await storage.loadBrowserSession())[0]).toMatchObject({ workspaceId: "b", partitionWorkspaceId: "a" });
   expect(await storage.loadSitePermissions()).toHaveLength(1);
   await expect(storage.applyProfileMutation({ type: "workspace:delete", id: "b", tabs: "close" })).rejects.toThrow();
   await storage.close(); const reopened = new ProfileStorage(directory); await reopened.open();

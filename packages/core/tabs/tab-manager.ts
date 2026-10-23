@@ -22,6 +22,7 @@ export class TabManager {
         url: input.url,
         active: input.active,
         workspaceId: input.workspaceId,
+        ...(input.partitionWorkspaceId ? { partitionWorkspaceId: input.partitionWorkspaceId } : {}),
         sessionId: input.sessionId,
         private: input.private
       }

@@ -132,6 +132,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     const window = this.windows.require(windowId);
     const profileId = this.windows.profileId(windowId);
     const guest = this.windows.isGuest(windowId);
+    const partitionArea = options.partitionWorkspaceId ?? options.workspaceId;
     const surface = new ElectronBrowserSurface(`surface-${id}`, id, window, {
       webPreferences: {
         contextIsolation: true,
@@ -142,9 +143,9 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
         partition: options.private
           ? `private:${profileId}:${sessionId}`
           : guest
-            ? `guest:${profileId}:${options.workspaceId ?? "default"}`
-          : options.workspaceId
-            ? `persist:profile:${profileId}:workspace:${options.workspaceId}`
+            ? `guest:${profileId}:${partitionArea ?? "default"}`
+          : partitionArea
+            ? `persist:profile:${profileId}:workspace:${partitionArea}`
             : `persist:profile:${profileId}:default`
       }
     });
@@ -162,6 +163,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       active: false,
       loading: !isHome,
       workspaceId: options.workspaceId,
+      ...(options.partitionWorkspaceId ? { partitionWorkspaceId: options.partitionWorkspaceId } : {}),
       sessionId,
       private: options.private ?? false
     };
@@ -436,7 +438,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     this.#installWindowOpenHandler(id, windowId, contents);
     contents.on("context-menu", (_event, params) => {
       const tab = this.#requireTab(id); const window = this.windows.get(windowId); if (!window || contents.isDestroyed()) return;
-      openElectronContextMenu({ windowId, window, contents, params, tab: { id, workspaceId: tab.workspaceId, sessionId: tab.sessionId, private: tab.private }, searchUrl: selection => (this.#searchTemplates.get(windowId) ?? "https://duckduckgo.com/?q={query}").replace("{query}", encodeURIComponent(selection)), createTab: (url, source) => this.createTab(windowId, { url, active: true, workspaceId: source.workspaceId, sessionId: source.sessionId, private: source.private }), navigate: (tabId, url) => this.navigate(tabId, url) });
+      openElectronContextMenu({ windowId, window, contents, params, tab: { id, workspaceId: tab.workspaceId, partitionWorkspaceId: tab.partitionWorkspaceId, sessionId: tab.sessionId, private: tab.private }, searchUrl: selection => (this.#searchTemplates.get(windowId) ?? "https://duckduckgo.com/?q={query}").replace("{query}", encodeURIComponent(selection)), createTab: (url, source) => this.createTab(windowId, { url, active: true, workspaceId: source.workspaceId, partitionWorkspaceId: source.partitionWorkspaceId, sessionId: source.sessionId, private: source.private }), navigate: (tabId, url) => this.navigate(tabId, url) });
     });
 
     contents.on("will-navigate", event => {
@@ -490,7 +492,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     for (const tab of this.#tabs.values()) {
       if (this.#tabWindows.get(tab.id) !== windowId || tab.workspaceId !== sourceId) continue;
       // Preserve the existing session/partition: moving an area never erases site data.
-      this.#replaceTab(tab.id, { workspaceId: targetId }); this.#emitUpdate(tab.id);
+      this.#replaceTab(tab.id, { workspaceId: targetId, partitionWorkspaceId: tab.partitionWorkspaceId ?? sourceId }); this.#emitUpdate(tab.id);
     }
   }
 
@@ -500,7 +502,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       if (decision.action === "deny") return { action: "deny" };
       if (decision.action === "tab") {
         const source = this.#tabs.get(id); if (!source) return { action: "deny" };
-        void this.createTab(windowId, { url: details.url, active: decision.active, workspaceId: source.workspaceId, sessionId: source.sessionId, private: source.private }).catch(() => undefined);
+        void this.createTab(windowId, { url: details.url, active: decision.active, workspaceId: source.workspaceId, partitionWorkspaceId: source.partitionWorkspaceId, sessionId: source.sessionId, private: source.private }).catch(() => undefined);
         return { action: "deny" };
       }
       const parent = this.windows.get(windowId); if (!parent) return { action: "deny" };

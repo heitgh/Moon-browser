@@ -1,7 +1,7 @@
 import { clipboard, Menu, type BrowserWindow, type ContextMenuParams, type MenuItemConstructorOptions, type WebContents } from "electron";
 import { buildContextMenu, type ContextMenuAction } from "./context-menu-model.js";
 
-export interface ContextMenuTab { readonly id: string; readonly workspaceId?: string; readonly sessionId?: string; readonly private: boolean; }
+export interface ContextMenuTab { readonly id: string; readonly workspaceId?: string; readonly partitionWorkspaceId?: string; readonly sessionId?: string; readonly private: boolean; }
 export interface ElectronContextMenuOptions { readonly windowId: string; readonly window: BrowserWindow; readonly contents: WebContents; readonly params: ContextMenuParams; readonly tab: ContextMenuTab; readonly searchUrl: (selection: string) => string; readonly createTab: (url: string, tab: ContextMenuTab) => Promise<unknown>; readonly navigate: (tabId: string, url: string) => Promise<void>; }
 
 export function openElectronContextMenu(options: ElectronContextMenuOptions): void {

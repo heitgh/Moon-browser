@@ -17,6 +17,7 @@ export interface TabModel {
   readonly canGoBack: boolean;
   readonly canGoForward: boolean;
   readonly workspaceId?: string;
+  readonly partitionWorkspaceId?: string;
   readonly sessionId?: string;
   readonly groupId?: string;
   readonly openerTabId?: string;
@@ -33,6 +34,7 @@ export interface CreateTabInput {
   readonly pinned?: boolean;
   readonly private?: boolean;
   readonly workspaceId?: string;
+  readonly partitionWorkspaceId?: string;
   readonly sessionId?: string;
   readonly groupId?: string;
   readonly openerTabId?: string;
