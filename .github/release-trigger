@@ -1,2 +1,4 @@
 # Versão oficial para publicação após os gates de qualidade.
 v0.6.0-alpha.4
+
+# Publish only installer artifacts, excluding E2E reports.
