@@ -271,7 +271,7 @@ test("exports and imports customization through the real desktop bridge", async 
       return true;
     }, exportPath);
     await window.getByLabel("Workspaces e dados", { exact: true }).click();
-    window.once("dialog", dialog => void dialog.accept());
+    window.once("dialog", dialog => { void dialog.accept().catch(() => undefined); });
     await window.getByLabel("Importar personalização").click();
     await expect.poll(() => window.evaluate(() => document.documentElement.dataset.moonTheme)).toBe("light");
     await window.getByLabel("Aplicar personalização").click();
@@ -534,4 +534,46 @@ test("page keyboard zoom is separate from Ctrl wheel UI zoom and the titlebar is
     const { writeFile } = await import("node:fs/promises");
     await writeFile("test-results/continuous-wallpaper.png", Buffer.from(screenshot, "base64"));
   } finally { await application.close(); server.close(); await rm(userData, { recursive: true, force: true }); }
+});
+
+test("rejects privileged IPC after a registered shell is navigated to a remote page", async () => {
+  const userData = await mkdtemp(join(tmpdir(), "moon-ipc-boundary-"));
+  const fixture = await startBrowserLifecycleFixture();
+  const application = await electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData } });
+  try {
+    const page = await shellWindow(application); await dismissOnboarding(page);
+    await application.evaluate(async ({ BrowserWindow }, url) => { await BrowserWindow.getAllWindows()[0]!.loadURL(url); }, fixture.origin);
+    const result = await page.evaluate(async () => {
+      const bridge = (window as unknown as { moonBrowser: { getTabs(): Promise<unknown> } }).moonBrowser;
+      try { await bridge.getTabs(); return "allowed"; } catch (error) { return String(error); }
+    });
+    expect(result).toContain("IPC origin");
+  } finally { await application.close(); await fixture.close(); await rm(userData, { recursive: true, force: true }); }
+});
+
+test("manages workspace metadata and deletes populated areas without orphan tabs", async () => {
+  const userData = await mkdtemp(join(tmpdir(), "moon-areas-"));
+  const launch = () => electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData } });
+  let application = await launch();
+  try {
+    const page = await shellWindow(application); await dismissOnboarding(page);
+    await page.evaluate(async () => {
+      const bridge = (window as unknown as { moonBrowser: {
+        mutateProfileData(value: unknown): Promise<void>; createTab(url: string, area: string): Promise<unknown>;
+      } }).moonBrowser;
+      await bridge.mutateProfileData({ type: "workspace:save", value: { id: "area-a", name: "Estudos", position: 0, color: "#123456", icon: "📚" } });
+      await bridge.mutateProfileData({ type: "workspace:save", value: { id: "area-b", name: "Pesquisa", position: 1 } });
+      await bridge.createTab("https://example.com", "area-a");
+      await bridge.mutateProfileData({ type: "workspace:save", value: { id: "area-a", name: "Arquivada", position: 0, archived: true } });
+      await bridge.mutateProfileData({ type: "workspace:save", value: { id: "area-a", name: "Restaurada", position: 0, archived: false } });
+      await bridge.mutateProfileData({ type: "workspace:delete", id: "area-a", tabs: "move", targetId: "area-b" });
+    });
+    const readState = (page: Page) => page.evaluate(async () => {
+      const bridge = (window as unknown as { moonBrowser: { getProfileData(): Promise<{ workspaces: { id: string }[] }>; getTabs(): Promise<{ workspaceId?: string }[]> } }).moonBrowser;
+      return { areas: (await bridge.getProfileData()).workspaces, tabs: await bridge.getTabs() };
+    });
+    const first = await readState(page); expect(first.areas.some(area => area.id === "area-a")).toBe(false); expect(first.tabs.some(tab => tab.workspaceId === "area-b")).toBe(true); expect(first.tabs.some(tab => tab.workspaceId === "area-a")).toBe(false);
+    await application.close(); application = await launch(); const restored = await readState(await shellWindow(application));
+    expect(restored.tabs.every(tab => restored.areas.some(area => area.id === tab.workspaceId))).toBe(true);
+  } finally { await application.close(); await rm(userData, { recursive: true, force: true }); }
 });

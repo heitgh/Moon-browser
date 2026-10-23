@@ -15,12 +15,13 @@ export function isPublicAddress(address: string): boolean {
   // Conservative IPv6 global-unicast policy; excludes mapped, NAT64 and tunnels.
   if (isIP(address) !== 6) return false;
   const value = address.toLowerCase();
-  return /^[23][0-9a-f]{3}:/.test(value) && !value.startsWith("2001:") && !value.startsWith("2002:") && !value.startsWith("3fff:");
+  return /^[23][0-9a-f]{3}:/.test(value) && !/^2001:(?:0:|db8:|2:|1[0-9a-f]:|2[0-9a-f]:)/.test(value) && !value.startsWith("2002:") && !value.startsWith("3fff:");
 }
 
 export async function resolvePublicImage(url: URL): Promise<{ address: string; family: number }> {
   if (url.protocol !== "https:" || url.username || url.password || (url.port && url.port !== "443")) throw new Error("Images require public HTTPS on port 443");
   const hostname = url.hostname.replace(/^\[|\]$/g, "");
+  if (/(^|\.)(localhost|local|internal)$/.test(hostname.toLowerCase())) throw new Error("Local image hostname is not allowed");
   const addresses = isIP(hostname) ? [{ address: hostname, family: isIP(hostname) }] : await lookup(hostname, { all: true, verbatim: true });
   if (!addresses.length || addresses.some(entry => !isPublicAddress(entry.address))) throw new Error("Private or special image destination is not allowed");
   return addresses[0]!;
