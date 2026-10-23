@@ -81,17 +81,31 @@ test("preserves OAuth popup semantics and restores the shell after HTML fullscre
     await shell.getByLabel("Abrir endereço").click();
     await expect.poll(() => shell.evaluate(origin => (window as unknown as { moonBrowser: { getTabs(): Promise<Array<{ url: string }>> } }).moonBrowser.getTabs().then(tabs => tabs.some(tab => tab.url === `${origin}/`)), fixture.origin)).toBe(true);
 
-    const popupPromise = application.waitForEvent("window");
-    await application.evaluate(async ({ webContents }, origin) => {
+    // Tab metadata is updated before the renderer finishes navigating. Wait for
+    // the actual document before opening the popup, including on slower Windows CI.
+    await expect.poll(() => application.evaluate(async ({ webContents }, origin) => {
+      const contents = webContents.getAllWebContents().find(candidate => candidate.getURL() === `${origin}/`);
+      return contents ? await contents.executeJavaScript("Boolean(document.querySelector('#popup'))") : false;
+    }, fixture.origin)).toBe(true);
+    expect(await application.evaluate(async ({ webContents }, origin) => {
       const contents = webContents.getAllWebContents().find(candidate => candidate.getURL() === `${origin}/`);
       if (!contents) return false;
-      await contents.executeJavaScript("document.querySelector('#popup').click()", true);
-      return true;
+      return await contents.executeJavaScript("document.querySelector('#popup').click(); Boolean(window.popupRef)", true);
+    }, fixture.origin)).toBe(true);
+    // Inspect the native popup rather than depending on Playwright's window event.
+    await expect.poll(() => application.evaluate(({ BrowserWindow }, origin) =>
+      BrowserWindow.getAllWindows().some(window => window.webContents.getURL() === `${origin}/oauth`), fixture.origin)).toBe(true);
+    await expect.poll(() => application.evaluate(async ({ BrowserWindow }, origin) => {
+      const popup = BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === `${origin}/oauth`);
+      return popup ? await popup.webContents.executeJavaScript("Boolean(window.opener && document.querySelector('#complete'))") : false;
+    }, fixture.origin)).toBe(true);
+    await application.evaluate(async ({ BrowserWindow }, origin) => {
+      const popup = BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === `${origin}/oauth`);
+      if (!popup) throw new Error("OAuth popup is unavailable");
+      await popup.webContents.executeJavaScript("document.querySelector('#complete').click()", true);
     }, fixture.origin);
-    const popup = await popupPromise;
-    await popup.waitForURL(`${fixture.origin}/oauth`);
-    await popup.locator("#complete").click();
-    await expect.poll(() => application.windows().some(page => page.url() === `${fixture.origin}/oauth`)).toBe(false);
+    await expect.poll(() => application.evaluate(({ BrowserWindow }, origin) =>
+      BrowserWindow.getAllWindows().some(window => window.webContents.getURL() === `${origin}/oauth`), fixture.origin)).toBe(false);
     await expect.poll(() => application.evaluate(async ({ webContents }, origin) => {
       const contents = webContents.getAllWebContents().find(candidate => candidate.getURL() === `${origin}/`);
       return contents ? await contents.executeJavaScript("window.oauthResult") : undefined;
