@@ -35,6 +35,10 @@ export class BetterSqliteConnection implements DatabaseConnection {
       ...(this.options.readonly === undefined ? {} : { readonly: this.options.readonly }),
       ...(this.options.fileMustExist === undefined ? {} : { fileMustExist: this.options.fileMustExist })
     });
+    // Nexus Inc. — refuse damaged files before opening a writable profile.
+    try {
+      if (database.pragma("integrity_check", { simple: true }) !== "ok") throw new Error("O banco do perfil está danificado. Preserve o arquivo e restaure um backup.");
+    } catch (error) { database.close(); throw error; }
     database.pragma("foreign_keys = ON");
     database.pragma(`busy_timeout = ${this.options.timeoutMs ?? 5_000}`);
     if (!this.options.readonly) {
@@ -42,6 +46,10 @@ export class BetterSqliteConnection implements DatabaseConnection {
       database.pragma("synchronous = NORMAL");
     }
     this.#database = database;
+  }
+
+  async backup(destination: string): Promise<void> {
+    await this.#requireDatabase().backup(destination);
   }
 
   async close(): Promise<void> {

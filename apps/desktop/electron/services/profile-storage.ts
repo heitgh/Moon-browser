@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { emptyMemory, parseMemory, scopeId, type ResearchMemory } from "../../../../packages/research/research.js";
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile, readdir, rm, chmod } from "node:fs/promises";
 import { join } from "node:path";
 import type { BrowserTab } from "@moon/platform";
 import type { NoteModel } from "@moon/core";
@@ -66,7 +67,18 @@ export class ProfileStorage {
   async open(): Promise<void> {
     await mkdir(this.profileDirectory, { recursive: true, mode: 0o700 });
     await this.#database.connect();
-    await new MigrationManager(this.#database, foundationMigrations).migrate();
+    try {
+      await new MigrationManager(this.#database, foundationMigrations, async () => {
+        const directory = join(this.profileDirectory, "migration-backups");
+        await mkdir(directory, { recursive: true, mode: 0o700 });
+        const filename = `before-migration-${Date.now()}-${randomUUID()}.sqlite3`;
+        const destination = join(directory, filename);
+        try { await this.#connection.backup(destination); await chmod(destination, 0o600); }
+        catch (error) { await rm(destination, { force: true }).catch(() => undefined); throw error; }
+        const backups = (await readdir(directory)).filter(name => /^before-migration-\d+-[a-f0-9-]+\.sqlite3$/.test(name)).sort().reverse();
+        for (const old of backups.slice(3)) await rm(join(directory, old));
+      }).migrate();
+    } catch (error) { await this.#database.close(); throw error; }
   }
 
   async close(): Promise<void> {

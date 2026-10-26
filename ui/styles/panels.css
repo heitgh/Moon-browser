@@ -117,3 +117,14 @@
 
 .moon-update-notice { position: fixed; right: 16px; bottom: 16px; z-index: 10000; width: min(380px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 18px; border: 1px solid var(--moon-user-accent, #7c5cff); border-radius: 14px; background: var(--moon-surface, #181922); color: var(--moon-text, #fff); box-shadow: 0 8px 32px #0005; }
 .moon-update-notice p { white-space: pre-wrap; font-size: 12px; }
+
+/* Nexus Inc. — download shelf participates in layout, never overlays a native web view. */
+.moon-download-shelf { order: 5; flex: 0 0 auto; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--moon-border); background: var(--moon-surface); max-height: 180px; overflow: auto; }
+.moon-download-shelf[hidden] { display: none; }
+.moon-download-shelf-item { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; min-width: 0; }
+.moon-download-shelf-copy { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.moon-download-shelf-copy strong, .moon-download-shelf-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.moon-download-shelf-copy progress { width: 100%; height: 5px; accent-color: var(--moon-accent); }
+.moon-update-notice progress { width: 100%; accent-color: var(--moon-accent); }
+
+.moon-browser-main > .moon-update-notice { position: static; order: 6; flex: 0 0 auto; width: auto; margin: 8px 12px; max-height: 28vh; padding: 12px; }

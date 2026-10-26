@@ -28,7 +28,7 @@ on:
       tag:
         description: "Tag da release (ex.: v0.6.0-alpha.1)"
         required: true
-        default: "v0.6.0-alpha.3"
+        default: "v0.6.0-alpha.5"
         type: string
       publish_release:
         description: "Publicar os instaladores em GitHub Releases"
@@ -122,6 +122,8 @@ jobs:
           name: ${{ matrix.artifact }}
           path: |
             release/*.exe
+            release/*.exe.blockmap
+            release/alpha.yml
             release/SHA256SUMS-windows.txt
           if-no-files-found: error
           retention-days: 14
@@ -133,6 +135,7 @@ jobs:
           name: ${{ matrix.artifact }}
           path: |
             release/*.AppImage
+            release/alpha-linux.yml
             release/*.deb
             release/*.rpm
             release/*.pacman
@@ -201,6 +204,11 @@ jobs:
             echo "Expected six installers and two checksum files; refusing incomplete publication." >&2
             exit 1
           fi
+          metadata=( release/alpha.yml release/alpha-linux.yml )
+          for manifest in "${metadata[@]}"; do
+            if [[ ! -s "$manifest" ]]; then echo "Missing native update metadata: $manifest" >&2; exit 1; fi
+          done
+          assets+=( "${metadata[@]}" release/*.exe.blockmap )
           notes_file="docs/releases/${RELEASE_TAG}.md"
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release já existe. Use uma nova versão; artefatos publicados são imutáveis." >&2

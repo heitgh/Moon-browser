@@ -3,11 +3,12 @@ updates:
   - package-ecosystem: npm
     directory: "/"
     schedule:
-      interval: weekly
+      interval: daily
     open-pull-requests-limit: 5
     groups:
       development-dependencies:
         dependency-type: development
+        exclude-patterns: ["electron"]
       production-dependencies:
         dependency-type: production
   - package-ecosystem: github-actions

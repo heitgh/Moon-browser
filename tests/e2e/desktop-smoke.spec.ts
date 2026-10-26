@@ -609,8 +609,9 @@ test("shows checked release notes, defers updates and opens only the checked rel
     });
     const page = await shellWindow(application); await dismissOnboarding(page);
     const notice = page.getByLabel("Atualização disponível", { exact: true }); await expect(notice).toContainText("v99.0.0"); await expect(notice).toContainText("Novidades de teste");
-    await page.getByLabel("Configurações", { exact: true }).click(); await page.getByLabel("Workspaces e dados", { exact: true }).click();
+    // Dismiss the browsing-surface notice before opening the modal settings overlay.
     await page.getByLabel("Adiar atualização", { exact: true }).click(); await expect(notice).toHaveCount(0);
+    await page.getByLabel("Configurações", { exact: true }).click(); await page.getByLabel("Workspaces e dados", { exact: true }).click();
     await page.getByLabel("Verificar atualizações", { exact: true }).click(); await page.getByLabel("Baixar atualização", { exact: true }).click();
     expect(await application.evaluate(() => (globalThis as unknown as { checkedUpdateUrl: string }).checkedUpdateUrl)).toBe("https://github.com/heitgh/Moon-browser/releases/tag/v99.0.0");
   } finally { await application.close(); await rm(userData, { recursive: true, force: true }); }
@@ -629,4 +630,36 @@ test("records a local many-tab memory sample without crashing renderers", async 
     await writeFile(samplePath, JSON.stringify({ beforeKiB: before, ...sample }));
     await test.info().attach("local-memory-sample", { path: samplePath, contentType: "application/json" });
   } finally { await application.close(); await fixture.close(); await rm(userData, { recursive: true, force: true }); }
+});
+
+// Nexus Inc. — real streamed download stays visible while a remote WebContentsView is active.
+test("shows a live download shelf beneath the browsing surface", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "moon-download-shelf-"));
+  const server = createServer((request, response) => {
+    if (request.url !== "/file") { response.end("<!doctype html><h1>Download fixture</h1>"); return; }
+    response.writeHead(200, { "content-type": "application/octet-stream", "content-disposition": 'attachment; filename="progress-test.bin"', "content-length": 20 * 16384 });
+    let count = 0;
+    const timer = setInterval(() => { response.write(Buffer.alloc(16384)); if (++count === 20) { clearInterval(timer); response.end(); } }, 100);
+    response.once("close", () => clearInterval(timer));
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const application = await electron.launch({ args: [...platformArguments, `--user-data-dir=${directory}`, "."], env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: directory } });
+  try {
+    const shell = await shellWindow(application); await dismissOnboarding(shell);
+    await shell.getByPlaceholder("Pesquise ou digite um endereço").fill(origin);
+    await shell.getByLabel("Abrir endereço").click();
+    await expect.poll(() => application.evaluate(({ webContents }, url) => webContents.getAllWebContents().some(wc => wc.getURL().startsWith(url)), origin)).toBe(true);
+    await application.evaluate(({ webContents }, args) => {
+      const target = webContents.getAllWebContents().find(wc => wc.getURL().startsWith(args.origin))!;
+      target.session.once("will-download", (_event, item) => item.setSavePath(args.path));
+      target.downloadURL(`${args.origin}/file`);
+    }, { origin, path: join(directory, "progress-test.bin") });
+    const shelf = shell.getByLabel("Acompanhamento de downloads", { exact: true });
+    await expect(shelf).toBeVisible(); await expect(shelf).toContainText("progress-test.bin");
+    await expect(shelf.getByRole("progressbar")).toBeVisible();
+    await expect(shelf).toContainText("Concluído");
+    const geometry = await shell.evaluate(() => ({ shelf: document.querySelector(".moon-download-shelf")!.getBoundingClientRect().top, viewport: document.querySelector(".moon-browser-viewport")!.getBoundingClientRect().bottom }));
+    expect(geometry.viewport).toBeLessThanOrEqual(geometry.shelf + 1);
+  } finally { await application.close(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(directory, { recursive: true, force: true }); }
 });

@@ -58,3 +58,10 @@ portable:
 mac:
   category: public.app-category.productivity
   target: dmg
+
+# Native updates are pinned to the release selected by the main-process checker.
+publish:
+  provider: github
+  owner: heitgh
+  repo: Moon-browser
+  releaseType: prerelease

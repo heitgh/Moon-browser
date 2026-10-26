@@ -32,11 +32,35 @@ export class ElectronDownloadManager {
 
   constructor(readonly windows: WindowManager) {}
 
-  attach(session: Session, profileId = "default"): void {
+  // Nexus Inc. — private download metadata belongs to its window, never the profile.
+  scopeForWindow(windowId: string): string {
+    const profileId = this.windows.profileId(windowId);
+    return this.windows.isPrivate(windowId) ? JSON.stringify(["private", profileId, windowId]) : profileId;
+  }
+
+  attach(session: Session, profileId = "default", privateWindowId?: string): void {
     if (this.#attachedSessions.has(session)) return;
     this.#attachedSessions.add(session);
+    let released = false;
+    if (privateWindowId) {
+      if (!this.windows.isPrivate(privateWindowId) || this.scopeForWindow(privateWindowId) !== profileId) throw new Error("Invalid private download scope");
+      this.windows.require(privateWindowId).once("closed", () => { released = true; this.forgetScope(profileId); });
+    }
     this.#sessionProfiles.set(session, profileId);
-    session.on("will-download", (_event, item) => this.#track(item, this.#sessionProfiles.get(session) ?? profileId));
+    session.on("will-download", (event, item) => {
+      if (released) { event.preventDefault(); return; }
+      this.#track(item, this.#sessionProfiles.get(session) ?? profileId);
+    });
+  }
+
+  forgetScope(scope: string): void {
+    for (const [id, itemScope] of this.#itemProfiles) {
+      if (itemScope !== scope) continue;
+      const native = this.#nativeItems.get(id);
+      const active = ["in-progress", "paused"].includes(this.#items.get(id)?.state ?? "");
+      this.#items.delete(id); this.#nativeItems.delete(id); this.#itemProfiles.delete(id);
+      if (active) native?.cancel();
+    }
   }
 
   list(profileId?: string): readonly ManagedDownload[] {
@@ -104,6 +128,7 @@ export class ElectronDownloadManager {
     this.#broadcast();
 
     item.on("updated", (_event, state) => {
+      if (!this.#items.has(id)) return;
       const receivedBytes = item.getReceivedBytes();
       const currentTotal = Math.max(0, item.getTotalBytes());
       this.#update(id, {
@@ -121,6 +146,7 @@ export class ElectronDownloadManager {
     });
 
     item.once("done", (_event, state) => {
+      if (!this.#items.has(id)) return;
       this.#update(id, {
         savePath: item.getSavePath(),
         state: state === "completed" ? "completed" : state === "cancelled" ? "cancelled" : "failed",
@@ -142,7 +168,7 @@ export class ElectronDownloadManager {
     for (const window of this.windows.list()) {
       if (!window.webContents.isDestroyed()) {
         const windowId = this.windows.idForWebContents(window.webContents);
-        if (windowId) window.webContents.send("download:updated", this.list(this.windows.profileId(windowId)));
+        if (windowId) window.webContents.send("download:updated", this.list(this.scopeForWindow(windowId)));
       }
     }
   }

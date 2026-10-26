@@ -71,13 +71,13 @@ export function registerProductIpc(
     return value;
   };
 
-  router.register("download:list", event => downloads.list(profileIdFor(event)));
-  router.register("download:pause", (event, payload: IdPayload) => downloads.pause(idFrom(payload), profileIdFor(event)));
-  router.register("download:resume", (event, payload: IdPayload) => downloads.resume(idFrom(payload), profileIdFor(event)));
-  router.register("download:cancel", (event, payload: IdPayload) => downloads.cancel(idFrom(payload), profileIdFor(event)));
-  router.register("download:open", (event, payload: IdPayload) => downloads.open(idFrom(payload), profileIdFor(event)));
-  router.register("download:show-in-folder", (event, payload: IdPayload) => downloads.showInFolder(idFrom(payload), profileIdFor(event)));
-  router.register("download:clear-finished", event => downloads.clearFinished(profileIdFor(event)));
+  router.register("download:list", event => downloads.list(downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
+  router.register("download:pause", (event, payload: IdPayload) => downloads.pause(idFrom(payload), downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
+  router.register("download:resume", (event, payload: IdPayload) => downloads.resume(idFrom(payload), downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
+  router.register("download:cancel", (event, payload: IdPayload) => downloads.cancel(idFrom(payload), downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
+  router.register("download:open", (event, payload: IdPayload) => downloads.open(idFrom(payload), downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
+  router.register("download:show-in-folder", (event, payload: IdPayload) => downloads.showInFolder(idFrom(payload), downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
+  router.register("download:clear-finished", event => downloads.clearFinished(downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
 
   router.register("adblock:get-status", () => adblock.status());
   router.register("adblock:set-enabled", (_event, payload?: { readonly enabled?: boolean }) => {

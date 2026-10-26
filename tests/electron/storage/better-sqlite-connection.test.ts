@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BetterSqliteConnection } from "../../../packages/storage/adapters/better-sqlite-connection.js";
 import { MoonDatabase } from "../../../packages/storage/database/database.js";
 import { MigrationManager } from "../../../packages/storage/migrations/migration-manager.js";
@@ -52,4 +52,41 @@ describe("BetterSqliteConnection", () => {
     expect(await settings.get("global:temporary")).toBeUndefined();
     await connection.close();
   });
+});
+
+it("refuses a future schema without running migrations or the backup hook", async () => {
+  const { connection, database } = await createDatabase();
+  try {
+    await new MigrationManager(database, foundationMigrations).migrate();
+    await database.run("INSERT INTO moon_migrations(version,name,applied_at) VALUES(999,'future',0)");
+    const backup = vi.fn();
+    await expect(new MigrationManager(database, foundationMigrations, backup).migrate()).rejects.toThrow(/incompatível/);
+    expect(backup).not.toHaveBeenCalled();
+    expect(await database.get("SELECT version FROM moon_migrations WHERE version=999")).toEqual({ version: 999 });
+  } finally { await connection.close(); }
+});
+
+it("takes a consistent pre-migration snapshot and leaves it readable after migration failure", async () => {
+  const { connection, database } = await createDatabase();
+  const destination = join(temporaryDirectories.at(-1)!, "snapshot.sqlite3");
+  try {
+    await new MigrationManager(database, foundationMigrations).migrate();
+    const settings = new SettingsRepository(database); await settings.setValue("precious", { saved: true });
+    const next = { version: 2, name: "failure", up: async () => { await database.run("CREATE TABLE transient_test(id INTEGER)"); throw new Error("disk failure"); } };
+    await expect(new MigrationManager(database, [...foundationMigrations, next], () => connection.backup(destination)).migrate()).rejects.toThrow("disk failure");
+    expect(await settings.getValue("precious")).toEqual({ saved: true });
+    expect(await database.get("SELECT name FROM sqlite_master WHERE name='transient_test'")).toBeUndefined();
+    const snapshot = new BetterSqliteConnection(destination, { readonly: true });
+    await snapshot.connect();
+    try { expect(await new SettingsRepository(new MoonDatabase(snapshot)).getValue("precious")).toEqual({ saved: true }); }
+    finally { await snapshot.close(); }
+  } finally { await connection.close(); }
+});
+
+it("does not mutate schema when the snapshot cannot be written", async () => {
+  const { connection, database } = await createDatabase();
+  try {
+    await expect(new MigrationManager(database, foundationMigrations, async () => { throw new Error("no space"); }).migrate()).rejects.toThrow("no space");
+    expect(await database.get("SELECT name FROM sqlite_master WHERE name='moon_migrations'")).toBeUndefined();
+  } finally { await connection.close(); }
 });

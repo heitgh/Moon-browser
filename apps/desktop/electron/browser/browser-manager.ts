@@ -149,7 +149,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
             : `persist:profile:${profileId}:default`
       }
     });
-    this.downloads?.attach(surface.view.webContents.session, profileId);
+    this.downloads?.attach(surface.view.webContents.session, this.downloads.scopeForWindow(windowId), this.windows.isPrivate(windowId) ? windowId : undefined);
     this.requestPipeline?.attach(surface.view.webContents.session);
     configureCompatibilityWebContents(surface.view.webContents);
     this.#installPermissionHandler(surface.view.webContents.session);
@@ -519,7 +519,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     contents.on("did-create-window", popup => {
       this.#auxiliaryWindows.set(popup.id, { tabId: id, window: popup });
       popup.setMenuBarVisibility(false);
-      this.downloads?.attach(popup.webContents.session, this.windows.profileId(windowId));
+      this.downloads?.attach(popup.webContents.session, this.downloads.scopeForWindow(windowId), this.windows.isPrivate(windowId) ? windowId : undefined);
       this.requestPipeline?.attach(popup.webContents.session);
       this.#installPermissionHandler(popup.webContents.session);
       this.#installWindowOpenHandler(id, windowId, popup.webContents);
