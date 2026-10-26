@@ -58,6 +58,10 @@ export interface MoonBrowserBridge {
   exportResearch?(content: string): Promise<boolean>;
   checkUpdates?(): Promise<{ version: string; notes: string; url: string } | null>;
   downloadUpdate?(): Promise<void>;
+  getUpdateState?(): Promise<import("../../packages/ipc/native-update-contract.js").NativeUpdateState>;
+  installUpdate?(): Promise<void>;
+  openUpdatePage?(): Promise<void>;
+  onUpdateState?(listener: (state: import("../../packages/ipc/native-update-contract.js").NativeUpdateState) => void): () => void;
   createTab(url?: string, workspaceId?: string): Promise<Tab>;
   getWindowContext(): Promise<{ readonly private: boolean; readonly guest: boolean; readonly profileId: string }>;
   createPrivateWindow(): Promise<void>;

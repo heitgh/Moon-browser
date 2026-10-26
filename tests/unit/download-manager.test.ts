@@ -105,3 +105,30 @@ describe("ElectronDownloadManager", () => {
     manager.pause(firstId, "profile-a"); expect(first.paused).toBe(true); expect(second.paused).toBe(false);
   });
 });
+
+// Nexus Inc. — privacy boundaries apply to events and every operation, not just rendering.
+it("isolates private downloads, discards metadata on close and ignores late native events", async () => {
+  const { ElectronDownloadManager } = await import("../../apps/desktop/electron/services/download-manager.js");
+  const normalEvents = vi.fn(); const privateEvents = vi.fn();
+  const normal = Object.assign(new EventEmitter(), { webContents: { id: 1, isDestroyed: () => false, send: normalEvents } });
+  const privateWindow = Object.assign(new EventEmitter(), { webContents: { id: 2, isDestroyed: () => false, send: privateEvents } });
+  const windows = { list: () => [normal, privateWindow], profileId: () => "profile-a", isPrivate: (id: string) => id === "private", require: () => privateWindow, idForWebContents: (wc: { id: number }) => wc.id === 1 ? "normal" : "private" };
+  const manager = new ElectronDownloadManager(windows as never);
+  const session = new EventEmitter(); const download = new FakeDownload();
+  const scope = manager.scopeForWindow("private");
+  manager.attach(session as never, scope, "private");
+  session.emit("will-download", {}, download);
+  const id = manager.list(scope)[0]!.id;
+  expect(manager.list("profile-a")).toEqual([]);
+  expect(normalEvents).toHaveBeenLastCalledWith("download:updated", []);
+  expect(privateEvents.mock.lastCall![1]).toHaveLength(1);
+  expect(() => manager.pause(id, "profile-a")).toThrow();
+  await expect(manager.open(id, "profile-a")).rejects.toThrow();
+  expect(() => manager.showInFolder(id, "profile-a")).toThrow();
+  manager.clearFinished("profile-a"); expect(manager.list(scope)).toHaveLength(1);
+  privateWindow.emit("closed"); expect(download.cancelled).toBe(true);
+  download.emit("updated", {}, "progressing"); download.emit("done", {}, "cancelled");
+  expect(manager.list(scope)).toEqual([]);
+  const preventDefault = vi.fn(); session.emit("will-download", { preventDefault }, new FakeDownload());
+  expect(preventDefault).toHaveBeenCalled(); expect(manager.list(scope)).toEqual([]);
+});

@@ -1,4 +1,20 @@
+## 0.6.0-alpha.5 — candidata
+
+- Nexus Inc.: atualização nativa do pacote Moon/Chromium, com progresso e confirmação de instalação (Windows instalado e AppImage).
+- Barra de downloads sob a página, com progresso, velocidade e controles.
+- Electron 45 e adaptação da API de clipboard; verificação diária de dependências.
+- Downloads privados isolados por janela, encerramento com prazo e backup antes de migrações.
+- Manifestos de atualização incluídos na release; publicação depende dos gates Windows/Linux.
+- Login real WhatsApp/Pinterest/Google e atualização entre dois pacotes instalados continuam sem homologação local.
+
 # Changelog
+
+## Próxima atualização — em desenvolvimento
+
+- Downloads de janelas anônimas isolados por janela, incluindo listagem, eventos e comandos; metadados removidos e downloads ativos cancelados ao fechar a janela.
+- Encerramento com prazo global de cinco segundos e diagnóstico local opt-in da etapa travada; saída forçada é último recurso e pode interromper gravações pendentes.
+- SQLite verifica integridade na abertura; schemas desconhecidos são recusados antes de migrar. Migrações de perfil criam snapshot consistente, mantendo até três cópias locais.
+- Implementação parcial, sem nova release ou instaladores. Estado e testes em [alpha.5 em desenvolvimento](docs/review/alpha5-security-stability.md).
 
 ## 0.6.0-alpha.4 — publicada como pré-release (2026-10-23)
 

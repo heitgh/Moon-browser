@@ -21,15 +21,15 @@ async function execute(action: ContextMenuAction, options: ElectronContextMenuOp
   if (action === "back") { if (contents.navigationHistory.canGoBack()) contents.navigationHistory.goBack(); return; }
   if (action === "forward") { if (contents.navigationHistory.canGoForward()) contents.navigationHistory.goForward(); return; }
   if (action === "reload") { contents.reload(); return; }
-  if (action === "copy-selection") { clipboard.writeText(params.selectionText); return; }
+  if (action === "copy-selection") { await clipboard.writeText(params.selectionText); return; }
   if (action === "search-selection") { await options.createTab(options.searchUrl(params.selectionText.trim().slice(0, 2_000)), tab); return; }
   if (action === "copy-image") { contents.copyImageAt(params.x, params.y); return; }
-  if (action === "copy-page-url") { clipboard.writeText(safeWebUrl(params.pageURL)); return; }
+  if (action === "copy-page-url") { await clipboard.writeText(safeWebUrl(params.pageURL)); return; }
   if (action === "open-page-new-tab") { await options.createTab(safeWebUrl(params.pageURL), tab); return; }
   if (action === "save-page") { contents.downloadURL(safeWebUrl(params.pageURL)); return; }
   if (action === "print") { await new Promise<void>((resolve, reject) => contents.print({ printBackground: true }, (success, reason) => success ? resolve() : reject(new Error(reason)))); return; }
   const url = action === "open-link" || action === "open-link-new-tab" || action === "copy-link" || action === "save-link" ? safeWebUrl(params.linkURL) : safeWebUrl(params.srcURL);
-  if (action === "copy-link" || action === "copy-media-url") { clipboard.writeText(url); return; }
+  if (action === "copy-link" || action === "copy-media-url") { await clipboard.writeText(url); return; }
   if (action === "open-link") { await options.navigate(tab.id, url); return; }
   if (action === "open-link-new-tab" || action === "open-media-new-tab") { await options.createTab(url, tab); return; }
   if (action === "save-link" || action === "save-media") contents.downloadURL(url);

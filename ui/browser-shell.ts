@@ -1,3 +1,5 @@
+import { DownloadShelf } from "./downloads/download-shelf.js";
+import type { NativeUpdateState } from "../packages/ipc/native-update-contract.js";
 import { builtinSiteIcon } from "./browser-shell/site-icons.js";
 import { ResearchPanel } from "./research/research-panel.js";
 import { MoonApp } from "./app/app.js";
@@ -132,6 +134,13 @@ class BrowserShell {
   #history: ProfileHistoryEntry[] = load<SavedLink[]>(KEYS.history, []).map(item => ({ ...item, schemaVersion: 2, startedAt: item.time, source: "legacy", navigationType: "other" }));
   #historyView: "classic" | "timeline" = "timeline";
   #downloads: readonly ManagedDownload[] = [];
+  #nativeUpdate: NativeUpdateState | undefined;
+  readonly #downloadShelf = new DownloadShelf({
+    open: () => this.#toggleDrawer("downloads"),
+    pause: id => { void this.#bridge?.pauseDownload(id).catch(error => this.#showError(error)); },
+    resume: id => { void this.#bridge?.resumeDownload(id).catch(error => this.#showError(error)); },
+    cancel: id => { void this.#bridge?.cancelDownload(id).catch(error => this.#showError(error)); }
+  });
   #notes = load<string>(KEYS.notes, "");
   #noteDocuments: ProfileNoteDocument[] = [];
   #shortcuts = load<Shortcut[]>(KEYS.shortcuts, []);
@@ -179,7 +188,7 @@ class BrowserShell {
     this.#bridge.onTabUpdated(update => this.#applyUpdate(update));
     this.#bridge.onTabClosed(({ tabId }) => { void this.#handleClosed(tabId); });
     this.#bridge.onFullscreenChanged?.(state => { document.documentElement.dataset.moonHtmlFullscreen = state.active ? "true" : "false"; });
-    this.#bridge.onDownloadsUpdated(downloads => { this.#downloads = downloads; this.#renderDrawer(); this.#refreshHomeData(); });
+    this.#bridge.onDownloadsUpdated(downloads => { this.#downloads = downloads; this.#downloadShelf.render(downloads, this.#nativeUpdate); this.#renderDrawer(); this.#refreshHomeData(); });
     this.#bridge.onAdblockStatus(status => { this.#adblock = status; this.#renderAdblock(); this.#renderDrawer(); });
     this.#bridge.onPermissionRequested(request => this.#permissionController?.enqueue(request));
     try {
@@ -194,6 +203,11 @@ class BrowserShell {
       await this.#migrateLegacyProfile();
       await this.#reloadProfileData();
       this.#downloads = await this.#bridge.getDownloads();
+      this.#downloadShelf.render(this.#downloads);
+      if (!this.#windowPrivate && !this.#windowGuest) {
+        this.#nativeUpdate = await this.#bridge.getUpdateState?.();
+        this.#bridge.onUpdateState?.(state => { this.#nativeUpdate = state; this.#downloadShelf.render(this.#downloads, state); this.#renderNativeUpdateControls(); });
+      }
       this.#adblock = await this.#bridge.getAdblockStatus();
       const preferredAdblock = load<boolean>(KEYS.adblock, true);
       if (this.#adblock.enabled !== preferredAdblock) {
@@ -204,22 +218,48 @@ class BrowserShell {
       const active = tabs.find(tab => tab.active);
       this.#activeTabId = active?.id; this.#workspaceId = active?.workspaceId ?? this.#workspaceId;
       if (tabs.length === 0) await this.#createTab(); else this.#render();
-      if (!this.#windowPrivate && !this.#windowGuest) setTimeout(() => { void this.#checkUpdates(false); }, 1000);
+      if (!this.#windowPrivate && !this.#windowGuest) {
+        const check = (): void => { if (load<boolean>("moon:automatic-updates", true)) void this.#checkUpdates(false); };
+        setTimeout(check, 1000); setInterval(check, 6 * 60 * 60 * 1000);
+      }
       if (!this.#windowPrivate && shouldShowOnboarding()) await this.#openOnboarding();
     } catch (error) { this.#showError(error); }
   }
 
   async #checkUpdates(manual = true): Promise<void> {
+    if (this.#windowPrivate || this.#windowGuest) { if (manual) this.#flash("Atualize em uma janela normal do Moon."); return; }
     try {
       const update = await this.#bridge?.checkUpdates?.();
-      if (!update) { if (manual) this.#flash("Você está usando a versão mais recente deste canal."); return; }
-      if (!manual && sessionStorage.getItem("moon:update-later") === update.version) return;
+      if (!update && !manual) return;
+      if (update && !manual && sessionStorage.getItem("moon:update-later") === update.version) return;
       document.querySelector(".moon-update-notice")?.remove();
       const notice = el("section", "moon-update-notice"); notice.setAttribute("aria-label", "Atualização disponível"); notice.setAttribute("role", "status");
-      notice.append(el("strong", "", `Moon ${update.version} disponível`), el("p", "", update.notes));
-      const download = btn("moon-primary-button", "Baixar atualização"); download.textContent = "Baixar"; download.addEventListener("click", () => { void this.#bridge?.downloadUpdate?.().catch(error => this.#showError(error)); });
-      const later = btn("moon-secondary-button", "Adiar atualização"); later.textContent = "Depois"; later.addEventListener("click", () => { sessionStorage.setItem("moon:update-later", update.version); notice.remove(); }); notice.append(download, later); this.container.append(notice);
+      notice.append(el("strong", "", update ? `Moon ${update.version} disponível` : "Moon e Chromium — versão atual"), el("p", "", update?.notes ?? "Nenhuma versão mais recente disponível neste canal."));
+      const engine = this.#nativeUpdate;
+      notice.append(el("p", "", `Moon ${engine?.moon ?? ""} · Chromium ${engine?.chromium ?? "—"} · Electron ${engine?.electron ?? "—"}. O motor é atualizado junto do Moon, não separadamente.`));
+      const preference = el("label"); const automatic = el("input"); automatic.type = "checkbox"; automatic.checked = load<boolean>("moon:automatic-updates", true); automatic.addEventListener("change", () => save("moon:automatic-updates", automatic.checked)); preference.append(automatic, el("span", "", "Verificar atualizações ao abrir e a cada 6 horas")); notice.append(preference);
+      if (update) {
+        const download = btn("moon-primary-button", "Baixar atualização"); download.textContent = engine?.supported ? "Baixar Moon e Chromium" : "Baixar instalador oficial"; download.dataset.updateDownload = "true";
+        download.addEventListener("click", () => { void this.#bridge?.downloadUpdate?.().catch(error => this.#showError(error)); });
+        const page = btn("moon-secondary-button", "Abrir página oficial da atualização"); page.textContent = "Página oficial"; page.addEventListener("click", () => { void this.#bridge?.openUpdatePage?.().catch(error => this.#showError(error)); }); notice.append(download, page);
+        if (!engine?.supported) notice.append(el("p", "", "Este formato exige instalação manual. Atualização nativa: Windows instalado e Linux AppImage."));
+      }
+      notice.append(el("div", "moon-update-native"));
+      const later = btn("moon-secondary-button", "Adiar atualização"); later.textContent = "Depois"; later.addEventListener("click", () => { if (update) sessionStorage.setItem("moon:update-later", update.version); notice.remove(); }); notice.append(later); (this.container.querySelector(".moon-customization-modal") ?? this.container.querySelector(".moon-browser-main"))!.append(notice);
+      this.#renderNativeUpdateControls();
     } catch (error) { if (manual) this.#showError(error); }
+  }
+
+  #renderNativeUpdateControls(): void {
+    const container = this.container.querySelector(".moon-update-native"); const state = this.#nativeUpdate;
+    const download = this.container.querySelector<HTMLButtonElement>("[data-update-download]");
+    if (download) download.disabled = Boolean(state && ["checking", "downloading", "downloaded", "installing"].includes(state.phase));
+    if (!container || !state) return;
+    container.replaceChildren();
+    if (state.phase === "idle") return;
+    container.append(el("p", "", state.message ?? "Conferindo atualização…"));
+    if (["checking", "downloading"].includes(state.phase)) { const progress = el("progress"); progress.max = 100; progress.setAttribute("aria-label", "Progresso da atualização do Moon"); if (state.percent !== undefined) progress.value = state.percent; container.append(progress); }
+    if (state.phase === "downloaded") { const install = btn("moon-primary-button", "Instalar atualização e reiniciar Moon"); install.textContent = "Instalar e reiniciar"; install.addEventListener("click", () => { void this.#bridge?.installUpdate?.().catch(error => this.#showError(error)); }); container.append(install); }
   }
 
   #build(): void {
@@ -252,7 +292,7 @@ class BrowserShell {
 
     const content = el("div", "moon-content"); this.#renderHomeShortcuts(); this.#stage.append(this.#home, this.#viewport, this.#status); content.append(this.#stage);
     this.#zenExit.append(el("span", "", "Sair do Foco")); this.#zenExit.hidden = true; this.#zenExit.addEventListener("click", () => this.#focus?.end());
-    main.append(tabsBar, this.#toolbar.element, this.#workspaceBar.element, content); shell.append(this.#chromeWallpaper, rail, this.#drawer, main); this.container.replaceChildren(shell, this.#zenExit);
+    main.append(tabsBar, this.#toolbar.element, this.#workspaceBar.element, content, this.#downloadShelf.element); shell.append(this.#chromeWallpaper, rail, this.#drawer, main); this.container.replaceChildren(shell, this.#zenExit);
     this.#renderAdblock();
   }
 
@@ -446,7 +486,7 @@ class BrowserShell {
       const header = el("div", "moon-download-header");
       header.append(el("strong", "", download.filename), el("span", `moon-download-state is-${download.state}`, this.#downloadStateLabel(download.state)));
       const progress = el("progress", "moon-download-progress");
-      progress.max = 100; progress.value = download.percentage ?? 0;
+      progress.max = 100; progress.setAttribute("aria-label", `Progresso: ${download.filename}`); if (download.percentage !== null) progress.value = download.percentage;
       const detail = el("div", "moon-download-detail", `${this.#bytes(download.receivedBytes)} / ${download.totalBytes > 0 ? this.#bytes(download.totalBytes) : "tamanho desconhecido"}`);
       const actions = el("div", "moon-download-actions");
       if (download.state === "in-progress") actions.append(this.#downloadAction("Pausar", "pause", () => void this.#bridge?.pauseDownload(download.id)));

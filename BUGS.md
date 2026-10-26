@@ -31,3 +31,11 @@ Ao reportar regressão, registre SO, versão do Moon, URL, horário, passos, com
 | MB-016 | Timeout intermitente ao encerrar Electron no E2E | Aberto: workflow independente encontrou timeout em Close context no Linux e no ensaio de perfis Windows; a mesma árvore passou no workflow de release. A repetição completa passou em Windows/Linux; causa raiz não comprovada, investigação permanece aberta. |
 
 Detalhes: [relatório de validação](docs/review/next-update-validation.md).
+
+## Próxima atualização — implementação em desenvolvimento
+
+- **Downloads anônimos:** escopo por janela e remoção de metadados implementados; teste unitário negativo cobre listagem, eventos, comandos e callbacks tardios. E2E de transferência privada real ainda pendente.
+- **MB-016:** prazo global e ensaio de 30 ciclos adicionados. Foi identificada e corrigida outra condição de corrida: fechar durante loadFile resultava em saída 1. Isso não comprova a causa dos timeouts históricos; permanece pendente a homologação Windows/desktop.
+- **Migrações:** backup prévio consistente, guarda de versões desconhecidas e integridade na abertura implementados e testados. UI de recuperação não implementada.
+
+Veja [validação do primeiro conjunto](docs/review/alpha5-security-stability.md). Nenhuma nova release foi publicada por esta alteração.

@@ -12,6 +12,10 @@ const subscribe = (channel, listener) => {
 contextBridge.exposeInMainWorld("moonBrowser", Object.freeze({
   checkUpdates: () => invoke("updates:check"),
   downloadUpdate: () => invoke("updates:download"),
+  getUpdateState: () => invoke("updates:status"),
+  installUpdate: () => invoke("updates:install"),
+  openUpdatePage: () => invoke("updates:open-page"),
+  onUpdateState: listener => subscribe("updates:state", listener),
   windowAction: action => invoke("browser:window-action", action),
   createTab: (url, workspaceId) => invoke("browser:create-tab", {
     ...(url ? { url } : {}),

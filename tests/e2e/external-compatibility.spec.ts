@@ -7,6 +7,7 @@ test.skip(process.env.MOON_EXTERNAL_COMPAT !== "1", "external compatibility prob
 
 for (const site of [
   { name: "Pinterest", url: "https://www.pinterest.com/login/", hosts: ["pinterest.com"] },
+  { name: "WhatsApp", url: "https://web.whatsapp.com/", hosts: ["web.whatsapp.com"] },
   { name: "TikTok", url: "https://www.tiktok.com/", hosts: ["tiktok.com"] },
 ]) {
   test(`${site.name} opens without a renderer crash or internal error leak`, async () => {

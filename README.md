@@ -16,6 +16,12 @@
 
 </div>
 
+## Atualização v0.6.0-alpha.5 — candidata à publicação
+
+Atualização nativa de Moon + Chromium no Windows instalado e Linux AppImage: consulta ao abrir e a cada seis horas, download com progresso e instalação após confirmação. O Chromium acompanha o Electron e exige um pacote novo do Moon; não há atualização isolada do Chrome. Windows portátil e demais pacotes Linux mantêm o link para instalação manual. Versões antigas precisam instalar esta atualização uma vez para receber o novo mecanismo.
+
+A barra inferior acompanha downloads com progresso, velocidade, pausa, retomada e cancelamento. Esta candidata também isola downloads anônimos, limita o tempo de encerramento e cria backup antes de migrar o perfil. Consulte [notas e limites de validação](docs/releases/v0.6.0-alpha.5.md). A atualização do motor não comprova resolução do login no WhatsApp Web.
+
 ## Atualização v0.6.0-alpha.4
 
 Segurança de IPC, origem de permissões, downloads de imagens com DNS fixado, gerenciamento de áreas, ícones locais e aviso de atualização estão disponíveis nesta pré-release.

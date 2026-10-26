@@ -1,10 +1,13 @@
 import { UpdateChecker } from "../services/update-checker.js";
 import { parseProfileDataMutation } from "../../../../packages/ipc/profile-data-contract.js";
+import { runShutdown } from "./shutdown.js";
+import { LocalDiagnostics } from "../services/local-diagnostics.js";
 import { installLocalDiagnostics } from "../services/local-diagnostics.js";
 import { DEFAULT_FEATURE_FLAGS, featureEnabled } from "../../../../config/feature-flags.js";
 import { registerResearchIpc } from "../ipc/research-ipc.js";
 import { changeInterfaceZoom, installInterfaceWheel, installZoomShortcuts } from "./interface-zoom.js";
-import { app, ipcMain, shell } from "electron";
+import { NativeUpdater } from "../services/native-updater.js";
+import { app, ipcMain, shell, dialog } from "electron";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { ElectronBrowserManager } from "../browser/browser-manager.js";
@@ -88,8 +91,32 @@ app.whenReady().then(async () => {
   installLocalDiagnostics(app);
   const offlineTest = process.env.NODE_ENV === "test" && process.env.MOON_TEST_OFFLINE === "1";
   const updates = new UpdateChecker(app.getVersion());
-  ipc.register("updates:check", () => offlineTest ? null : updates.check());
-  ipc.register("updates:download", async () => { if (!updates.available) throw new Error("No checked update is available"); await shell.openExternal(updates.available.url); });
+  ipc.register("updates:check", event => { updateWindow(event); return offlineTest ? null : updates.check(); });
+  const nativeUpdates = new NativeUpdater({ packaged: app.isPackaged, platform: process.platform, portable: Boolean(process.env.PORTABLE_EXECUTABLE_DIR), appImage: Boolean(process.env.APPIMAGE), moon: app.getVersion(), chromium: process.versions.chrome, electron: process.versions.electron }, state => {
+    for (const window of windows.list()) {
+      const id = windows.idForWebContents(window.webContents);
+      if (id && !windows.isPrivate(id) && !windows.isGuest(id)) window.webContents.send("updates:state", state);
+    }
+  });
+  const updateWindow = (event: Electron.IpcMainInvokeEvent): string => {
+    const id = windows.idForWebContents(event.sender);
+    if (!id || windows.isPrivate(id) || windows.isGuest(id)) throw new Error("Atualize em uma janela normal do Moon.");
+    return id;
+  };
+  ipc.register("updates:status", event => { updateWindow(event); return nativeUpdates.state; });
+  ipc.register("updates:download", async event => {
+    updateWindow(event);
+    if (!updates.available) throw new Error("No checked update is available");
+    if (nativeUpdates.state.supported) await nativeUpdates.download(updates.available);
+    else await shell.openExternal(updates.available.url);
+  });
+  ipc.register("updates:open-page", async event => { updateWindow(event); if (!updates.available) throw new Error("No checked update is available"); await shell.openExternal(updates.available.url); });
+  ipc.register("updates:install", async event => {
+    const id = updateWindow(event);
+    if (nativeUpdates.state.phase !== "downloaded") throw new Error("Nenhuma atualização pronta.");
+    const confirmation = await dialog.showMessageBox(windows.require(id), { type: "question", title: "Atualizar Moon e Chromium", message: "Salvou seu trabalho?", detail: "O Moon será fechado para abrir o instalador oficial. O motor Chromium é atualizado junto do aplicativo. Esta pré-release não possui promessa de assinatura digital do instalador.", buttons: ["Cancelar", "Instalar e reiniciar"], defaultId: 0, cancelId: 0 });
+    if (confirmation.response === 1) nativeUpdates.install();
+  });
   const testProfileDirectory = process.env.NODE_ENV === "test" ? process.env.MOON_TEST_PROFILE_DIR : undefined;
   const defaultDirectory = testProfileDirectory ?? join(app.getPath("userData"), "profile");
   const profilesDirectory = testProfileDirectory ? join(testProfileDirectory, "profiles") : join(app.getPath("userData"), "profiles");
@@ -145,6 +172,8 @@ app.whenReady().then(async () => {
   await createMainWindow();
   if (!offlineTest) void adblock.initialize();
 }).catch(error => {
+  // Closing during loadFile aborts navigation; it is not a startup failure.
+  if (shutdownStarted) return;
   console.error("Moon failed to start", error);
   app.exit(1);
 });
@@ -162,11 +191,21 @@ app.on("before-quit", event => {
     app.quit();
     return;
   }
-  void application.shutdown()
-    .catch(error => console.error("Moon shutdown failed", error))
-    .finally(async () => {
-      await profiles?.close().catch(error => console.error("Profile shutdown failed", error));
-      shutdownComplete = true;
-      app.quit();
-    });
+  const diagnostics = new LocalDiagnostics(join(app.getPath("userData"), "diagnostics"), process.env.MOON_LOCAL_DIAGNOSTICS === "1");
+  void runShutdown([
+    { name: "flush-and-destroy-tabs", run: () => application!.shutdown() },
+    { name: "close-profiles", run: async () => { await profiles?.close(); } }
+  ], {
+    timeoutMs: 5_000,
+    timedOut: stage => {
+      console.error("Moon shutdown deadline exceeded", stage);
+      void diagnostics.record("shutdown-timeout", { stage });
+      app.exit(1);
+    },
+    failed: stage => { console.error("Moon shutdown step failed", stage); void diagnostics.record("shutdown-failed", { stage }); }
+  }).then(completed => {
+    if (!completed) return;
+    shutdownComplete = true;
+    app.quit();
+  });
 });

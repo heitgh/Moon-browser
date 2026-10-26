@@ -19,7 +19,7 @@ export function selectUpdate(current: string, releases: unknown): AvailableUpdat
     if (installed.channel === "stable" && next.channel !== "stable") continue;
     if (installed.channel === "beta" && next.channel === "alpha") continue;
     let url: URL; try { url = new URL(item.html_url); } catch { continue; }
-    if (url.origin !== "https://github.com" || url.username || url.password || !/^\/heitgh\/Moon-browser\/releases\/tag\/[a-zA-Z0-9._-]+$/.test(url.pathname) || url.search || url.hash) continue;
+    if (url.href !== `https://github.com/heitgh/Moon-browser/releases/tag/${item.tag_name}` || url.origin !== "https://github.com" || url.username || url.password || !/^\/heitgh\/Moon-browser\/releases\/tag\/[a-zA-Z0-9._-]+$/.test(url.pathname) || url.search || url.hash) continue;
     if (compare(next, installed) <= 0) continue;
     candidates.push({ version: item.tag_name, notes: typeof item.body === "string" ? item.body.slice(0, 2000) : "Veja as novidades na página da versão.", url: url.href });
   }
