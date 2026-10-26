@@ -1,6 +1,8 @@
 # Bugs do Moon Browser
 
-Atualizado em 23 de outubro de 2026.
+Atualizado em 26 de outubro de 2026.
+
+A alpha.5 foi publicada após a matriz de release Windows/Linux passar (292 testes por sistema e auditoria sem vulnerabilidades). A execução independente Windows falhou no ensaio de encerramento: o trace mostra Close context ultrapassando cinco segundos, seguido de EBUSY na limpeza e timeout do worker. A causa raiz permanece não comprovada; MB-016 continua aberto.
 
 O workflow da alpha.4 passou na matriz automatizada Windows/Linux. Os dois probes externos curtos de Pinterest/TikTok passaram no CI; não validam login com contas nem estabilidade prolongada. O workflow independente de qualidade encontrou timeouts de encerramento, registrados em MB-016.
 
@@ -25,7 +27,7 @@ Ao reportar regressão, registre SO, versão do Moon, URL, horário, passos, com
 | MB-010 | DNS validado separadamente da conexão de imagem | Transporte fixado ao endereço validado; testes de DNS, redirects, IPs, IPv6, tamanho e MIME passaram. |
 | MB-011 | Não é possível excluir área com abas | Mover/fechar abas implementado; SQLite e E2E cobrem exclusão/reinício/cookie persistente. Homologação multijanela adicional pendente. |
 | MB-012 | Ícones de atalhos ausentes offline | YouTube/GitHub locais e cache por site implementados; regressões passaram. |
-| MB-013 | Atualização exige consulta manual ao repositório | Aviso e consulta nas configurações implementados e testados com release simulada. Instalação automática permanece fora. |
+| MB-013 | Atualização exige consulta manual ao repositório | Alpha.5 oferece atualização nativa Moon/Chromium em Windows instalado e AppImage, com progresso e confirmação. Outros formatos usam instalação manual; upgrade entre dois pacotes ainda requer homologação. |
 | MB-014 | Consumo de memória e crash prolongado | Aberto: 20 abas locais sem crash; métricas de memória retornaram zero no ambiente e são inconclusivas. GPU física/TikTok pendentes. |
 | MB-015 | Protótipo de IA local | Não implementado; flag ai desativada, fora do primeiro pacote. |
 | MB-016 | Timeout intermitente ao encerrar Electron no E2E | Aberto: workflow independente encontrou timeout em Close context no Linux e no ensaio de perfis Windows; a mesma árvore passou no workflow de release. A repetição completa passou em Windows/Linux; causa raiz não comprovada, investigação permanece aberta. |

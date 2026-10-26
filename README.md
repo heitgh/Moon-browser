@@ -9,18 +9,20 @@
 
 [![Quality](https://github.com/heitgh/Moon-browser/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/heitgh/Moon-browser/actions/workflows/quality.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-7C3AED.svg)](LICENSE)
-[![Current prerelease](https://img.shields.io/badge/prerelease-v0.6.0--alpha.4-7C3AED.svg)](https://github.com/heitgh/Moon-browser/releases/tag/v0.6.0-alpha.4)
-[![Alpha](https://img.shields.io/badge/main-0.6.0--alpha.4-9333EA.svg)](CHANGELOG.md)
+[![Current prerelease](https://img.shields.io/badge/prerelease-v0.6.0--alpha.5-7C3AED.svg)](https://github.com/heitgh/Moon-browser/releases/tag/v0.6.0-alpha.5)
+[![Alpha](https://img.shields.io/badge/main-0.6.0--alpha.5-9333EA.svg)](CHANGELOG.md)
 
 [**Download**](#download) · [**Website**](https://moon-browser.vercel.app) · [**See the product**](#o-que-o-moon-propoe) · [**Contribute**](CONTRIBUTING.md) · [**Report a bug**](https://github.com/heitgh/Moon-browser/issues)
 
 </div>
 
-## Atualização v0.6.0-alpha.5 — candidata à publicação
+## Atualização v0.6.0-alpha.5 — publicada
 
 Atualização nativa de Moon + Chromium no Windows instalado e Linux AppImage: consulta ao abrir e a cada seis horas, download com progresso e instalação após confirmação. O Chromium acompanha o Electron e exige um pacote novo do Moon; não há atualização isolada do Chrome. Windows portátil e demais pacotes Linux mantêm o link para instalação manual. Versões antigas precisam instalar esta atualização uma vez para receber o novo mecanismo.
 
-A barra inferior acompanha downloads com progresso, velocidade, pausa, retomada e cancelamento. Esta candidata também isola downloads anônimos, limita o tempo de encerramento e cria backup antes de migrar o perfil. Consulte [notas e limites de validação](docs/releases/v0.6.0-alpha.5.md). A atualização do motor não comprova resolução do login no WhatsApp Web.
+A barra inferior acompanha downloads com progresso, velocidade, pausa, retomada e cancelamento. Esta versão também isola downloads anônimos, limita o tempo de encerramento e cria backup antes de migrar o perfil. Consulte [notas e limites de validação](docs/releases/v0.6.0-alpha.5.md). A atualização do motor não comprova resolução do login no WhatsApp Web.
+
+Publicação [confirmada no workflow](https://github.com/heitgh/Moon-browser/actions/runs/40334618699): 292 testes por sistema passaram, com 3 probes externos pulados e auditoria sem vulnerabilidades. A execução independente de qualidade apresentou timeout intermitente no ensaio de encerramento Windows, seguido de EBUSY ao limpar arquivos; MB-016 continua aberto. Não há comprovação de correção definitiva do encerramento.
 
 ## Atualização v0.6.0-alpha.4
 
@@ -34,11 +36,11 @@ Consulte [evidências, limites e sequência de revisão](docs/review/next-update
 ![Moon Browser home with workspaces, search and shortcuts](assets/screenshots/update-home-dark.png)
 
 > [!IMPORTANT]
-> **Moon is experimental.** The current public prerelease is `v0.6.0-alpha.4`, built from the validated `main` branch. Do not use Moon as your only browser for critical data.
+> **Moon is experimental.** The current public prerelease is `v0.6.0-alpha.5`, built from the validated `main` branch. Do not use Moon as your only browser for critical data.
 
-A `v0.6.0-alpha.4` prioriza segurança, estabilidade, organização de áreas, ícones e avisos de atualização. Mantém os atalhos de zoom separados entre site e interface e os recursos existentes. Consulte as [notas da versão](docs/releases/v0.6.0-alpha.4.md).
+A `v0.6.0-alpha.5` adiciona atualização nativa Moon/Chromium e barra de downloads, além de proteção de downloads privados e migrações. Consulte as [notas da versão](docs/releases/v0.6.0-alpha.5.md).
 
-**Atualização inicial:** a alpha.3 e anteriores não contêm verificador de atualização. Instale a alpha.4 manualmente uma vez. Esta versão poderá avisar ao abrir sobre futuras releases compatíveis, com novidades, **Baixar** e **Depois**, além de **Verificar atualizações** nas configurações. Baixar abre a página oficial; não instala automaticamente.
+**Atualização inicial:** instale a alpha.5 uma vez. A alpha.4 pode abrir a página oficial pelo aviso existente. Depois, Windows instalado e Linux AppImage oferecem download e instalação dentro do Moon, com confirmação; demais formatos mantêm a instalação manual.
 
 ## O que é o Moon?
 
@@ -79,23 +81,23 @@ As capturas acima vêm da alpha e usam dados de teste. Elas mostram cenários re
 <a id="download"></a>
 ## Download
 
-### Prerelease pública — `v0.6.0-alpha.4`
+### Prerelease pública — `v0.6.0-alpha.5`
 
 | Sistema | Download | Integridade |
 | --- | --- | --- |
-| **Windows x64** | [Instalador `.exe`](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.4/Moon-Browser-0.6.0-alpha.4-Windows-x64-Setup.exe) · [Portátil `.exe`](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.4/Moon-Browser-0.6.0-alpha.4-Windows-x64-Portable.exe) | [SHA-256](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.4/SHA256SUMS-windows.txt) |
-| **Linux x64** | [AppImage](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.4/Moon-Browser-0.6.0-alpha.4-Linux-x64.AppImage) · [DEB](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.4/Moon-Browser-0.6.0-alpha.4-Linux-x64.deb) · [RPM](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.4/Moon-Browser-0.6.0-alpha.4-Linux-x64.rpm) · [pacman](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.4/Moon-Browser-0.6.0-alpha.4-Linux-x64.pacman) | [SHA-256](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.4/SHA256SUMS-linux.txt) |
+| **Windows x64** | [Instalador `.exe`](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.5/Moon-Browser-0.6.0-alpha.5-Windows-x64-Setup.exe) · [Portátil `.exe`](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.5/Moon-Browser-0.6.0-alpha.5-Windows-x64-Portable.exe) | [SHA-256](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.5/SHA256SUMS-windows.txt) |
+| **Linux x64** | [AppImage](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.5/Moon-Browser-0.6.0-alpha.5-Linux-x64.AppImage) · [DEB](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.5/Moon-Browser-0.6.0-alpha.5-Linux-x64.deb) · [RPM](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.5/Moon-Browser-0.6.0-alpha.5-Linux-x64.rpm) · [pacman](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.5/Moon-Browser-0.6.0-alpha.5-Linux-x64.pacman) | [SHA-256](https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.5/SHA256SUMS-linux.txt) |
 
 [**Ver todas as releases →**](https://github.com/heitgh/Moon-browser/releases)
 
 Para AppImage:
 
 ```bash
-chmod +x Moon-Browser-0.6.0-alpha.4-Linux-x64.AppImage
-./Moon-Browser-0.6.0-alpha.4-Linux-x64.AppImage
+chmod +x Moon-Browser-0.6.0-alpha.5-Linux-x64.AppImage
+./Moon-Browser-0.6.0-alpha.5-Linux-x64.AppImage
 ```
 
-> A `v0.6.0-alpha.4` é uma prerelease pública. Windows e Linux possuem instaladores oficiais e checksums; macOS ainda não possui build publicado.
+> A `v0.6.0-alpha.5` é uma prerelease pública. Windows e Linux possuem instaladores oficiais e checksums; macOS ainda não possui build publicado.
 
 ## Estado do projeto
 
