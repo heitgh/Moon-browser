@@ -65,3 +65,4 @@ publish:
   owner: heitgh
   repo: Moon-browser
   releaseType: prerelease
+  channel: alpha
