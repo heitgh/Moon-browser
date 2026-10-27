@@ -61,10 +61,10 @@
     "prepare": "npm run typecheck"
   },
   "dependencies": {
-    "@ghostery/adblocker-electron": "^2.11.3",
+    "@ghostery/adblocker-electron": "^2.20.1",
     "better-sqlite3": "^13.0.3",
     "cross-fetch": "^4.1.0",
-    "electron-store": "^10.1.0",
+    "electron-store": "^12.0.0",
     "electron-updater": "^6.8.11"
   },
   "devDependencies": {
