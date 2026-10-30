@@ -64,6 +64,21 @@ separa `userData/profile`, como a instalação real. A recuperação continua te
 de preservar o original e demonstrar a reabertura do dado. Esta mudança não é
 considerada prova de correção até a próxima execução Windows/Linux.
 
+### Recuperação interrompida durante a substituição
+
+Antes de renomear o original, a recuperação grava e sincroniza um journal externo
+à pasta afetada. Abertura normal recusa um perfil com recuperação pendente em vez
+de criar um banco vazio silenciosamente. A UI lista backups e exporta os arquivos
+do original preservado. Ao retomar uma restauração ou criar perfil independente,
+uma cópia incompleta fica em pasta `*.incomplete-*` e o original é recolocado antes
+de prosseguir. O journal aceita somente destinos irmãos com prefixo e formato
+esperados; não aceita caminhos arbitrários ou links simbólicos.
+
+Testes SQLite cobrem interrupção antes/depois do primeiro rename, retenção da cópia
+parcial, bloqueio da inicialização, reabertura dos dados e journal forjado.
+O sync do arquivo de intenção não é uma promessa de tolerância a toda queda de
+energia, falha de hardware ou alteração externa de arquivos.
+
 - Typecheck e lint passaram.
 - 223 testes unitários (50 arquivos), 35 de integração e 33 Electron/SQLite passaram.
 - A rodada completa headless teve 21 E2E aprovados, 2 falhas e 3 probes externos

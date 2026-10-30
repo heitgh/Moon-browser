@@ -15,6 +15,7 @@ import {
   type UpdateLocalProfileRequest
 } from "../../../../packages/ipc/local-profile-contract.js";
 import { ProfileStorage } from "./profile-storage.js";
+import { readRecoveryJournal } from "./profile-recovery-journal.js";
 
 interface RegistryV1 {
   readonly version: 1;
@@ -81,7 +82,10 @@ export class LocalProfileManager {
     if (pending) return pending;
     const opening = (async () => {
       const storage = new ProfileStorage(directory);
-      try { await storage.open(); }
+      try {
+        if (await readRecoveryJournal(directory)) throw new Error("A restauração anterior foi interrompida. Abra a recuperação antes de carregar o perfil.");
+        await storage.open();
+      }
       catch (error) { throw new ProfileOpenError(directory, error); }
       this.#storages.set(profile.id, storage);
       return storage;

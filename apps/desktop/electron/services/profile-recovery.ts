@@ -1,10 +1,11 @@
 // Nexus Inc. — offline recovery; no damaged SQLite file is ever overwritten in place.
 import { randomUUID } from "node:crypto";
-import { cp, copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile, realpath, lstat } from "node:fs/promises";
+import { cp, copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile, realpath, lstat, open } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { BetterSqliteConnection } from "../../../../packages/storage/adapters/better-sqlite-connection.js";
 import { ProfileStorage } from "./profile-storage.js";
 import { parseLocalProfileId, validateLocalProfileSummary, type LocalProfileSummary } from "../../../../packages/ipc/local-profile-contract.js";
+import { readRecoveryJournal, recoveryJournalPath } from "./profile-recovery-journal.js";
 
 export interface RecoveryBackup {
   readonly id: string;
@@ -36,12 +37,14 @@ export class ProfileRecoveryService {
   }
 
   async listBackups(): Promise<readonly RecoveryBackup[]> {
+    const pending = await readRecoveryJournal(this.profileDirectory);
+    const sourceDirectory = pending && !pending.originalIntact ? pending.preservedPath : this.profileDirectory;
     const results: RecoveryBackup[] = [];
     for (const source of ["migration", "update"] as const) {
       const { directory, pattern } = SOURCES[source];
-      for (const entry of await readdir(join(this.profileDirectory, directory)).catch(() => [])) {
+      for (const entry of await readdir(join(sourceDirectory, directory)).catch(() => [])) {
         if (!pattern.test(entry)) continue;
-        const path = join(this.profileDirectory, directory, entry);
+        const path = join(sourceDirectory, directory, entry);
         const info = await lstat(path).catch(() => undefined);
         if (!info?.isFile() || !(await verifyDatabase(path))) continue;
         results.push({ id: `${source}/${entry}`, source, createdAt: info.mtimeMs });
@@ -52,6 +55,7 @@ export class ProfileRecoveryService {
 
   async restoreBackup(id: string): Promise<string> {
     return this.#exclusive(async () => {
+    await this.#recoverInterrupted();
     const selected = (await this.listBackups()).find(item => item.id === id);
     if (!selected) throw new Error("Backup inexistente ou com integridade inválida.");
     return this.#replacePreservingOld(async preserved => {
@@ -74,6 +78,7 @@ export class ProfileRecoveryService {
   // silently share cookies and authenticated sessions with the damaged profile.
   async createFresh(registryDirectory: string): Promise<string> {
     return this.#exclusive(async () => {
+    await this.#recoverInterrupted();
     const indexPath = join(registryDirectory, "index.json");
     let existing: readonly LocalProfileSummary[];
     try {
@@ -135,7 +140,8 @@ export class ProfileRecoveryService {
   // Emergency export is a raw directory copy, not an importable or encrypted archive.
   async exportEmergency(destinationRoot: string): Promise<string> {
     return this.#exclusive(async () => {
-    const from = await realpath(this.profileDirectory);
+    const pending = await readRecoveryJournal(this.profileDirectory);
+    const from = await realpath(pending && !pending.originalIntact ? pending.preservedPath : this.profileDirectory);
     const target = await realpath(destinationRoot);
     if (!isAbsolute(destinationRoot) || target === from || target.startsWith(from + sep) || from.startsWith(target + sep))
       throw new Error("Escolha uma pasta fora do diretório do perfil.");
@@ -150,14 +156,33 @@ export class ProfileRecoveryService {
     const original = resolve(this.profileDirectory);
     if (!(await stat(original).catch(() => undefined))?.isDirectory()) throw new Error("O perfil original não está disponível.");
     const preserved = join(dirname(original), `${basename(original)}.preserved-${Date.now()}-${randomUUID()}`);
-    await rename(original, preserved);
+    const journal = recoveryJournalPath(original);
+    const handle = await open(journal, "wx", 0o600);
+    try { await handle.writeFile(JSON.stringify({version: 1, preservedPath: preserved})); await handle.sync(); }
+    catch (error) { await handle.close(); await rm(journal, {force: true}); throw error; }
+    finally { await handle.close(); }
+    try { await rename(original, preserved); }
+    catch (error) { await rm(journal, {force: true}); throw error; }
     try {
       await operation(preserved);
+      await rm(journal);
       return preserved;
     } catch (error) {
       await rm(original, { recursive: true, force: true });
       await rename(preserved, original);
+      await rm(journal);
       throw error;
     }
+  }
+
+  async #recoverInterrupted(): Promise<void> {
+    const pending = await readRecoveryJournal(this.profileDirectory);
+    if (!pending) return;
+    if (pending.originalIntact) { await rm(recoveryJournalPath(this.profileDirectory)); return; }
+    const original = resolve(this.profileDirectory);
+    // Never delete a partial replacement: retain it separately for inspection.
+    if (await lstat(original).catch(() => undefined)) await rename(original, `${original}.incomplete-${Date.now()}-${randomUUID()}`);
+    await rename(pending.preservedPath, original);
+    await rm(recoveryJournalPath(original));
   }
 }

@@ -1,10 +1,13 @@
 // Nexus Inc. — failure-injection tests for real SQLite profile recovery.
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile, rename } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ProfileStorage } from "../../apps/desktop/electron/services/profile-storage.js";
 import { ProfileRecoveryService } from "../../apps/desktop/electron/services/profile-recovery.js";
+import { recoveryJournalPath } from "../../apps/desktop/electron/services/profile-recovery-journal.js";
+import { LocalProfileManager } from "../../apps/desktop/electron/services/local-profile-manager.js";
 
 const directories: string[] = [];
 afterEach(async () => { await Promise.all(directories.splice(0).map(dir => rm(dir, { recursive: true, force: true }))); });
@@ -19,6 +22,46 @@ async function fixture() {
 }
 
 describe("ProfileRecoveryService", () => {
+  it("blocks silent profile creation and recovers a replacement interrupted after rename", async () => {
+    const { root, directory, storage, recovery } = await fixture();
+    await storage.applyProfileMutation({type: "notes:save", content: "Original after interruption"});
+    await storage.createUpdateBackup();
+    await storage.close();
+    const preserved = `${directory}.preserved-${Date.now()}-${randomUUID()}`;
+    await writeFile(recoveryJournalPath(directory), JSON.stringify({version: 1, preservedPath: preserved}));
+    await rename(directory, preserved);
+    const manager = new LocalProfileManager(join(root, "profiles"), directory);
+    await expect(manager.initialize()).rejects.toThrow(/perfil selecionado/);
+    // An interrupted copy is also preserved, rather than deleted during rollback.
+    await mkdir(directory, {recursive: true});
+    await writeFile(join(directory, "partial.txt"), "partial replacement");
+    const backups = await recovery.listBackups();
+    expect(backups.some(item => item.source === "update")).toBe(true);
+    await mkdir(join(root, "exports"));
+    const exported = await recovery.exportEmergency(join(root, "exports"));
+    expect((await stat(join(exported, "moon.sqlite3"))).isFile()).toBe(true);
+    await recovery.restoreBackup(backups.find(item => item.source === "update")!.id);
+    await expect(stat(recoveryJournalPath(directory))).rejects.toMatchObject({code: "ENOENT"});
+    const incomplete = (await readdir(root)).find(name => name.startsWith("profile.incomplete-"));
+    expect(await readFile(join(root, incomplete!, "partial.txt"), "utf8")).toBe("partial replacement");
+    const reopened = new ProfileStorage(directory);
+    await reopened.open();
+    expect((await reopened.loadProfileData()).notes).toBe("Original after interruption");
+    await reopened.close();
+  });
+
+  it("handles interruption before rename and rejects forged recovery destinations", async () => {
+    const { root, directory, storage, recovery } = await fixture();
+    await storage.close();
+    const journal = recoveryJournalPath(directory);
+    await writeFile(journal, JSON.stringify({version: 1, preservedPath: `${directory}.preserved-${Date.now()}-${randomUUID()}`}));
+    await recovery.createFresh(join(root, "profiles"));
+    await expect(stat(journal)).rejects.toMatchObject({code: "ENOENT"});
+    expect((await stat(join(directory, "moon.sqlite3"))).isFile()).toBe(true);
+    await writeFile(journal, JSON.stringify({version: 1, preservedPath: join(root, "unrelated")}));
+    await expect(recovery.listBackups()).rejects.toThrow(/Destino/);
+    expect((await stat(join(directory, "moon.sqlite3"))).isFile()).toBe(true);
+  });
   it("refuses concurrent recovery actions and preserves data when update backup fails", async () => {
     const { root, directory, storage, recovery } = await fixture();
     await storage.applyProfileMutation({ type: "notes:save", content: "Keep me" });
