@@ -9,3 +9,9 @@ O detector **não é antivírus** e não garante identificação de todos os for
 Testes previstos: `tests/unit/download-manager.test.ts` e conjunto `Quality` Windows/Linux.
 
 Esta entrega está num PR encadeado sobre `fix/stage1-shutdown-recovery` e não deve ser mesclada antes de validar a recuperação do perfil.
+
+## Consentimento Research no processo principal
+
+O checkbox da interface não é tratado como autorização suficiente. Antes de ler o conteúdo de até cinco abas selecionadas, o processo principal apresenta um diálogo nativo com as URLs elegíveis e requer **Permitir uma vez**. Após a confirmação, ele confere novamente cada aba, URL e workspace. Qualquer alteração de página cancela a leitura; janelas privadas e de convidado continuam excluídas. Testes específicos cobrem negação, aceite e navegação durante a autorização.
+
+O consentimento é apenas para a leitura local corrente; ele não autoriza uso posterior por IA, envio à nuvem ou leitura automática.
