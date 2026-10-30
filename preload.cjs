@@ -28,6 +28,8 @@ contextBridge.exposeInMainWorld("moonBrowser", Object.freeze({
   restoreResearchSession: (workspaceId, id, urls) => invoke("research:restore-session", { workspaceId, id, urls }),
   exportResearch: content => invoke("research:export", { content }),
   getWindowContext: () => invoke("browser:get-window-context"),
+  getResourceSnapshot: () => invoke("resources:snapshot"),
+  onResourcesOpen: listener => subscribe("resources:open", listener),
   createPrivateWindow: () => invoke("browser:create-private-window"),
   getTabs: () => invoke("browser:get-tabs"),
   closeTab: tabId => invoke("browser:close-tab", { tabId }),

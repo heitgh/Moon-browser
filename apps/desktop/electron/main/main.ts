@@ -1,3 +1,5 @@
+import { ResourceMonitor } from "../services/resource-monitor.js";
+import { registerResourceIpc } from "../ipc/resource-ipc.js";
 import { UpdateChecker } from "../services/update-checker.js";
 import { parseProfileDataMutation } from "../../../../packages/ipc/profile-data-contract.js";
 import { runShutdown } from "./shutdown.js";
@@ -246,6 +248,7 @@ app.whenReady().then(async () => {
   const profilesDirectory = testProfileDirectory ? join(testProfileDirectory, "profiles") : join(app.getPath("userData"), "profiles");
   accessController = new ProfileAccessController(new ProfileAccessService(join(app.getPath("userData"), "profile-access")), windows, () => application, id => createMainWindow(false, id));
   accessController.register(ipc);
+  registerResourceIpc(ipc, windows, new ResourceMonitor(() => app.getAppMetrics(), () => browser.resourceTabMappings()));
   profiles = new LocalProfileManager(profilesDirectory, defaultDirectory, id => accessController!.authorizeStorage(id));
   try { defaultProfileId = (await profiles.initialize()).id; }
   catch (error) {
@@ -273,6 +276,10 @@ app.whenReady().then(async () => {
   application = new BrowserApplicationService(browser, async windowId => profiles!.openedStorage(windows.profileId(windowId)));
   installApplicationMenu(() => { void createMainWindow(true, defaultProfileId); }, (window, action) => {
     const id = windows.idForWebContents(window.webContents); if (id) browser.zoomActivePage(id, action);
+  }, window => {
+    const id = windows.idForWebContents(window.webContents);
+    if (!id || accessController!.service.status(windows.profileId(id)).locked) return;
+    window.webContents.send("resources:open");
   });
   ipcMain.on("browser:ui-wheel", (event, direction: unknown) => {
     if (direction !== "in" && direction !== "out") return;

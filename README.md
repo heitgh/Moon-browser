@@ -261,8 +261,12 @@ Moon Browser é distribuído sob a [licença MIT](LICENSE). Electron, Chromium e
 
 </div>
 
-### Proteção de acesso em revisão (PR #39, ainda não publicada)
+### Proteção de acesso integrada (PR #39, ainda não publicada)
 
 Em **Gerenciar perfis → Segurança do perfil**, a próxima atualização permite ativar senha, alterá-la/removê-la com a senha atual, bloquear agora e configurar inatividade. O bloqueio pela tela do sistema é específico de Windows/macOS. A janela isolada exige senha antes de carregar o perfil; a proteção também é aplicada no processo principal ao IPC.
 
-A senha impede acesso casual pelo aplicativo, mas **não criptografa os arquivos**. Não há recuperação de senha nesta implementação: o aviso nativo precisa ser confirmado ao ativar. Quem controla a conta e os arquivos do sistema pode remover essa proteção. Consulte os [passos de teste e limites](docs/review/stage2-profile-access.md). A interface Windows/Linux ainda está em validação; os downloads públicos permanecem na versão publicada.
+A senha impede acesso casual pelo aplicativo, mas **não criptografa os arquivos**. Não há recuperação de senha nesta implementação: o aviso nativo precisa ser confirmado ao ativar. Quem controla a conta e os arquivos do sistema pode remover essa proteção. Consulte os [passos de teste e limites](docs/review/stage2-profile-access.md). A matriz de testes e builds Windows/Linux passou no PR #39; os downloads públicos permanecem na versão publicada.
+
+### Recursos em revisão (etapa 3, ainda não publicada)
+
+**Menu Moon → Recursos** ou **Ctrl/Cmd+Shift+E** abre RAM, CPU, processos únicos e páginas pesadas. A opção do próprio painel adiciona o botão à sidebar. O consumo por aba corresponde ao processo inteiro, que pode ser compartilhado; amostras indisponíveis ou parciais são identificadas. Ainda não há suspensão nesta etapa. Consulte os [limites e passos de teste](docs/review/stage3-resource-monitor.md).
