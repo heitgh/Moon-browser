@@ -1,3 +1,4 @@
+/* global document, window */
 // Nexus Inc. — no file access or path selection happens in the renderer.
 const backups = document.querySelector("#backups");
 const status = document.querySelector("#status");
