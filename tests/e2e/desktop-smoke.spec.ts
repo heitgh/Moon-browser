@@ -144,7 +144,7 @@ test("preserves OAuth popup semantics and restores the shell after HTML fullscre
   } finally {
     await quitDesktop(application);
     await fixture.close();
-    await rm(userData, { recursive: true, force: true });
+    await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -192,7 +192,7 @@ test("starts the packaged desktop shell and opens every primary panel", async ()
     await window.keyboard.press("Control+Shift+W"); await expect(window.locator(".moon-drawer-title")).toHaveText("Workspaces");
   } finally {
     await quitDesktop(application);
-    await rm(userData, { recursive: true, force: true });
+    await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -231,7 +231,7 @@ test("restores the real tab session after an application restart", async () => {
       await quitDesktop(application);
     }
   } finally {
-    await rm(userData, { recursive: true, force: true });
+    await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -264,7 +264,7 @@ test("persists theme, sidebar and Home customization after restart", async () =>
       const storedVersion = await restored.evaluate(() => JSON.parse(localStorage.getItem("moon:customization:v4") ?? "{}").version as number);
       expect(storedVersion).toBe(4);
     } finally { await quitDesktop(application); }
-  } finally { await rm(userData, { recursive: true, force: true }); }
+  } finally { await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("exports and imports customization through the real desktop bridge", async () => {
@@ -305,7 +305,7 @@ test("exports and imports customization through the real desktop bridge", async 
     await window.getByLabel("Aplicar personalização").click();
   } finally {
     await quitDesktop(application);
-    await rm(userData, { recursive: true, force: true });
+    await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -344,7 +344,7 @@ test("keeps the Phase A chrome readable, reachable and unclipped across target v
     expect(await window.evaluate(() => Number.parseFloat(getComputedStyle(document.querySelector(".moon-settings-modal")!).animationDuration || "0"))).toBeLessThanOrEqual(.001);
   } finally {
     await quitDesktop(application);
-    await rm(userData, { recursive: true, force: true });
+    await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -362,7 +362,7 @@ test("pauses an animated local wallpaper and uses its static poster", async () =
     await window.emulateMedia({ reducedMotion: "no-preference" }); await window.getByLabel("Aplicar personalização").click(); const omnibox = window.getByPlaceholder("Pesquise ou digite um endereço"); await omnibox.fill("https://example.com/"); await window.getByLabel("Abrir endereço").click();
     await expect.poll(() => window.evaluate(() => document.querySelector<HTMLElement>(".moon-home-wallpaper")?.dataset.playback)).toBe("paused");
     await window.getByLabel("Página inicial", { exact: true }).click(); await expect.poll(() => window.evaluate(() => document.querySelector<HTMLElement>(".moon-home-wallpaper")?.dataset.playback)).toBe("running");
-  } finally { await quitDesktop(application); await rm(userData, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("opens a real isolated private window and never restores it", async () => {
@@ -397,7 +397,7 @@ test("opens a real isolated private window and never restores it", async () => {
       const restoredTabs = await restored.evaluate(() => (window as unknown as { moonBrowser: { getTabs(): Promise<Array<{ private: boolean }>> } }).moonBrowser.getTabs());
       expect(restoredTabs.every(tab => !tab.private)).toBe(true);
     } finally { await quitDesktop(application); }
-  } finally { await rm(userData, { recursive: true, force: true }); }
+  } finally { await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("keeps local profile SQLite data and Chromium partitions isolated", async () => {
@@ -436,7 +436,7 @@ test("keeps local profile SQLite data and Chromium partitions isolated", async (
     expect(primarySnapshot.bookmarks.map(item => item.id)).toContain("only-default"); expect(primarySnapshot.bookmarks.map(item => item.id)).not.toContain("only-product");
     expect((await stat(join(userData, "moon.sqlite3"))).isFile()).toBe(true);
     expect((await stat(join(userData, "profiles", secondId, "moon.sqlite3"))).isFile()).toBe(true);
-  } finally { await quitDesktop(application); await rm(userData, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("research reads real sources, saves notes and opt-in memory, and recovers after a crash", async () => {
@@ -516,7 +516,7 @@ test("research reads real sources, saves notes and opt-in memory, and recovers a
       const bridge = (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser;
       try { await bridge.loadResearchMemory!("research"); return false; } catch { return true; }
     })).toBe(true);
-  } finally { await quitDesktop(application); await new Promise<void>(resolve => server.close(() => resolve())); await rm(userData, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); await new Promise<void>(resolve => server.close(() => resolve())); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("page keyboard zoom is separate from Ctrl wheel UI zoom and the titlebar is integrated", async () => {
@@ -562,7 +562,7 @@ test("page keyboard zoom is separate from Ctrl wheel UI zoom and the titlebar is
     const screenshot = await application.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0]!.webContents.capturePage()).toPNG().toString("base64"));
     const { writeFile } = await import("node:fs/promises");
     await writeFile("test-results/continuous-wallpaper.png", Buffer.from(screenshot, "base64"));
-  } finally { await quitDesktop(application); server.close(); await rm(userData, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); server.close(); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("rejects privileged IPC after a registered shell is navigated to a remote page", async () => {
@@ -577,7 +577,7 @@ test("rejects privileged IPC after a registered shell is navigated to a remote p
       try { await bridge.getTabs(); return "allowed"; } catch (error) { return String(error); }
     });
     expect(result).toContain("IPC origin");
-  } finally { await quitDesktop(application); await fixture.close(); await rm(userData, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); await fixture.close(); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("manages workspace metadata and deletes populated areas without orphan tabs", async () => {
@@ -610,7 +610,7 @@ test("manages workspace metadata and deletes populated areas without orphan tabs
       return contents ? contents.session.cookies.get({ name: "workspace-cookie" }) : [];
     });
     expect(cookies.some(cookie => cookie.value === "preserved")).toBe(true);
-  } finally { await quitDesktop(application); await rm(userData, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("shows checked release notes, defers updates and opens only the checked release", async () => {
@@ -628,7 +628,7 @@ test("shows checked release notes, defers updates and opens only the checked rel
     await page.getByLabel("Configurações", { exact: true }).click(); await page.getByLabel("Workspaces e dados", { exact: true }).click();
     await page.getByLabel("Verificar atualizações", { exact: true }).click(); await page.getByLabel("Baixar atualização", { exact: true }).click();
     expect(await application.evaluate(() => (globalThis as unknown as { checkedUpdateUrl: string }).checkedUpdateUrl)).toBe("https://github.com/heitgh/Moon-browser/releases/tag/v99.0.0");
-  } finally { await quitDesktop(application); await rm(userData, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("records a local many-tab memory sample without crashing renderers", async () => {
@@ -643,7 +643,7 @@ test("records a local many-tab memory sample without crashing renderers", async 
     const samplePath = test.info().outputPath("memory-sample.json");
     await writeFile(samplePath, JSON.stringify({ beforeKiB: before, ...sample }));
     await test.info().attach("local-memory-sample", { path: samplePath, contentType: "application/json" });
-  } finally { await quitDesktop(application); await fixture.close(); await rm(userData, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); await fixture.close(); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 // Nexus Inc. — real streamed download stays visible while a remote WebContentsView is active.
@@ -675,5 +675,5 @@ test("shows a live download shelf beneath the browsing surface", async () => {
     await expect(shelf).toContainText("Concluído");
     const geometry = await shell.evaluate(() => ({ shelf: document.querySelector(".moon-download-shelf")!.getBoundingClientRect().top, viewport: document.querySelector(".moon-browser-viewport")!.getBoundingClientRect().bottom }));
     expect(geometry.viewport).toBeLessThanOrEqual(geometry.shelf + 1);
-  } finally { await quitDesktop(application); await new Promise<void>(resolve => server.close(() => resolve())); await rm(directory, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); await new Promise<void>(resolve => server.close(() => resolve())); await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
