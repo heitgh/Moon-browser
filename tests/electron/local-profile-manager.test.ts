@@ -80,3 +80,20 @@ describe("LocalProfileManager", () => {
     await profiles.close();
   });
 });
+
+it("lets internal persistence finish only on already opened stores while new access is blocked", async () => {
+  const {root, legacy} = await manager();
+  let locked = false;
+  const profiles = new LocalProfileManager(join(root, "profiles"), legacy, async () => { if (locked) throw new Error("locked"); });
+  await profiles.initialize();
+  const second = await profiles.create({name: "Protected", avatar: "moon", color: "#2563eb"});
+  const storage = await profiles.storage("default");
+  locked = true;
+  await expect(profiles.storage("default")).rejects.toThrow("locked");
+  await expect(profiles.delete({id: second.id, confirmation: "Protected", backup: false})).rejects.toThrow("locked");
+  expect(profiles.openedStorage("default")).toBe(storage);
+  await profiles.openedStorage("default").saveBrowserSession([]);
+  expect(() => profiles.openedStorage("unknown")).toThrow();
+  await profiles.close();
+  expect(() => profiles.openedStorage("default")).toThrow(/aberto/);
+});

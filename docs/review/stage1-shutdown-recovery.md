@@ -1,6 +1,13 @@
-# Moon Browser — Etapa 1: Encerramento e recuperação (branch de trabalho)
+# Moon Browser — Etapa 1: Encerramento e recuperação
 
 Nexus Inc. · 30/10/2026 · **não publicada**
+
+## Estado atual
+
+Integrada na main pelo [PR #37](https://github.com/heitgh/Moon-browser/pull/37), merge `a2c26b7588b6415350360fbc2c81a68f75bf18db`. O commit final `c7cbe70813cb1ebfd158323b2f814d07d98cb442` passou na matriz Windows/Linux de qualidade e builds do [workflow 41076974239](https://github.com/heitgh/Moon-browser/actions/runs/41076974239), além de CodeQL e compatibilidade. Nenhuma release nova foi publicada.
+
+Os registros abaixo descrevem rodadas intermediárias, inclusive bloqueios e falhas que foram tratados antes da integração. A afirmação histórica de código somente local não descreve o estado atual. A matriz aprovada valida os cenários automatizados; não prova tolerância universal a falhas nem substitui teste de upgrade real e homologação em hardware físico.
+
 
 ## Mudanças nesta branch
 

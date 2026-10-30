@@ -25,6 +25,11 @@ import { SessionRequestPipeline } from "../security/session-request-pipeline.js"
 import { SitePermissionService } from "../security/site-permission-service.js";
 import { LocalProfileManager, ProfileOpenError } from "../services/local-profile-manager.js";
 import { ProfileRecoveryService } from "../services/profile-recovery.js";
+import { ProfileAccessService } from "../services/profile-access.js";
+import { ProfileAccessController, ProfileAccessError } from "../security/profile-access-controller.js";
+
+const primaryInstance = app.requestSingleInstanceLock();
+if (!primaryInstance) app.quit();
 
 const windows = new WindowManager();
 const downloads = new ElectronDownloadManager(windows);
@@ -32,7 +37,11 @@ const requestPipeline = new SessionRequestPipeline();
 const permissions = new Map<string, SitePermissionService>();
 const adblock = new ElectronAdblockService(windows, requestPipeline);
 const browser = new ElectronBrowserManager(windows, downloads, adblock, requestPipeline, windowId => permissions.get(windows.profileId(windowId)));
-const ipc = new IpcRouter(windows);
+let accessController: ProfileAccessController | undefined;
+const ipc = new IpcRouter(windows, (event, channel) => {
+  if (!accessController) throw new Error("Segurança do perfil indisponível.");
+  accessController.authorizeShell(event, channel);
+});
 let profiles: LocalProfileManager | undefined;
 let application: BrowserApplicationService | undefined;
 let defaultProfileId = "default";
@@ -123,14 +132,18 @@ async function ensureProfilePermissions(profileId: string): Promise<void> {
 }
 
 async function createMainWindow(privateMode = false, profileId = defaultProfileId): Promise<void> {
+  if (shutdownStarted) return;
   if (!profiles) throw new Error("Profile manager is not ready");
   const localProfile = profiles.require(profileId);
+  await accessController?.authorizeStorage(profileId);
   try { await ensureProfilePermissions(profileId); }
   catch (error) {
     if (!(error instanceof ProfileOpenError)) throw error;
     await showRecoveryWindow(error.directory);
+    accessController?.closeGate(profileId);
     throw error;
   }
+  if (shutdownStarted) return;
   const appRoot = app.getAppPath();
   const id = windows.create({
     title: privateMode ? `Moon Browser — Janela anônima · ${localProfile.name}` : `Moon Browser — ${localProfile.name}`,
@@ -185,9 +198,11 @@ async function createMainWindow(privateMode = false, profileId = defaultProfileI
   if (privateMode) await application?.createTab(id, { active: true, private: true, sessionId: id });
   else await application?.restoreWindow(id);
   await window.loadFile(join(appRoot, "index.html"));
+  accessController?.closeGate(profileId);
 }
 
 app.whenReady().then(async () => {
+  if (!primaryInstance) return;
   installLocalDiagnostics(app);
   const offlineTest = process.env.NODE_ENV === "test" && process.env.MOON_TEST_OFFLINE === "1";
   const updates = new UpdateChecker(app.getVersion());
@@ -229,17 +244,33 @@ app.whenReady().then(async () => {
   const testProfileDirectory = process.env.NODE_ENV === "test" ? process.env.MOON_TEST_PROFILE_DIR : undefined;
   const defaultDirectory = testProfileDirectory ?? join(app.getPath("userData"), "profile");
   const profilesDirectory = testProfileDirectory ? join(testProfileDirectory, "profiles") : join(app.getPath("userData"), "profiles");
-  profiles = new LocalProfileManager(profilesDirectory, defaultDirectory);
+  accessController = new ProfileAccessController(new ProfileAccessService(join(app.getPath("userData"), "profile-access")), windows, () => application, id => createMainWindow(false, id));
+  accessController.register(ipc);
+  profiles = new LocalProfileManager(profilesDirectory, defaultDirectory, id => accessController!.authorizeStorage(id));
   try { defaultProfileId = (await profiles.initialize()).id; }
   catch (error) {
+    if (error instanceof ProfileAccessError) {
+      if (!shutdownStarted) await dialog.showMessageBox({type: "error", title: "Acesso ao perfil", message: error.message});
+      app.quit(); return;
+    }
+    // A corrupt registry is inspected before any database is opened. Emergency
+    // export can include every profile, so all existing protection must pass.
+    if (!(error instanceof ProfileOpenError)) {
+      try { await accessController.authorizeRecovery(); }
+      catch (accessError) {
+        if (!shutdownStarted) await dialog.showMessageBox({type: "error", title: "Acesso à recuperação", message: accessError instanceof Error ? accessError.message : "Acesso negado."});
+        app.quit(); return;
+      }
+    }
     console.error("Moon profile open failed; starting isolated recovery", error);
     await profiles.close();
     // A broken registry can hide several profiles. Emergency export must retain
     // the whole application directory, not only the registry subdirectory.
     await showRecoveryWindow(error instanceof ProfileOpenError ? error.directory : testProfileDirectory ?? app.getPath("userData"));
+    accessController.closeGates();
     return;
   }
-  application = new BrowserApplicationService(browser, windowId => profiles!.storage(windows.profileId(windowId)));
+  application = new BrowserApplicationService(browser, async windowId => profiles!.openedStorage(windows.profileId(windowId)));
   installApplicationMenu(() => { void createMainWindow(true, defaultProfileId); }, (window, action) => {
     const id = windows.idForWebContents(window.webContents); if (id) browser.zoomActivePage(id, action);
   });
@@ -302,9 +333,11 @@ app.on("before-quit", event => {
   event.preventDefault();
   if (shutdownStarted) return;
   shutdownStarted = true;
+  accessController?.closeGates();
   ipc.dispose();
   const diagnostics = new LocalDiagnostics(join(app.getPath("userData"), "diagnostics"), process.env.MOON_LOCAL_DIAGNOSTICS === "1");
   void runShutdown([
+    { name: "drain-profile-locks", run: async () => { await accessController?.drain(); } },
     { name: "drain-recovery", run: async () => { await recoveryTask?.catch(() => undefined); } },
     { name: "drain-ipc", run: () => ipc.drain() },
     { name: "flush-and-destroy-tabs", run: async () => { await application?.shutdown(); } },
@@ -323,3 +356,7 @@ app.on("before-quit", event => {
     app.quit();
   });
 });
+
+// A second launch or external link may focus a gate, never bypass it or navigate.
+app.on("second-instance", () => { if (!accessController?.focusGate()) windows.list()[0]?.focus(); });
+app.on("open-url", event => { event.preventDefault(); accessController?.focusGate(); });

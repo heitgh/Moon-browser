@@ -58,12 +58,14 @@ import { FocusSessionController } from "./focus/focus-session-controller.js";
 import { FocusPanel } from "./focus/focus-panel.js";
 import { CommandCenter, type CommandCenterItem } from "./command-center/command-center.js";
 import { MoonNotesPanel } from "./notes/moon-notes-panel.js";
+import { ProfileSecurityPanel } from "./security/profile-security-panel.js";
 
 const AI_ENABLED = featureEnabled(DEFAULT_FEATURE_FLAGS, "ai");
 const MODULES_ENABLED = featureEnabled(DEFAULT_FEATURE_FLAGS, "extensions") || featureEnabled(DEFAULT_FEATURE_FLAGS, "plugins");
 
 class BrowserShell {
   readonly #bridge = moonBrowserBridge();
+  #profileSecurityPanel: ProfileSecurityPanel | undefined;
   readonly #customization = CustomizationStore.load();
   readonly #customizationApplier = new CustomizationApplier();
   readonly #faviconCache = new FaviconCache();
@@ -378,6 +380,10 @@ class BrowserShell {
     });
     this.#drawerBody.append(list);
     if (this.#windowPrivate || this.#windowGuest) return;
+    if (this.#bridge) {
+      this.#profileSecurityPanel ??= new ProfileSecurityPanel(this.#bridge);
+      this.#drawerBody.append(this.#profileSecurityPanel.element);
+    }
     const createTitle = el("h3", "moon-panel-section-title", "Novo perfil local");
     this.#drawerBody.append(createTitle, this.#profileForm(undefined, async value => { await this.#bridge!.createLocalProfile(value); await this.#reloadLocalProfiles(); }));
     const guest = btn("moon-secondary-button moon-profile-guest", "Abrir perfil convidado", "moon"); guest.append(el("span", "", "Usar como convidado")); guest.addEventListener("click", () => { void this.#createGuestProfile(); }); this.#drawerBody.append(guest);

@@ -1,13 +1,21 @@
 # Changelog
 
-## Em revisão — etapa 1: encerramento e recuperação (não publicada)
+## Em revisão — etapa 2: proteção de acesso (não publicada)
+
+- Senha por perfil com scrypt, sal único e espera progressiva após erros.
+- Janela isolada exige desbloqueio antes de abrir o banco e restaurar abas; IPC respeita o bloqueio.
+- Controles para alterar/remover senha, bloquear agora e configurar inatividade ou bloqueio do sistema (Windows/macOS).
+- A proteção não criptografa os arquivos e não oferece recuperação de senha; a ativação exige confirmação nativa desses limites.
+- Validação de interface Windows/Linux pendente no PR #39. Nenhuma nova release foi publicada.
+
+## Integrada — etapa 1: encerramento e recuperação (não publicada)
 
 - Encerramento aguarda IPC, gravações, destruição efetiva das páginas e checkpoint SQLite antes da saída normal.
 - Operações SQLite são enfileiradas por conexão; aberturas concorrentes do mesmo perfil compartilham uma instância.
 - Recuperação isolada restaura backup validado, exporta arquivos brutos ou cria um perfil independente preservando os dados anteriores.
 - Registro danificado pode ser reconstruído mediante confirmação, com cópia do original e preservação das pastas existentes.
 - Backup SQLite antes da instalação de atualização; falha impede iniciar o instalador. Não inclui partições Chromium.
-- MB-016 continua em investigação até homologação Windows/Linux. Não há novo instalador nesta branch.
+- Matriz de testes e builds Windows/Linux aprovada no PR #37, integrado à main. Isso não equivale à homologação de upgrade entre instaladores nem à publicação de nova versão.
 
 ## 0.6.0-alpha.5 — publicada como pré-release (2026-10-26)
 
