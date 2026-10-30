@@ -82,7 +82,8 @@ async function showRecoveryWindow(profileDirectory: string): Promise<void> {
   ipcMain.handle("recovery:fresh", async event => {
     const service = assertRecoveryCaller(event);
     if (!(await confirm("Criar um perfil limpo sem apagar o anterior?"))) return "Operação cancelada.";
-    await service.createFresh();
+    if (!profiles) throw new Error("Gerenciador de perfis indisponível.");
+    await service.createFresh(profiles.profilesDirectory);
     restart(); return "Novo perfil criado. Reiniciando Moon…";
   });
   await window.loadFile(join(appRoot, "recovery.html"));
