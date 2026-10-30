@@ -10,6 +10,7 @@ import { NativeUpdater } from "../services/native-updater.js";
 import { app, ipcMain, shell, dialog, BrowserWindow } from "electron";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { ElectronBrowserManager } from "../browser/browser-manager.js";
 import { registerBrowserIpc } from "../ipc/browser-ipc.js";
 import { registerProductIpc } from "../ipc/product-ipc.js";
@@ -41,7 +42,9 @@ let recoveryService: ProfileRecoveryService | undefined;
 function assertRecoveryCaller(event: Electron.IpcMainInvokeEvent): ProfileRecoveryService {
   if (!recoveryService || !recoveryWindow || recoveryWindow.isDestroyed()
     || event.sender !== recoveryWindow.webContents
-    || !event.senderFrame || event.senderFrame !== event.sender.mainFrame || event.senderFrame.detached)
+    || !event.senderFrame || event.senderFrame !== event.sender.mainFrame
+    || event.senderFrame.detached
+    || event.senderFrame.url !== pathToFileURL(join(app.getAppPath(), "recovery.html")).href)
     throw new Error("Janela de recuperação inválida.");
   return recoveryService;
 }
@@ -59,7 +62,11 @@ async function showRecoveryWindow(profileDirectory: string): Promise<void> {
   recoveryWindow = window;
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", event => event.preventDefault());
-  window.once("closed", () => { if (recoveryWindow === window) { recoveryWindow = undefined; recoveryService = undefined; } });
+  window.once("closed", () => {
+    if (recoveryWindow === window) { recoveryWindow = undefined; recoveryService = undefined; }
+    // Normal browser lifecycle listeners are not installed if profile initialization failed.
+    if (!shutdownStarted) app.quit();
+  });
 
   const confirm = async (message: string): Promise<boolean> =>
     (await dialog.showMessageBox(window, { type: "warning", title: "Confirmar recuperação",
