@@ -22,3 +22,15 @@ it("closes in order and cancels the deadline after success", async () => {
   await vi.advanceTimersByTimeAsync(6000);
   expect(order).toEqual(["flush", "database"]); expect(timedOut).not.toHaveBeenCalled();
 });
+
+it("does not run later shutdown steps when a flush rejects", async () => {
+  const closed = vi.fn(async () => undefined);
+  const failed = vi.fn();
+  const completed = await runShutdown([
+    { name: "flush", run: async () => { throw new Error("disk full"); } },
+    { name: "close-db", run: closed }
+  ], { timeoutMs: 5000, timedOut: vi.fn(), failed });
+  expect(completed).toBe(false);
+  expect(failed).toHaveBeenCalledWith("flush");
+  expect(closed).not.toHaveBeenCalled();
+});
