@@ -1,3 +1,4 @@
+import { ResourcesPanel, RESOURCE_SIDEBAR_KEY } from "./resources/resources-panel.js";
 import { DownloadShelf } from "./downloads/download-shelf.js";
 import type { NativeUpdateState } from "../packages/ipc/native-update-contract.js";
 import { builtinSiteIcon } from "./browser-shell/site-icons.js";
@@ -65,6 +66,7 @@ const MODULES_ENABLED = featureEnabled(DEFAULT_FEATURE_FLAGS, "extensions") || f
 
 class BrowserShell {
   readonly #bridge = moonBrowserBridge();
+  #resourcesPanel: ResourcesPanel | undefined;
   #profileSecurityPanel: ProfileSecurityPanel | undefined;
   readonly #customization = CustomizationStore.load();
   readonly #customizationApplier = new CustomizationApplier();
@@ -185,6 +187,7 @@ class BrowserShell {
     this.#build(); this.#customization.setWorkspace(this.#workspaceId); this.#customization.subscribe(change => this.#applyCustomization(change.config)); this.#bindShortcuts(); this.#observe(); this.#startClock();
     if (this.#customization.loadResult.message) this.#flash(this.#customization.loadResult.message);
     if (!this.#bridge) { this.#status.textContent = "Prévia da interface — use npm run dev:desktop para navegar."; return; }
+    this.#bridge.onResourcesOpen?.(() => { if (this.#openDrawer !== "resources") this.#toggleDrawer("resources"); });
     this.#bridge.onWorkspaceDeleting?.(({ source, target }) => { this.#workspaceDeleting = true; if (this.#workspaceId === source) this.#workspaceId = target; });
     this.#bridge.onWorkspaceChanged?.(() => { this.#workspaceDeleting = false; void this.#reloadProfileData(); });
     this.#bridge.onTabUpdated(update => this.#applyUpdate(update));
@@ -273,9 +276,10 @@ class BrowserShell {
       ["bookmarks", "Favoritos", "star", () => this.#toggleDrawer("bookmarks")], ["downloads", "Downloads", "download", () => this.#toggleDrawer("downloads")],
       ["history", "Histórico", "history", () => this.#toggleDrawer("history")], ["translate", "Traduzir página", "translate", () => this.#toggleDrawer("translate")],
       ["research", "Moon Research", "search", () => this.#toggleDrawer("research")], ["notes", "Bloco de notas", "note", () => this.#toggleDrawer("notes")], ["focus", "Foco e Zen", "play", () => this.#toggleDrawer("focus")], ["extensions", "Extensões", "plugin", () => this.#toggleDrawer("extensions")],
-      ["ai", "Moon AI", "sparkles", () => this.#toggleDrawer("ai")]
+      ["resources", "Recursos", "settings", () => this.#toggleDrawer("resources")], ["ai", "Moon AI", "sparkles", () => this.#toggleDrawer("ai")]
     ];
     controls.filter(([id]) => (id !== "research" || featureEnabled(DEFAULT_FEATURE_FLAGS, "research")) && (id !== "ai" || AI_ENABLED) && (id !== "extensions" || MODULES_ENABLED)).forEach(([id, label, name, action]) => { const control = btn("moon-rail-button", label, name); control.append(el("span", "moon-rail-label", label)); control.addEventListener("click", action); this.#rail.set(id, control); rail.append(control); });
+    this.#rail.get("resources")!.hidden = load<unknown>(RESOURCE_SIDEBAR_KEY, false) !== true;
     rail.append(el("div", "moon-rail-spacer"));
     const settings = btn("moon-rail-button", "Configurações", "settings"); settings.append(el("span", "moon-rail-label", "Configurações")); settings.addEventListener("click", () => void this.#openSettings()); this.#rail.set("settings", settings); rail.append(settings);
 
@@ -353,10 +357,19 @@ class BrowserShell {
     this.#render(); this.#renderDrawer();
   }
   #toggleDrawer(name: Drawer): void { if (this.#openDrawer === name) return this.#closeDrawer(); this.#openDrawer = name; this.#drawer.classList.add("is-open"); this.#renderDrawer(); requestAnimationFrame(() => this.#syncBounds()); }
-  #closeDrawer(): void { this.#openDrawer = undefined; this.#drawer.classList.remove("is-open"); this.#rail.forEach(item => item.classList.remove("is-active")); this.#render(); requestAnimationFrame(() => this.#syncBounds()); }
+  #closeDrawer(): void { this.#resourcesPanel?.unmount(); this.#openDrawer = undefined; this.#drawer.classList.remove("is-open"); this.#rail.forEach(item => item.classList.remove("is-active")); this.#render(); requestAnimationFrame(() => this.#syncBounds()); }
   #renderDrawer(): void {
-    if (!this.#openDrawer) return; const titles: Readonly<Record<Drawer, string>> = { research: "Moon Research", profiles: "Gerenciar perfis", workspaces: "Workspaces", bookmarks: "Favoritos", downloads: "Downloads", history: "Histórico", translate: "Tradutor", notes: "Bloco de notas", focus: "Foco e Zen", extensions: "Extensões", ai: "Moon AI", security: "Proteção" };
+    if (this.#openDrawer === "resources" && this.#resourcesPanel?.isMounted(this.#drawerBody)) return;
+    this.#resourcesPanel?.unmount();
+    if (!this.#openDrawer) return; const titles: Readonly<Record<Drawer, string>> = { resources: "Recursos", research: "Moon Research", profiles: "Gerenciar perfis", workspaces: "Workspaces", bookmarks: "Favoritos", downloads: "Downloads", history: "Histórico", translate: "Tradutor", notes: "Bloco de notas", focus: "Foco e Zen", extensions: "Extensões", ai: "Moon AI", security: "Proteção" };
     this.#drawerTitle.textContent = titles[this.#openDrawer]; this.#drawerBody.replaceChildren(); this.#rail.forEach(item => item.classList.remove("is-active")); this.#rail.get(this.#openDrawer)?.classList.add("is-active");
+    if (this.#openDrawer === "resources") {
+      this.#resourcesPanel ??= new ResourcesPanel(async () => {
+        if (!this.#bridge?.getResourceSnapshot) throw new Error("Métricas indisponíveis.");
+        return this.#bridge.getResourceSnapshot();
+      }, {visible: () => load<unknown>(RESOURCE_SIDEBAR_KEY, false) === true, change: visible => { save(RESOURCE_SIDEBAR_KEY, visible); const control = this.#rail.get("resources"); if (control) control.hidden = !visible; }});
+      this.#resourcesPanel.mount(this.#drawerBody);
+    }
     if (this.#openDrawer === "research") this.#researchPanel.mount(this.#drawerBody);
     if (this.#openDrawer === "profiles") this.#profilesDrawer(); if (this.#openDrawer === "workspaces") this.#workspaceDrawer(); if (this.#openDrawer === "bookmarks") this.#bookmarksDrawer(); if (this.#openDrawer === "downloads") this.#downloadsDrawer(); if (this.#openDrawer === "history") this.#historyDrawer(); if (this.#openDrawer === "translate") this.#translateDrawer(); if (this.#openDrawer === "notes") this.#notesDrawer(); if (this.#openDrawer === "focus") this.#focusPanel.render(this.#drawerBody); if (this.#openDrawer === "extensions") this.#extensionsDrawer(); if (this.#openDrawer === "ai") this.#aiDrawer(); if (this.#openDrawer === "security") this.#securityDrawer();
   }
@@ -645,6 +658,7 @@ class BrowserShell {
       { id: "command:private", kind: "command", title: "Nova janela anônima", subtitle: "Ctrl+Shift+N", keywords: ["privada", "incognito"], icon: "shield", action: () => this.#bridge?.createPrivateWindow() },
       { id: "command:home", kind: "command", title: "Abrir página inicial", keywords: ["home", "nova aba"], icon: "home", action: () => this.#showHome() },
       { id: "command:settings", kind: "command", title: "Abrir configurações", subtitle: "Ctrl+,", keywords: ["preferências", "personalizar"], icon: "settings", action: () => this.#openSettings() },
+      { id: "command:resources", kind: "command", title: "Abrir Recursos", subtitle: "Ctrl+Shift+E", keywords: ["memória", "RAM", "CPU", "processos"], icon: "settings", action: () => this.#toggleDrawer("resources") },
       { id: "command:focus", kind: "command", title: this.#focus?.active ? "Encerrar Foco" : "Configurar Foco e Zen", subtitle: "Ctrl+Shift+Z", keywords: ["pomodoro", "concentração"], icon: this.#focus?.active ? "stop" : "play", action: () => { if (this.#focus?.active) this.#focus.end(); else this.#toggleDrawer("focus"); } }
     ];
     const tabs = [...this.#tabs.values()].map(tab => ({ id: `tab:${tab.id}`, kind: "tab" as const, title: tab.title || this.#hostname(tab.url), subtitle: tab.url, keywords: ["aba", "guia"], icon: "globe" as const, action: () => this.#activate(tab.id) }));
@@ -868,6 +882,7 @@ class BrowserShell {
       else if (mod && event.shiftKey && key === "z") { event.preventDefault(); if (this.#focus?.active) this.#focus.end(); else this.#toggleDrawer("focus"); }
       else if (mod && event.shiftKey && key === "p") { event.preventDefault(); void this.#openCommandCenter(); }
       else if (mod && key === "tab") { event.preventDefault(); void this.#cycleTab(event.shiftKey ? -1 : 1); }
+      else if (mod && event.shiftKey && key === "e") { event.preventDefault(); if (this.#openDrawer !== "resources") this.#toggleDrawer("resources"); }
       else if (mod && event.shiftKey && key === "w") { event.preventDefault(); this.#toggleDrawer("workspaces"); }
       else if (mod && event.shiftKey && key === "n") { event.preventDefault(); void this.#bridge?.createPrivateWindow(); }
       else if (mod && key === "l") { event.preventDefault(); this.#toolbar.focusOmnibox(); }

@@ -309,6 +309,15 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       .map(([, tab]) => tab);
   }
 
+  resourceTabMappings(): readonly import("../services/resource-monitor.js").ResourceTabMapping[] {
+    return [...this.#tabs.values()].map(tab => {
+      const contents = this.#surfaces.get(tab.id)?.view.webContents;
+      let pid: number | null = null;
+      try { if (contents && !contents.isDestroyed()) pid = contents.getOSProcessId() || null; } catch { /* renderer may exit between samples */ }
+      return {id: tab.id, title: tab.title, active: tab.active, windowId: this.#tabWindows.get(tab.id) ?? "", pid};
+    });
+  }
+
   windowIds(): readonly string[] {
     return [...new Set(this.#tabWindows.values())];
   }

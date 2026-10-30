@@ -1,5 +1,9 @@
 # Proteção de acesso aos perfis — Nexus Inc.
 
+## Estado atual
+
+Integrada na main pelo [PR #39](https://github.com/heitgh/Moon-browser/pull/39), merge `241a412a31046df02426afa07bee855efe7eb635`. O commit final `02e160919da7033a64ba9f7ed659f7a0a02ce310` passou nos workflows [Desktop Releases](https://github.com/heitgh/Moon-browser/actions/runs/41097992354) e [Quality](https://github.com/heitgh/Moon-browser/actions/runs/41097992180): 243 unitários, 35 integração, 36 Electron/SQLite e 27 E2E por sistema, além de builds Windows/Linux, CodeQL e compatibilidade. Três probes externos opcionais não foram executados. As notas sobre validação pendente abaixo registram o estado local inicial, superado pela CI. Nenhuma release nova foi publicada.
+
 A etapa 1 foi integrada na main pelo PR #37. Esta etapa adiciona proteção de acesso pelo aplicativo, não criptografia de arquivos. Quem controla a conta e os arquivos do sistema pode remover essa proteção. Não há recuperação de senha; a ativação exige confirmação nativa explícita desse limite.
 
 ## Implementação

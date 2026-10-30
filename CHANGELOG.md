@@ -1,12 +1,18 @@
 # Changelog
 
-## Em revisão — etapa 2: proteção de acesso (não publicada)
+## Em revisão — etapa 3: medidor de recursos (não publicada)
+
+- Menu Recursos, coleta nativa de RAM/CPU, contagem de processos únicos e associação de abas a PIDs compartilhadas.
+- Amostras iniciais/indisponíveis e totais parciais indicados; consulta limitada ao painel aberto, sem telemetria.
+- Nenhuma suspensão de abas ou limitação rígida de recursos nesta etapa.
+
+## Integrada — etapa 2: proteção de acesso (não publicada)
 
 - Senha por perfil com scrypt, sal único e espera progressiva após erros.
 - Janela isolada exige desbloqueio antes de abrir o banco e restaurar abas; IPC respeita o bloqueio.
 - Controles para alterar/remover senha, bloquear agora e configurar inatividade ou bloqueio do sistema (Windows/macOS).
 - A proteção não criptografa os arquivos e não oferece recuperação de senha; a ativação exige confirmação nativa desses limites.
-- Validação de interface Windows/Linux pendente no PR #39. Nenhuma nova release foi publicada.
+- PR #39 integrado com qualidade, UI e builds Windows/Linux aprovados. Nenhuma nova release foi publicada.
 
 ## Integrada — etapa 1: encerramento e recuperação (não publicada)
 
