@@ -1,6 +1,6 @@
 // Nexus Inc. — failure-injection tests for real SQLite profile recovery.
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ProfileStorage } from "../../apps/desktop/electron/services/profile-storage.js";
@@ -47,6 +47,16 @@ describe("ProfileRecoveryService", () => {
     await expect(recovery.restoreBackup("update/" + backup.split("/").at(-1))).rejects.toThrow();
     const reopened = new ProfileStorage(directory);
     await reopened.open(); await reopened.close();
+  });
+
+  it("refuses to replace a corrupt profile registry and keeps the original database", async () => {
+    const { root, directory, storage, recovery } = await fixture();
+    await storage.close();
+    const profiles = join(root, "profiles");
+    await mkdir(profiles);
+    await writeFile(join(profiles, "index.json"), "not-json");
+    await expect(recovery.createFresh(profiles)).rejects.toThrow(/registro de perfis/i);
+    expect((await stat(join(directory, "moon.sqlite3"))).isFile()).toBe(true);
   });
 
   it("exports raw emergency files and creates a fresh profile while keeping the old directory", async () => {
