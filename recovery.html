@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recuperação do Moon Browser</title>
+<link rel="stylesheet" href="./recovery.css">
+</head>
+<body>
+<main>
+<h1>Recuperação de perfil</h1>
+<p>O Moon não conseguiu abrir este perfil. Seus arquivos originais não serão apagados automaticamente.</p>
+<p>Os backups listados são do <strong>banco SQLite</strong>. Cookies e partições Chromium não estão incluídos nessas cópias.</p>
+<section aria-labelledby="restore-title">
+<h2 id="restore-title">Restaurar backup íntegro</h2>
+<label for="backups">Escolha uma cópia verificada</label>
+<select id="backups" aria-label="Backups disponíveis"></select>
+<button id="restore" disabled>Restaurar backup</button>
+</section>
+<section aria-labelledby="export-title">
+<h2 id="export-title">Exportação de emergência</h2>
+<p>Copie a pasta do perfil para outro local, mesmo quando o banco estiver danificado.</p>
+<button id="export">Exportar arquivos do perfil</button>
+</section>
+<section aria-labelledby="new-title">
+<h2 id="new-title">Criar perfil limpo</h2>
+<p>O perfil anterior será preservado em outra pasta, sem exclusão silenciosa.</p>
+<button id="fresh">Criar perfil limpo</button>
+</section>
+<p id="status" role="status" aria-live="polite">Procurando backups locais…</p>
+</main>
+<script src="./recovery.js"></script>
+</body>
+</html>
