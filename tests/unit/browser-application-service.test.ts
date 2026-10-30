@@ -103,6 +103,23 @@ describe("BrowserApplicationService", () => {
 });
 
 describe("concurrent profile persistence", () => {
+  it("does not resurrect a closed-window snapshot after reopening the profile and removing its tabs", async () => {
+    const browser = new FakeBrowser();
+    let saved: BrowserTab[] = [];
+    const profile = {
+      loadBrowserSession: async () => saved,
+      saveBrowserSession: async (tabs: readonly BrowserTab[]) => { saved = [...tabs]; }
+    };
+    const app = new BrowserApplicationService(browser as never, profile as never);
+    const tab = await app.createTab("old-window", {url: "https://saved.example/"});
+    await app.closeWindow("old-window");
+    expect(saved.map(item => item.id)).toEqual([tab.id]);
+    await app.restoreWindow("new-window");
+    await app.closeTab(tab.id);
+    await app.flushWindow("new-window");
+    expect(saved).toEqual([]);
+    await app.shutdown();
+  });
   it("keeps tabs from multiple windows instead of replacing the snapshot with the last writer", async () => {
     const browser = new FakeBrowser();
     const saves: string[][] = [];

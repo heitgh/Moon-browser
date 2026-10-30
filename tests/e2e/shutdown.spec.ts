@@ -3,6 +3,7 @@ import { _electron as electron, expect, test } from "@playwright/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { execFile } from "node:child_process";
 import type { MoonBrowserBridge } from "../../ui/browser-shell/contracts.js";
 
 test("preserves committed notes across 30 native window-close and app.quit cycles", async () => {
@@ -78,7 +79,11 @@ test("reopens committed data after an abrupt process interruption", async () => 
     await page.evaluate(async () => (window as unknown as {moonBrowser: MoonBrowserBridge}).moonBrowser.mutateProfileData({type: "notes:save", content: "Committed before interruption"}));
     const child = application.process();
     const interrupted = new Promise<void>(resolve => child.once("exit", () => resolve()));
-    child.kill("SIGKILL");
+    if (process.platform === "win32") {
+      // Killing only the main PID leaves Chromium children holding the fixture's
+      // profile files on Windows. Simulate a crash of the entire application.
+      await new Promise<void>((resolve, reject) => execFile("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], error => error ? reject(error) : resolve()));
+    } else child.kill("SIGKILL");
     await interrupted;
     application = await launch();
     await expect.poll(() => application.windows().some(page => /index\.html$/.test(page.url()))).toBe(true);

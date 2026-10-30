@@ -51,7 +51,16 @@ export class BrowserApplicationService {
 
   async restoreWindow(windowId: string): Promise<number> {
     this.#normalWindowIds.add(windowId);
-    const savedTabs = await (await this.#profileForWindow(windowId)).loadBrowserSession();
+    const profile = await this.#profileForWindow(windowId);
+    const savedTabs = await profile.loadBrowserSession();
+    const liveWindowIds = new Set(this.browser.windowIds());
+    let hasLiveProfileWindow = false;
+    for (const id of this.browser.windowIds()) {
+      if (id !== windowId && await this.#profileForWindow(id) === profile && (await this.browser.getTabs(id)).some(tab => !tab.private)) hasLiveProfileWindow = true;
+    }
+    // A reopened profile takes ownership of the saved session. Retaining the
+    // closed window's snapshot here would resurrect tabs closed after reopening.
+    if (!hasLiveProfileWindow) this.#sessionSnapshots.delete(profile);
     let restored = 0;
     let activeTabId: string | undefined;
     this.#restoringWindows.add(windowId);
@@ -59,6 +68,9 @@ export class BrowserApplicationService {
       for (const saved of savedTabs) {
         try {
           await this.tabs.create({ id: saved.id, windowId, url: saved.url, active: false, private: false, workspaceId: saved.workspaceId, partitionWorkspaceId: saved.partitionWorkspaceId, sessionId: saved.sessionId });
+          for (const [oldId, snapshot] of this.#sessionSnapshots.get(profile) ?? []) {
+            if (!liveWindowIds.has(oldId)) this.#sessionSnapshots.get(profile)!.set(oldId, snapshot.filter(tab => tab.id !== saved.id));
+          }
           restored += 1;
           if (saved.active) activeTabId = saved.id;
         } catch (error) {
@@ -127,7 +139,7 @@ export class BrowserApplicationService {
       snapshots.set(id, tabs.filter(tab => !tab.private));
     }
     if (!snapshots.size) return;
-    const combined = [...snapshots.values()].flat();
+    const combined = [...new Map([...snapshots.values()].flat().map(tab => [tab.id, tab])).values()];
     const previous = this.#profileWrites.get(profile) ?? Promise.resolve();
     const write = previous.catch(() => undefined).then(() => profile.saveBrowserSession(combined));
     this.#profileWrites.set(profile, write);

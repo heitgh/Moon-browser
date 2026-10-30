@@ -79,6 +79,20 @@ parcial, bloqueio da inicialização, reabertura dos dados e journal forjado.
 O sync do arquivo de intenção não é uma promessa de tolerância a toda queda de
 energia, falha de hardware ou alteração externa de arquivos.
 
+### Reabertura no mesmo processo e interrupção Windows
+
+Snapshots de janelas já fechadas deixam de possuir abas restauradas em outra janela.
+Isso evita ressuscitar abas que o usuário fechou após reabrir o perfil sem sair do
+Moon. O snapshot agregado também elimina IDs duplicados. Regressão unitária cobre
+fechar janela, reabrir no mesmo processo, remover abas e salvar sessão vazia.
+
+No CI do commit bb15076, a qualidade Linux passou integralmente; no Windows,
+22 E2E passaram e um ensaio excedeu o prazo. O trace mostra que o dado foi recuperado
+e a saída nativa retornou zero; o timeout ocorreu depois, na limpeza da fixture.
+A interrupção agora encerra a árvore de processos exclusiva da instância de teste
+no Windows, evitando renderers órfãos segurando arquivos. Nenhuma asserção de dados
+ou de saída normal foi removida, e não se aumentou o timeout para esconder a falha.
+
 - Typecheck e lint passaram.
 - 223 testes unitários (50 arquivos), 35 de integração e 33 Electron/SQLite passaram.
 - A rodada completa headless teve 21 E2E aprovados, 2 falhas e 3 probes externos
