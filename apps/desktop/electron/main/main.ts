@@ -7,7 +7,7 @@ import { DEFAULT_FEATURE_FLAGS, featureEnabled } from "../../../../config/featur
 import { registerResearchIpc } from "../ipc/research-ipc.js";
 import { changeInterfaceZoom, installInterfaceWheel, installZoomShortcuts } from "./interface-zoom.js";
 import { NativeUpdater } from "../services/native-updater.js";
-import { app, ipcMain, shell, dialog } from "electron";
+import { app, ipcMain, shell, dialog, BrowserWindow } from "electron";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { ElectronBrowserManager } from "../browser/browser-manager.js";
@@ -23,6 +23,7 @@ import { BrowserApplicationService } from "../../application/browser-application
 import { SessionRequestPipeline } from "../security/session-request-pipeline.js";
 import { SitePermissionService } from "../security/site-permission-service.js";
 import { LocalProfileManager } from "../services/local-profile-manager.js";
+import { ProfileRecoveryService } from "../services/profile-recovery.js";
 
 const windows = new WindowManager();
 const downloads = new ElectronDownloadManager(windows);
@@ -34,6 +35,59 @@ const ipc = new IpcRouter(windows);
 let profiles: LocalProfileManager | undefined;
 let application: BrowserApplicationService | undefined;
 let defaultProfileId = "default";
+let recoveryWindow: BrowserWindow | undefined;
+let recoveryService: ProfileRecoveryService | undefined;
+
+function assertRecoveryCaller(event: Electron.IpcMainInvokeEvent): ProfileRecoveryService {
+  if (!recoveryService || !recoveryWindow || recoveryWindow.isDestroyed()
+    || event.sender !== recoveryWindow.webContents
+    || !event.senderFrame || event.senderFrame !== event.sender.mainFrame || event.senderFrame.detached)
+    throw new Error("Janela de recuperação inválida.");
+  return recoveryService;
+}
+
+async function showRecoveryWindow(profileDirectory: string): Promise<void> {
+  recoveryService = new ProfileRecoveryService(profileDirectory);
+  const appRoot = app.getAppPath();
+  const window = new BrowserWindow({
+    width: 760, height: 780, minWidth: 520, minHeight: 580,
+    title: "Moon Browser — Recuperação de perfil",
+    backgroundColor: "#10121a", autoHideMenuBar: true,
+    webPreferences: { preload: join(appRoot, "recovery-preload.cjs"),
+      nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: false }
+  });
+  recoveryWindow = window;
+  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("will-navigate", event => event.preventDefault());
+  window.once("closed", () => { if (recoveryWindow === window) { recoveryWindow = undefined; recoveryService = undefined; } });
+
+  const confirm = async (message: string): Promise<boolean> =>
+    (await dialog.showMessageBox(window, { type: "warning", title: "Confirmar recuperação",
+      message, detail: "O perfil original será preservado em uma pasta separada. O Moon será reiniciado.",
+      buttons: ["Cancelar", "Confirmar"], defaultId: 0, cancelId: 0 })).response === 1;
+  const restart = (): void => { app.relaunch(); app.quit(); };
+  ipcMain.handle("recovery:list", event => assertRecoveryCaller(event).listBackups());
+  ipcMain.handle("recovery:export", async event => {
+    const service = assertRecoveryCaller(event);
+    const result = await dialog.showOpenDialog(window, { title: "Escolha uma pasta externa para a cópia", properties: ["openDirectory", "createDirectory"] });
+    return result.canceled || !result.filePaths[0] ? "Exportação cancelada." : service.exportEmergency(result.filePaths[0]);
+  });
+  ipcMain.handle("recovery:restore", async (event, id: unknown) => {
+    const service = assertRecoveryCaller(event);
+    if (typeof id !== "string" || id.length > 200) throw new TypeError("Backup inválido.");
+    if (!(await confirm("Restaurar este backup do banco SQLite?"))) return "Restauração cancelada.";
+    await service.restoreBackup(id);
+    restart(); return "Backup restaurado. Reiniciando Moon…";
+  });
+  ipcMain.handle("recovery:fresh", async event => {
+    const service = assertRecoveryCaller(event);
+    if (!(await confirm("Criar um perfil limpo sem apagar o anterior?"))) return "Operação cancelada.";
+    await service.createFresh();
+    restart(); return "Novo perfil criado. Reiniciando Moon…";
+  });
+  await window.loadFile(join(appRoot, "recovery.html"));
+}
+
 
 async function ensureProfilePermissions(profileId: string): Promise<void> {
   if (permissions.has(profileId)) return;
@@ -131,13 +185,27 @@ app.whenReady().then(async () => {
     const id = updateWindow(event);
     if (nativeUpdates.state.phase !== "downloaded") throw new Error("Nenhuma atualização pronta.");
     const confirmation = await dialog.showMessageBox(windows.require(id), { type: "question", title: "Atualizar Moon e Chromium", message: "Salvou seu trabalho?", detail: "O Moon será fechado para abrir o instalador oficial. O motor Chromium é atualizado junto do aplicativo. Esta pré-release não possui promessa de assinatura digital do instalador.", buttons: ["Cancelar", "Instalar e reiniciar"], defaultId: 0, cancelId: 0 });
-    if (confirmation.response === 1) nativeUpdates.install();
+    if (confirmation.response === 1) {
+      // Refuse to install if any persistent SQLite profile cannot be backed up.
+      // This is deliberately not described as a copy of Chromium cookie stores.
+      await application?.flushAll();
+      for (const profile of profiles?.list() ?? []) {
+        if (profile.kind !== "persistent") continue;
+        await (await profiles!.storage(profile.id)).createUpdateBackup();
+      }
+      nativeUpdates.install();
+    }
   });
   const testProfileDirectory = process.env.NODE_ENV === "test" ? process.env.MOON_TEST_PROFILE_DIR : undefined;
   const defaultDirectory = testProfileDirectory ?? join(app.getPath("userData"), "profile");
   const profilesDirectory = testProfileDirectory ? join(testProfileDirectory, "profiles") : join(app.getPath("userData"), "profiles");
   profiles = new LocalProfileManager(profilesDirectory, defaultDirectory);
-  defaultProfileId = (await profiles.initialize()).id;
+  try { defaultProfileId = (await profiles.initialize()).id; }
+  catch (error) {
+    console.error("Moon profile open failed; starting isolated recovery", error);
+    await showRecoveryWindow(defaultDirectory);
+    return;
+  }
   application = new BrowserApplicationService(browser, windowId => profiles!.storage(windows.profileId(windowId)));
   installApplicationMenu(() => { void createMainWindow(true, defaultProfileId); }, (window, action) => {
     const id = windows.idForWebContents(window.webContents); if (id) browser.zoomActivePage(id, action);
