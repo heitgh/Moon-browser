@@ -54,7 +54,7 @@ test("security UI activates protection and startup exposes no profile data until
     await quit(application); application = undefined;
     application = await launch(directory);
     const gate = await document(application, "access");
-    expect(application.windows().some(page => page.url().endsWith("/index.html"))).toBe(false);
+    await expect.poll(() => application!.windows().some(page => page.url().endsWith("/index.html"))).toBe(false);
     expect(await gate.evaluate(() => typeof (window as unknown as {moonBrowser?: unknown}).moonBrowser)).toBe("undefined");
     await expect(stat(join(directory, "profile", "moon.sqlite3-wal"))).rejects.toMatchObject({code: "ENOENT"});
     await gate.getByLabel("Senha do perfil").fill("incorrect-password");
@@ -77,15 +77,19 @@ test("manual and automatic locking protect the whole profile and a second launch
     await first.page.evaluate(async () => {
       const bridge = (window as unknown as {moonBrowser: MoonBrowserBridge}).moonBrowser;
       await bridge.enableProfileAccess("secure-profile-password");
-      await bridge.lockProfile();
+      await bridge.createPrivateWindow();
+    });
+    await expect.poll(() => application!.windows().filter(page => page.url().endsWith("/index.html")).length).toBe(2);
+    await first.page.evaluate(async () => {
+      await (window as unknown as {moonBrowser: MoonBrowserBridge}).moonBrowser.lockProfile();
     }).catch(error => { if (!first.page.isClosed()) throw error; });
     const gate = await document(application, "access");
-    expect(application.windows().some(page => page.url().endsWith("/index.html"))).toBe(false);
+    await expect.poll(() => application!.windows().some(page => page.url().endsWith("/index.html"))).toBe(false);
     const binary = createRequire(import.meta.url)("electron") as string;
     await new Promise<void>((resolve, reject) => execFile(binary, [...(process.platform === "linux" ? ["--no-sandbox"] : []), ...(process.env.MOON_HEADLESS === "1" ? ["--ozone-platform=headless"] : []), `--user-data-dir=${directory}`, ".", "https://example.test/should-not-open"], {
       cwd: process.cwd(), env: {...process.env, NODE_ENV: "test", MOON_TEST_OFFLINE: "1", MOON_TEST_PROFILE_DIR: join(directory, "profile")}, timeout: 15_000
     }, error => error ? reject(error) : resolve()));
-    expect(application.windows().some(page => page.url().endsWith("/index.html"))).toBe(false);
+    await expect.poll(() => application!.windows().some(page => page.url().endsWith("/index.html"))).toBe(false);
     await gate.getByLabel("Senha do perfil").fill("secure-profile-password");
     await gate.getByRole("button", {name: "Desbloquear", exact: true}).click().catch(error => { if (!gate.isClosed()) throw error; });
     const page = await document(application, "index");
@@ -93,7 +97,7 @@ test("manual and automatic locking protect the whole profile and a second launch
     await application.evaluate(({powerMonitor}) => { powerMonitor.getSystemIdleTime = () => 120; });
     const automatic = await document(application, "access");
     await expect(automatic.getByRole("heading", {name: "Perfil bloqueado"})).toBeVisible();
-    expect(application.windows().some(page => page.url().endsWith("/index.html"))).toBe(false);
+    await expect.poll(() => application!.windows().some(page => page.url().endsWith("/index.html"))).toBe(false);
   } finally { if (application) await quit(application); await rm(directory, {recursive: true, force: true, maxRetries: 12, retryDelay: 250}); }
 });
 
@@ -107,10 +111,10 @@ test("quitting at the startup gate cancels authorization without opening the pro
     await quit(application); application = undefined;
     application = await launch(directory);
     await document(application, "access");
-    expect(application.windows().some(page => page.url().endsWith("/index.html"))).toBe(false);
+    await expect.poll(() => application!.windows().some(page => page.url().endsWith("/index.html"))).toBe(false);
     await quit(application); application = undefined;
     application = await launch(directory);
     await document(application, "access");
-    expect(application.windows().some(page => page.url().endsWith("/index.html"))).toBe(false);
+    await expect.poll(() => application!.windows().some(page => page.url().endsWith("/index.html"))).toBe(false);
   } finally { if (application) await quit(application); await rm(directory, {recursive: true, force: true, maxRetries: 12, retryDelay: 250}); }
 });
