@@ -24,6 +24,27 @@ async function createDatabase(): Promise<{ connection: BetterSqliteConnection; d
 }
 
 describe("BetterSqliteConnection", () => {
+  it("queues unrelated writes behind a transaction and drains them before checkpoint and close", async () => {
+    const { connection, database } = await createDatabase();
+    await connection.execute("CREATE TABLE queue_test(id TEXT PRIMARY KEY)");
+    let release!: () => void;
+    const first = database.transaction(async () => {
+      await database.run("INSERT INTO queue_test VALUES('rollback')");
+      await new Promise<void>(resolve => { release = resolve; });
+      throw new Error("rollback");
+    });
+    const rejected = expect(first).rejects.toThrow("rollback");
+    for (let i = 0; i < 100 && !release; i++) await new Promise(resolve => setImmediate(resolve));
+    const second = database.run("INSERT INTO queue_test VALUES('committed')");
+    const closed = database.close();
+    await expect(database.run("INSERT INTO queue_test VALUES('too-late')")).rejects.toThrow(/encerrando/);
+    release();
+    await rejected; await second; await closed;
+    const reopened = new BetterSqliteConnection(connection.filename, { readonly: true });
+    await reopened.connect();
+    try { expect(await reopened.all("SELECT id FROM queue_test")).toEqual([{ id: "committed" }]); }
+    finally { await reopened.close(); }
+  });
   it("enables the production pragmas and applies migrations once", async () => {
     const { connection, database } = await createDatabase();
     const migrations = new MigrationManager(database, foundationMigrations);

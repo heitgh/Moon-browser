@@ -15,18 +15,19 @@ const platformArguments = process.env.MOON_HEADLESS === "1" ? ["--ozone-platform
   ? ["--ozone-platform=wayland"]
   : [];
 
-// Exercise the native application quit path for UI tests. The dedicated
-// shutdown.spec.ts continues to stress Playwright's context-close path.
+// Exercise the native quit path and retain stderr/signal on failures.
 async function quitDesktop(application: ElectronApplication): Promise<void> {
   const child = application.process();
   if (child.exitCode !== null) return;
+  let stderr = "";
+  child.stderr?.on("data", chunk => { stderr += String(chunk); });
   const exitCode = new Promise<number | null>((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("Native Electron quit exceeded 12 seconds")), 12_000);
     child.once("exit", code => { clearTimeout(timeout); resolve(code); });
   });
   // Electron may terminate before the DevTools evaluation can acknowledge quit.
-  void application.evaluate(({ app }) => { app.quit(); }).catch(() => undefined);
-  expect(await exitCode).toBe(0);
+  void application.evaluate(({ app }) => { setImmediate(() => app.quit()); }).catch(() => undefined);
+  expect(await exitCode, `Signal: ${child.signalCode}; stderr: ${stderr}`).toBe(0);
 }
 
 async function shellWindow(application: ElectronApplication): Promise<Page> {
@@ -271,6 +272,7 @@ test("exports and imports customization through the real desktop bridge", async 
   const userData = await mkdtemp(join(tmpdir(), "moon-e2e-portability-"));
   const exportPath = join(userData, "moon-customization.json");
   const application = await electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData } });
+  const child = application.process();
   try {
     const window = await shellWindow(application);
     await dismissOnboarding(window);
@@ -304,7 +306,9 @@ test("exports and imports customization through the real desktop bridge", async 
     await expect.poll(() => window.evaluate(() => document.documentElement.dataset.moonTheme)).toBe("light");
     await window.getByLabel("Aplicar personalização").click();
   } finally {
-    await quitDesktop(application);
+    // Preserve the original crash/error instead of masking it with process()
+    // after Playwright has already disposed the terminated application.
+    if (child.exitCode === null && child.signalCode === null) await quitDesktop(application);
     await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
@@ -413,7 +417,9 @@ test("keeps local profile SQLite data and Chromium partitions isolated", async (
       await bridge.mutateProfileData({ type: "bookmark:save", value: { id: "only-default", title: "Default", url: "https://default.test/", time: Date.now() } });
       return (await bridge.createLocalProfile({ name: "Produto", avatar: "briefcase", color: "#2563eb" })).id;
     });
-    await primary.evaluate(async id => (window as unknown as { moonBrowser: { openLocalProfile(id: string): Promise<unknown> } }).moonBrowser.openLocalProfile(id), secondId);
+    await primary.evaluate(async id => (window as unknown as { moonBrowser: { openLocalProfile(id: string): Promise<unknown> } }).moonBrowser.openLocalProfile(id), secondId).catch(error => {
+      if (!(error instanceof Error) || !error.message.includes("Target page, context or browser has been closed")) throw error;
+    });
     await expect.poll(async () => {
       const pages = application.windows().filter(page => page.url().endsWith("/index.html"));
       const contexts = await Promise.all(pages.map(page => page.evaluate(() => (window as unknown as { moonBrowser: { getWindowContext(): Promise<{ profileId: string }> } }).moonBrowser.getWindowContext()).catch(() => undefined)));
@@ -425,7 +431,11 @@ test("keeps local profile SQLite data and Chromium partitions isolated", async (
     expect(productSnapshot.bookmarks).toEqual([]);
     await product.evaluate(async () => (window as unknown as { moonBrowser: { mutateProfileData(value: unknown): Promise<void> } }).moonBrowser.mutateProfileData({ type: "bookmark:save", value: { id: "only-product", title: "Produto", url: "https://product.test/", time: Date.now() } }));
     expect(await application.evaluate(({ session, webContents }, partition) => webContents.getAllWebContents().some(contents => contents.session === session.fromPartition(partition)), `persist:profile:${secondId}:workspace:research`)).toBe(true);
-    await product.evaluate(async () => (window as unknown as { moonBrowser: { openLocalProfile(id: string): Promise<unknown> } }).moonBrowser.openLocalProfile("default"));
+    await product.evaluate(async () => (window as unknown as { moonBrowser: { openLocalProfile(id: string): Promise<unknown> } }).moonBrowser.openLocalProfile("default")).catch(error => {
+      // Switching deliberately destroys the source window. The assertions below
+      // still require the destination profile, its data and its partition.
+      if (!(error instanceof Error) || !error.message.includes("Target page, context or browser has been closed")) throw error;
+    });
     await expect.poll(async () => {
       const pages = application.windows().filter(page => page.url().endsWith("/index.html"));
       const contexts = await Promise.all(pages.map(page => page.evaluate(() => (window as unknown as { moonBrowser: { getWindowContext(): Promise<{ profileId: string }> } }).moonBrowser.getWindowContext()).catch(() => undefined)));

@@ -3,6 +3,7 @@ import { WebContentsView, type BaseWindow } from "electron";
 export class ElectronBrowserSurface {
   readonly view: WebContentsView;
   #destroyed = false;
+  #closing: Promise<void> | undefined;
 
   constructor(
     readonly id: string,
@@ -27,10 +28,16 @@ export class ElectronBrowserSurface {
     if (!this.#destroyed) this.view.webContents.focus();
   }
 
-  destroy(): void {
-    if (this.#destroyed) return;
+  destroy(): Promise<void> {
+    if (this.#closing) return this.#closing;
     this.#destroyed = true;
-    this.window.contentView.removeChildView(this.view);
-    if (!this.view.webContents.isDestroyed()) this.view.webContents.close();
+    if (!this.window.isDestroyed()) this.window.contentView.removeChildView(this.view);
+    const contents = this.view.webContents;
+    this.#closing = contents.isDestroyed() ? Promise.resolve() : new Promise<void>(resolve => {
+      contents.once("destroyed", resolve);
+      // Closing the host window before this event can race renderer teardown.
+      contents.close({ waitForBeforeUnload: false });
+    });
+    return this.#closing;
   }
 }

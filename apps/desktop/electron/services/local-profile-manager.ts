@@ -23,11 +23,17 @@ interface RegistryV1 {
 }
 
 export interface DeletedLocalProfile { readonly id: string; readonly backupPath?: string; }
+export class ProfileOpenError extends Error {
+  constructor(readonly directory: string, cause: unknown) {
+    super("Não foi possível abrir o perfil selecionado.", { cause });
+  }
+}
 
 export class LocalProfileManager {
   readonly #profiles = new Map<string, LocalProfileSummary>();
   readonly #storages = new Map<string, ProfileStorage>();
   readonly #guestDirectories = new Map<string, string>();
+  readonly #opening = new Map<string, Promise<ProfileStorage>>();
 
   constructor(readonly profilesDirectory: string, readonly legacyDefaultDirectory: string) {}
 
@@ -71,10 +77,18 @@ export class LocalProfileManager {
     if (existing) return existing;
     const directory = profile.kind === "guest" ? this.#guestDirectories.get(profile.id) : this.#directoryFor(profile.id);
     if (!directory) throw new Error("Diretório temporário do perfil não está disponível.");
-    const storage = new ProfileStorage(directory);
-    await storage.open();
-    this.#storages.set(profile.id, storage);
-    return storage;
+    const pending = this.#opening.get(profile.id);
+    if (pending) return pending;
+    const opening = (async () => {
+      const storage = new ProfileStorage(directory);
+      try { await storage.open(); }
+      catch (error) { throw new ProfileOpenError(directory, error); }
+      this.#storages.set(profile.id, storage);
+      return storage;
+    })();
+    this.#opening.set(profile.id, opening);
+    try { return await opening; }
+    finally { this.#opening.delete(profile.id); }
   }
 
   async create(value: CreateLocalProfileRequest): Promise<LocalProfileSummary> {
@@ -163,6 +177,7 @@ export class LocalProfileManager {
   }
 
   async close(): Promise<void> {
+    await Promise.allSettled([...this.#opening.values()]);
     for (const id of [...this.#storages.keys()]) await this.#closeStorage(id);
     for (const [id, directory] of this.#guestDirectories) { await rm(directory, { recursive: true, force: true }); this.#profiles.delete(id); }
     this.#guestDirectories.clear();
@@ -201,6 +216,6 @@ export class LocalProfileManager {
 
   async #closeStorage(id: string): Promise<void> {
     const storage = this.#storages.get(id); if (!storage) return;
-    this.#storages.delete(id); await storage.close();
+    await storage.close(); this.#storages.delete(id);
   }
 }

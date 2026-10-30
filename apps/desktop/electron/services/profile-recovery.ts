@@ -1,10 +1,10 @@
 // Nexus Inc. — offline recovery; no damaged SQLite file is ever overwritten in place.
 import { randomUUID } from "node:crypto";
-import { cp, copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { cp, copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile, realpath, lstat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { BetterSqliteConnection } from "../../../../packages/storage/adapters/better-sqlite-connection.js";
 import { ProfileStorage } from "./profile-storage.js";
-import { validateLocalProfileSummary, type LocalProfileSummary } from "../../../../packages/ipc/local-profile-contract.js";
+import { parseLocalProfileId, validateLocalProfileSummary, type LocalProfileSummary } from "../../../../packages/ipc/local-profile-contract.js";
 
 export interface RecoveryBackup {
   readonly id: string;
@@ -25,7 +25,15 @@ async function verifyDatabase(path: string): Promise<boolean> {
 }
 
 export class ProfileRecoveryService {
+  #busy = false;
   constructor(readonly profileDirectory: string) {}
+
+  async #exclusive<T>(operation: () => Promise<T>): Promise<T> {
+    if (this.#busy) throw new Error("Aguarde a recuperação em andamento.");
+    this.#busy = true;
+    try { return await operation(); }
+    finally { this.#busy = false; }
+  }
 
   async listBackups(): Promise<readonly RecoveryBackup[]> {
     const results: RecoveryBackup[] = [];
@@ -34,7 +42,7 @@ export class ProfileRecoveryService {
       for (const entry of await readdir(join(this.profileDirectory, directory)).catch(() => [])) {
         if (!pattern.test(entry)) continue;
         const path = join(this.profileDirectory, directory, entry);
-        const info = await stat(path).catch(() => undefined);
+        const info = await lstat(path).catch(() => undefined);
         if (!info?.isFile() || !(await verifyDatabase(path))) continue;
         results.push({ id: `${source}/${entry}`, source, createdAt: info.mtimeMs });
       }
@@ -43,6 +51,7 @@ export class ProfileRecoveryService {
   }
 
   async restoreBackup(id: string): Promise<string> {
+    return this.#exclusive(async () => {
     const selected = (await this.listBackups()).find(item => item.id === id);
     if (!selected) throw new Error("Backup inexistente ou com integridade inválida.");
     return this.#replacePreservingOld(async preserved => {
@@ -57,12 +66,14 @@ export class ProfileRecoveryService {
       await rm(`${target}-shm`, { force: true });
       if (!(await verifyDatabase(target))) throw new Error("O banco restaurado não passou na verificação.");
     });
+    });
   }
 
   // A truly new profile must receive a new identifier and therefore a new
   // Chromium partition. Reinitializing the old "default" directory would
   // silently share cookies and authenticated sessions with the damaged profile.
   async createFresh(registryDirectory: string): Promise<string> {
+    return this.#exclusive(async () => {
     const indexPath = join(registryDirectory, "index.json");
     let existing: readonly LocalProfileSummary[];
     try {
@@ -72,12 +83,18 @@ export class ProfileRecoveryService {
       existing = raw.profiles.map(validateLocalProfileSummary);
       if (existing.filter(item => item.default && item.kind === "persistent").length !== 1)
         throw new TypeError("Registro de perfis inconsistente.");
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT")
-        throw new Error("O registro de perfis está danificado. Exporte os arquivos antes de tentar uma reconstrução manual.", { cause: error });
+    } catch {
+      // Explicit fresh-profile recovery preserves the original registry below.
+      // Rebuild only identities from valid directory names, never delete data.
       const now = Date.now();
       existing = [{ id: "default", name: "Padrão (preservado)", avatar: "moon", color: "#8b5cf6",
         kind: "persistent", default: true, createdAt: now, lastUsedAt: now }];
+      for (const entry of await readdir(registryDirectory, { withFileTypes: true }).catch(() => [])) {
+        if (!entry.isDirectory() || !entry.name.startsWith("profile-")) continue;
+        try { parseLocalProfileId(entry.name); } catch { continue; }
+        existing = [...existing, { id: entry.name, name: "Perfil preservado", avatar: "moon", color: "#8b5cf6",
+          kind: "persistent", default: false, createdAt: now, lastUsedAt: now }];
+      }
     }
 
     const id = `profile-${randomUUID()}`;
@@ -96,7 +113,6 @@ export class ProfileRecoveryService {
       await rm(directory, { recursive: true, force: true });
       throw error;
     }
-
     const backupIndex = `${indexPath}.preserved-${Date.now()}-${randomUUID()}`;
     const temporary = `${indexPath}.tmp-${randomUUID()}`;
     try {
@@ -113,18 +129,21 @@ export class ProfileRecoveryService {
       await rm(directory, { recursive: true, force: true });
       throw error;
     }
+    });
   }
 
   // Emergency export is a raw directory copy, not an importable or encrypted archive.
   async exportEmergency(destinationRoot: string): Promise<string> {
-    const from = resolve(this.profileDirectory);
-    const target = resolve(destinationRoot);
+    return this.#exclusive(async () => {
+    const from = await realpath(this.profileDirectory);
+    const target = await realpath(destinationRoot);
     if (!isAbsolute(destinationRoot) || target === from || target.startsWith(from + sep) || from.startsWith(target + sep))
       throw new Error("Escolha uma pasta fora do diretório do perfil.");
     if (!(await stat(from)).isDirectory()) throw new Error("Pasta do perfil não encontrada.");
     const destination = join(target, `moon-emergency-${Date.now()}-${randomUUID()}`);
     await cp(from, destination, { recursive: true, errorOnExist: true, force: false });
     return destination;
+    });
   }
 
   async #replacePreservingOld(operation: (preserved: string) => Promise<void>): Promise<string> {

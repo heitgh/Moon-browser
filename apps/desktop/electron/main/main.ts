@@ -10,7 +10,7 @@ import { NativeUpdater } from "../services/native-updater.js";
 import { app, ipcMain, shell, dialog, BrowserWindow } from "electron";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { assertRecoveryDocument } from "../ipc/recovery-ipc-policy.js";
 import { ElectronBrowserManager } from "../browser/browser-manager.js";
 import { registerBrowserIpc } from "../ipc/browser-ipc.js";
 import { registerProductIpc } from "../ipc/product-ipc.js";
@@ -23,7 +23,7 @@ import { ElectronDownloadManager } from "../services/download-manager.js";
 import { BrowserApplicationService } from "../../application/browser-application-service.js";
 import { SessionRequestPipeline } from "../security/session-request-pipeline.js";
 import { SitePermissionService } from "../security/site-permission-service.js";
-import { LocalProfileManager } from "../services/local-profile-manager.js";
+import { LocalProfileManager, ProfileOpenError } from "../services/local-profile-manager.js";
 import { ProfileRecoveryService } from "../services/profile-recovery.js";
 
 const windows = new WindowManager();
@@ -38,18 +38,16 @@ let application: BrowserApplicationService | undefined;
 let defaultProfileId = "default";
 let recoveryWindow: BrowserWindow | undefined;
 let recoveryService: ProfileRecoveryService | undefined;
+let recoveryTask: Promise<string> | undefined;
 
 function assertRecoveryCaller(event: Electron.IpcMainInvokeEvent): ProfileRecoveryService {
-  if (!recoveryService || !recoveryWindow || recoveryWindow.isDestroyed()
-    || event.sender !== recoveryWindow.webContents
-    || !event.senderFrame || event.senderFrame !== event.sender.mainFrame
-    || event.senderFrame.detached
-    || event.senderFrame.url !== pathToFileURL(join(app.getAppPath(), "recovery.html")).href)
-    throw new Error("Janela de recuperação inválida.");
+  if (!recoveryService) throw new Error("Recuperação indisponível.");
+  assertRecoveryDocument(event, recoveryWindow, app.getAppPath());
   return recoveryService;
 }
 
 async function showRecoveryWindow(profileDirectory: string): Promise<void> {
+  if (recoveryWindow && !recoveryWindow.isDestroyed()) { recoveryWindow.focus(); return; }
   recoveryService = new ProfileRecoveryService(profileDirectory);
   const appRoot = app.getAppPath();
   const window = new BrowserWindow({
@@ -60,39 +58,58 @@ async function showRecoveryWindow(profileDirectory: string): Promise<void> {
       nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: false }
   });
   recoveryWindow = window;
+  let recoveryBusy = false;
+  const runRecovery = async (event: Electron.IpcMainInvokeEvent, operation: (service: ProfileRecoveryService) => Promise<string>): Promise<string> => {
+    const service = assertRecoveryCaller(event);
+    if (recoveryBusy) throw new Error("Aguarde a recuperação em andamento.");
+    recoveryBusy = true;
+    const task = operation(service);
+    recoveryTask = task;
+    try { return await task; }
+    finally { recoveryBusy = false; if (recoveryTask === task) recoveryTask = undefined; }
+  };
+  window.on("close", event => { if (recoveryBusy && !shutdownStarted) event.preventDefault(); });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", event => event.preventDefault());
   window.once("closed", () => {
     if (recoveryWindow === window) { recoveryWindow = undefined; recoveryService = undefined; }
+    for (const channel of ["recovery:list", "recovery:export", "recovery:restore", "recovery:fresh"]) ipcMain.removeHandler(channel);
     // Normal browser lifecycle listeners are not installed if profile initialization failed.
-    if (!shutdownStarted) app.quit();
+    if (!shutdownStarted && windows.list().length === 0) app.quit();
   });
 
   const confirm = async (message: string): Promise<boolean> =>
     (await dialog.showMessageBox(window, { type: "warning", title: "Confirmar recuperação",
       message, detail: "O perfil original será preservado em uma pasta separada. O Moon será reiniciado.",
       buttons: ["Cancelar", "Confirmar"], defaultId: 0, cancelId: 0 })).response === 1;
-  const restart = (): void => { app.relaunch(); app.quit(); };
+  const restart = (): void => { app.relaunch(); setImmediate(() => app.quit()); };
+  const prepareRecovery = async (): Promise<void> => {
+    // Stop normal writes and close handles before renaming any profile files.
+    ipc.dispose();
+    await ipc.drain();
+    await application?.shutdown();
+    await profiles?.close();
+    windows.closeAll();
+  };
   ipcMain.handle("recovery:list", event => assertRecoveryCaller(event).listBackups());
-  ipcMain.handle("recovery:export", async event => {
-    const service = assertRecoveryCaller(event);
+  ipcMain.handle("recovery:export", event => runRecovery(event, async service => {
     const result = await dialog.showOpenDialog(window, { title: "Escolha uma pasta externa para a cópia", properties: ["openDirectory", "createDirectory"] });
     return result.canceled || !result.filePaths[0] ? "Exportação cancelada." : service.exportEmergency(result.filePaths[0]);
-  });
-  ipcMain.handle("recovery:restore", async (event, id: unknown) => {
-    const service = assertRecoveryCaller(event);
+  }));
+  ipcMain.handle("recovery:restore", (event, id: unknown) => runRecovery(event, async service => {
     if (typeof id !== "string" || id.length > 200) throw new TypeError("Backup inválido.");
     if (!(await confirm("Restaurar este backup do banco SQLite?"))) return "Restauração cancelada.";
+    await prepareRecovery();
     await service.restoreBackup(id);
     restart(); return "Backup restaurado. Reiniciando Moon…";
-  });
-  ipcMain.handle("recovery:fresh", async event => {
-    const service = assertRecoveryCaller(event);
-    if (!(await confirm("Criar um perfil limpo sem apagar o anterior?"))) return "Operação cancelada.";
+  }));
+  ipcMain.handle("recovery:fresh", event => runRecovery(event, async service => {
+    if (!(await confirm("Criar um perfil limpo sem apagar o anterior? Se o registro estiver danificado, uma cópia será preservada e o registro será reconstruído."))) return "Operação cancelada.";
     if (!profiles) throw new Error("Gerenciador de perfis indisponível.");
+    await prepareRecovery();
     await service.createFresh(profiles.profilesDirectory);
     restart(); return "Novo perfil criado. Reiniciando Moon…";
-  });
+  }));
   await window.loadFile(join(appRoot, "recovery.html"));
 }
 
@@ -108,7 +125,12 @@ async function ensureProfilePermissions(profileId: string): Promise<void> {
 async function createMainWindow(privateMode = false, profileId = defaultProfileId): Promise<void> {
   if (!profiles) throw new Error("Profile manager is not ready");
   const localProfile = profiles.require(profileId);
-  await ensureProfilePermissions(profileId);
+  try { await ensureProfilePermissions(profileId); }
+  catch (error) {
+    if (!(error instanceof ProfileOpenError)) throw error;
+    await showRecoveryWindow(error.directory);
+    throw error;
+  }
   const appRoot = app.getAppPath();
   const id = windows.create({
     title: privateMode ? `Moon Browser — Janela anônima · ${localProfile.name}` : `Moon Browser — ${localProfile.name}`,
@@ -211,7 +233,10 @@ app.whenReady().then(async () => {
   try { defaultProfileId = (await profiles.initialize()).id; }
   catch (error) {
     console.error("Moon profile open failed; starting isolated recovery", error);
-    await showRecoveryWindow(defaultDirectory);
+    await profiles.close();
+    // A broken registry can hide several profiles. Emergency export must retain
+    // the whole application directory, not only the registry subdirectory.
+    await showRecoveryWindow(error instanceof ProfileOpenError ? error.directory : testProfileDirectory ?? app.getPath("userData"));
     return;
   }
   application = new BrowserApplicationService(browser, windowId => profiles!.storage(windows.profileId(windowId)));
@@ -278,15 +303,11 @@ app.on("before-quit", event => {
   if (shutdownStarted) return;
   shutdownStarted = true;
   ipc.dispose();
-  if (!application) {
-    shutdownComplete = true;
-    app.quit();
-    return;
-  }
   const diagnostics = new LocalDiagnostics(join(app.getPath("userData"), "diagnostics"), process.env.MOON_LOCAL_DIAGNOSTICS === "1");
   void runShutdown([
+    { name: "drain-recovery", run: async () => { await recoveryTask?.catch(() => undefined); } },
     { name: "drain-ipc", run: () => ipc.drain() },
-    { name: "flush-and-destroy-tabs", run: () => application!.shutdown() },
+    { name: "flush-and-destroy-tabs", run: async () => { await application?.shutdown(); } },
     { name: "close-profiles", run: async () => { await profiles?.close(); } }
   ], {
     timeoutMs: 5_000,

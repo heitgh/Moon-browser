@@ -205,7 +205,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       tabId => tabId !== id && this.#tabWindows.get(tabId) === windowId
     );
 
-    this.#requireSurface(id).destroy();
+    await this.#requireSurface(id).destroy();
     this.#surfaces.delete(id);
     this.#tabs.delete(id);
     this.#tabWindows.delete(id);
@@ -382,7 +382,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       this.#closeAuxiliaryWindows(id);
       const surface = this.#surfaces.get(id);
       if (surface && this.#tabs.get(id)?.private) privateSessions.add(surface.view.webContents.session);
-      surface?.destroy();
+      await surface?.destroy();
       this.#surfaces.delete(id);
       this.#tabs.delete(id);
       this.#tabWindows.delete(id);
@@ -423,7 +423,8 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     for (const windowId of new Set(this.#tabWindows.values())) {
       await this.closeTabsForWindow(windowId);
     }
-    this.windows.closeAll();
+    // The shutdown coordinator owns host windows. Closing them here emits
+    // window-all-closed and can re-enter app.quit before storage has closed.
   }
 
   #attachWebContentsEvents(

@@ -19,6 +19,21 @@ async function fixture() {
 }
 
 describe("ProfileRecoveryService", () => {
+  it("refuses concurrent recovery actions and preserves data when update backup fails", async () => {
+    const { root, directory, storage, recovery } = await fixture();
+    await storage.applyProfileMutation({ type: "notes:save", content: "Keep me" });
+    await writeFile(join(directory, "recovery-backups"), "not a directory");
+    await expect(storage.createUpdateBackup()).rejects.toThrow();
+    expect((await storage.loadProfileData()).notes).toBe("Keep me");
+    await storage.close();
+    const first = recovery.createFresh(join(root, "profiles"));
+    await expect(recovery.createFresh(join(root, "profiles"))).rejects.toThrow(/andamento/);
+    await first;
+    const original = new ProfileStorage(directory);
+    await original.open();
+    expect((await original.loadProfileData()).notes).toBe("Keep me");
+    await original.close();
+  });
   it("backs up SQLite before an update and restores data after simulated corruption without erasing the original", async () => {
     const { directory, storage, recovery } = await fixture();
     await storage.applyProfileMutation({ type: "notes:save", content: "Dados importantes" });
@@ -49,13 +64,18 @@ describe("ProfileRecoveryService", () => {
     await reopened.open(); await reopened.close();
   });
 
-  it("refuses to replace a corrupt profile registry and keeps the original database", async () => {
+  it("preserves a corrupt registry before explicitly creating an independent fresh profile", async () => {
     const { root, directory, storage, recovery } = await fixture();
     await storage.close();
     const profiles = join(root, "profiles");
     await mkdir(profiles);
     await writeFile(join(profiles, "index.json"), "not-json");
-    await expect(recovery.createFresh(profiles)).rejects.toThrow(/registro de perfis/i);
+    const id = await recovery.createFresh(profiles);
+    expect(id).toMatch(/^profile-/);
+    const preserved = (await readdir(profiles)).find(name => name.startsWith("index.json.preserved-"));
+    expect(await readFile(join(profiles, preserved!), "utf8")).toBe("not-json");
+    const registry = JSON.parse(await readFile(join(profiles, "index.json"), "utf8")) as { profiles: {id: string; default: boolean}[] };
+    expect(registry.profiles.find(profile => profile.default)?.id).toBe(id);
     expect((await stat(join(directory, "moon.sqlite3"))).isFile()).toBe(true);
   });
 
