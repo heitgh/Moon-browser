@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { shell, type DownloadItem, type Session } from "electron";
+import { dialog, shell, type DownloadItem, type Session } from "electron";
+import { extname } from "node:path";
 import type { WindowManager } from "../main/window-manager.js";
 
 export type ManagedDownloadState =
@@ -21,6 +22,18 @@ export interface ManagedDownload {
   readonly percentage: number | null;
   readonly startedAt: number;
   readonly completedAt?: number;
+}
+
+// Executables/scripts can be invoked by the OS when opened through shell.openPath.
+const EXECUTABLE_EXTENSIONS = new Set([
+  ".exe", ".msi", ".msp", ".msix", ".appx", ".bat", ".cmd", ".com", ".scr",
+  ".ps1", ".psm1", ".vbs", ".vbe", ".wsf", ".wsh", ".hta", ".lnk",
+  ".app", ".dmg", ".pkg", ".command", ".sh", ".bash", ".zsh", ".run",
+  ".appimage", ".deb", ".rpm", ".jar", ".desktop", ".py"
+]);
+
+export function needsExecutableConfirmation(filename: string, savePath: string): boolean {
+  return [filename, savePath].some(value => EXECUTABLE_EXTENSIONS.has(extname(value).toLowerCase()));
 }
 
 export class ElectronDownloadManager {
@@ -87,6 +100,22 @@ export class ElectronDownloadManager {
   async open(id: string, profileId?: string): Promise<void> {
     const item = this.#require(id, profileId);
     if (item.state !== "completed") throw new Error("Download is not complete");
+    if (needsExecutableConfirmation(item.filename, item.savePath)) {
+      // Authorization stays in Electron main and is required on every attempt.
+      const { response } = await dialog.showMessageBox({
+        type: "warning",
+        title: "Confirmar abertura de executável",
+        message: "Este arquivo pode executar programas ou comandos no seu computador.",
+        detail: `Arquivo: ${item.filename}\nDestino: ${item.savePath}\nOrigem: ${item.url}\n\nAbra somente se confiar na origem.`,
+        buttons: ["Cancelar", "Abrir arquivo"],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true
+      });
+      if (response !== 1) return;
+      // The download can be cleared while the confirmation dialog is open.
+      if (this.#require(id, profileId).state !== "completed") throw new Error("Download is no longer complete");
+    }
     const error = await shell.openPath(item.savePath);
     if (error) throw new Error(error);
   }
