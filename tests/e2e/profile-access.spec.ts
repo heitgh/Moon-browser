@@ -18,7 +18,9 @@ async function document(application: ElectronApplication, name: string): Promise
 }
 async function quit(application: ElectronApplication) {
   const child = nativeProcess.get(application)!;
-  if (child.exitCode !== null || child.signalCode !== null) return;
+  if (child.exitCode !== null || child.signalCode !== null) {
+    expect(child.signalCode).toBeNull(); expect(child.exitCode).toBe(0); return;
+  }
   let stderr = ""; child.stderr?.on("data", chunk => { stderr += String(chunk); });
   let timer: ReturnType<typeof setTimeout> | undefined;
   const exit = new Promise<number | null>(resolve => child.once("exit", resolve));
@@ -29,7 +31,8 @@ async function quit(application: ElectronApplication) {
 async function setup(directory: string) {
   const application = await launch(directory); const page = await document(application, "index");
   await application.evaluate(({dialog}) => { dialog.showMessageBox = async () => ({response: 1, checkboxChecked: false}); });
-  const skip = page.getByLabel("Pular configuração inicial"); if (await skip.isVisible()) await skip.click();
+  await page.getByLabel("Pular configuração inicial").click();
+  await expect(page.getByTestId("moon-onboarding")).toHaveCount(0);
   return {application, page};
 }
 
@@ -90,6 +93,24 @@ test("manual and automatic locking protect the whole profile and a second launch
     await application.evaluate(({powerMonitor}) => { powerMonitor.getSystemIdleTime = () => 120; });
     const automatic = await document(application, "access");
     await expect(automatic.getByRole("heading", {name: "Perfil bloqueado"})).toBeVisible();
+    expect(application.windows().some(page => page.url().endsWith("/index.html"))).toBe(false);
+  } finally { if (application) await quit(application); await rm(directory, {recursive: true, force: true, maxRetries: 12, retryDelay: 250}); }
+});
+
+test("quitting at the startup gate cancels authorization without opening the protected profile", async () => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "moon-protected-quit-"));
+  let application: ElectronApplication | undefined;
+  try {
+    const first = await setup(directory); application = first.application;
+    await first.page.evaluate(async () => (window as unknown as {moonBrowser: MoonBrowserBridge}).moonBrowser.enableProfileAccess("secure-profile-password"));
+    await quit(application); application = undefined;
+    application = await launch(directory);
+    await document(application, "access");
+    expect(application.windows().some(page => page.url().endsWith("/index.html"))).toBe(false);
+    await quit(application); application = undefined;
+    application = await launch(directory);
+    await document(application, "access");
     expect(application.windows().some(page => page.url().endsWith("/index.html"))).toBe(false);
   } finally { if (application) await quit(application); await rm(directory, {recursive: true, force: true, maxRetries: 12, retryDelay: 250}); }
 });

@@ -132,6 +132,7 @@ async function ensureProfilePermissions(profileId: string): Promise<void> {
 }
 
 async function createMainWindow(privateMode = false, profileId = defaultProfileId): Promise<void> {
+  if (shutdownStarted) return;
   if (!profiles) throw new Error("Profile manager is not ready");
   const localProfile = profiles.require(profileId);
   try { await ensureProfilePermissions(profileId); }
@@ -141,6 +142,7 @@ async function createMainWindow(privateMode = false, profileId = defaultProfileI
     accessController?.closeGate(profileId);
     throw error;
   }
+  if (shutdownStarted) return;
   const appRoot = app.getAppPath();
   const id = windows.create({
     title: privateMode ? `Moon Browser — Janela anônima · ${localProfile.name}` : `Moon Browser — ${localProfile.name}`,
@@ -321,6 +323,7 @@ app.on("before-quit", event => {
   event.preventDefault();
   if (shutdownStarted) return;
   shutdownStarted = true;
+  accessController?.closeGates();
   ipc.dispose();
   const diagnostics = new LocalDiagnostics(join(app.getPath("userData"), "diagnostics"), process.env.MOON_LOCAL_DIAGNOSTICS === "1");
   void runShutdown([
