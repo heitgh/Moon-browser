@@ -170,3 +170,29 @@ it("persists an intentionally emptied normal window without resurrecting closed 
   expect(saves.at(-1)).toEqual([]);
   await app.shutdown();
 });
+
+it("drains an in-flight history write before completing shutdown", async () => {
+  const browser = new FakeBrowser();
+  let release!: () => void;
+  const profile = {
+    loadBrowserSession: async () => [],
+    saveBrowserSession: async () => undefined,
+    recordHistoryEntry: async () => { await new Promise<void>(resolve => { release = resolve; }); }
+  };
+  const app = new BrowserApplicationService(browser as never, profile as never);
+  const tab = await app.createTab("window-1", { url: "https://history.example/" });
+  const pending = browser.listener?.("window-1", {
+    tab, navigation: { canGoBack: false, canGoForward: false },
+    historyEntry: { id: "visit", url: tab.url, title: "Visit" }
+  } as never);
+  for (let i = 0; i < 100 && !release; i++) await new Promise(resolve => setImmediate(resolve));
+  expect(release).toBeTypeOf("function");
+  let done = false;
+  const shutdown = app.shutdown().then(() => { done = true; });
+  await Promise.resolve();
+  expect(done).toBe(false);
+  release();
+  await pending;
+  await shutdown;
+  expect(done).toBe(true);
+});
