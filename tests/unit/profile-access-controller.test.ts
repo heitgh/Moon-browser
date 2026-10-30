@@ -10,7 +10,7 @@ import { ProfileAccessController, ProfileAccessError } from "../../apps/desktop/
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.clearAllMocks(); });
 function fixture() {
   vi.useFakeTimers();
-  const service = {unlock: vi.fn(), load: vi.fn(async () => undefined), assertLoadAllowed: vi.fn(), assertUnlocked: vi.fn(), status: vi.fn(() => ({enabled: true, locked: false, lockOnSystem: true}))};
+  const service = {protectedProfileIds: vi.fn(async () => ["default"]), beginLock: vi.fn(() => false), unlock: vi.fn(), load: vi.fn(async () => undefined), assertUnlocked: vi.fn(), status: vi.fn(() => ({enabled: true, locked: false, lockOnSystem: true}))};
   const windows = {idForWebContents: vi.fn(() => "shell"), profileId: () => "default", list: () => []};
   const controller = new ProfileAccessController(service as unknown as ProfileAccessService, windows as unknown as WindowManager, () => undefined, async () => undefined);
   return {service, windows, controller};
@@ -35,13 +35,13 @@ it("labels invalid access metadata separately so it cannot enter database recove
   const {service, controller} = fixture();
   service.load.mockRejectedValueOnce(new Error("invalid protection"));
   await expect(controller.authorizeStorage("default")).rejects.toBeInstanceOf(ProfileAccessError);
-  expect(service.assertLoadAllowed).not.toHaveBeenCalled();
+  expect(service.assertUnlocked).not.toHaveBeenCalled();
 });
 it("allows storage only after its access policy has approved loading", async () => {
   const {service, controller} = fixture();
   await controller.authorizeStorage("default");
   expect(service.load).toHaveBeenCalledWith("default");
-  expect(service.assertLoadAllowed).toHaveBeenCalledWith("default");
+  expect(service.assertUnlocked).toHaveBeenCalledWith("default");
 });
 
 it("retries a system lock request after a credential operation finishes", () => {
@@ -54,4 +54,18 @@ it("retries a system lock request after a credential operation finishes", () => 
   expect(locking).toHaveBeenCalledTimes(2);
   vi.advanceTimersByTime(5000);
   expect(locking).toHaveBeenCalledTimes(2);
+});
+
+it("does not create a new access gate during application shutdown", () => {
+  const {service, controller} = fixture();
+  native.on.mock.calls.find(call => call[0] === "before-quit")![1]();
+  expect(controller.lock("default")).toBe(false);
+  expect(service.beginLock).not.toHaveBeenCalled();
+});
+
+it("authorizes every protected profile before whole-directory recovery", async () => {
+  const {service, controller} = fixture();
+  service.protectedProfileIds.mockResolvedValueOnce(["default", "secondary"]);
+  await controller.authorizeRecovery();
+  expect(service.assertUnlocked.mock.calls).toEqual([["default"], ["secondary"]]);
 });

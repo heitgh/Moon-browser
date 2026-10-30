@@ -72,6 +72,14 @@ export class LocalProfileManager {
     return profile;
   }
 
+  // Internal persistence may finish accepted writes while access is locked.
+  // This cannot open a database or authorize a renderer operation.
+  openedStorage(id: string): ProfileStorage {
+    const storage = this.#storages.get(this.require(id).id);
+    if (!storage) throw new Error("O armazenamento do perfil não está aberto.");
+    return storage;
+  }
+
   async storage(id: string): Promise<ProfileStorage> {
     const profile = this.require(id);
     await this.authorizeProfile(id);

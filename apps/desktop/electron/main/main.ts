@@ -135,6 +135,7 @@ async function createMainWindow(privateMode = false, profileId = defaultProfileI
   if (shutdownStarted) return;
   if (!profiles) throw new Error("Profile manager is not ready");
   const localProfile = profiles.require(profileId);
+  await accessController?.authorizeStorage(profileId);
   try { await ensureProfilePermissions(profileId); }
   catch (error) {
     if (!(error instanceof ProfileOpenError)) throw error;
@@ -252,6 +253,15 @@ app.whenReady().then(async () => {
       if (!shutdownStarted) await dialog.showMessageBox({type: "error", title: "Acesso ao perfil", message: error.message});
       app.quit(); return;
     }
+    // A corrupt registry is inspected before any database is opened. Emergency
+    // export can include every profile, so all existing protection must pass.
+    if (!(error instanceof ProfileOpenError)) {
+      try { await accessController.authorizeRecovery(); }
+      catch (accessError) {
+        if (!shutdownStarted) await dialog.showMessageBox({type: "error", title: "Acesso à recuperação", message: accessError instanceof Error ? accessError.message : "Acesso negado."});
+        app.quit(); return;
+      }
+    }
     console.error("Moon profile open failed; starting isolated recovery", error);
     await profiles.close();
     // A broken registry can hide several profiles. Emergency export must retain
@@ -260,7 +270,7 @@ app.whenReady().then(async () => {
     accessController.closeGates();
     return;
   }
-  application = new BrowserApplicationService(browser, windowId => profiles!.storage(windows.profileId(windowId)));
+  application = new BrowserApplicationService(browser, async windowId => profiles!.openedStorage(windows.profileId(windowId)));
   installApplicationMenu(() => { void createMainWindow(true, defaultProfileId); }, (window, action) => {
     const id = windows.idForWebContents(window.webContents); if (id) browser.zoomActivePage(id, action);
   });

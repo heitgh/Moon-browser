@@ -59,9 +59,13 @@ export class ProfileAccessController {
   async authorizeStorage(id: string): Promise<void> {
     try {
       await this.service.load(id);
-      try { this.service.assertLoadAllowed(id); }
+      try { this.service.assertUnlocked(id); }
       catch { await this.#waitForUnlock(id); }
     } catch (error) { throw new ProfileAccessError(error instanceof Error ? error.message : "Não foi possível autorizar o perfil."); }
+  }
+  async authorizeRecovery(): Promise<void> {
+    try { for (const id of await this.service.protectedProfileIds()) await this.authorizeStorage(id); }
+    catch (error) { throw new ProfileAccessError(error instanceof Error ? error.message : "Recuperação protegida indisponível."); }
   }
   authorizeShell(event: IpcMainInvokeEvent, channel: string): void {
     // The lock command returns only acknowledgement while its source is hidden.
@@ -108,6 +112,7 @@ export class ProfileAccessController {
   }
   async drain(): Promise<void> { await Promise.allSettled([...this.#pending]); }
   lock(id: string): boolean {
+    if (this.#quitting) return false;
     if (!this.service.beginLock(id)) return false;
     const hosts = this.windows.list().filter(window => {
       const windowId = this.windows.idForWebContents(window.webContents);

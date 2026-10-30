@@ -7,6 +7,7 @@ A etapa 1 foi integrada na main pelo PR #37. Esta etapa adiciona proteção de a
 - `ProfileAccessService`: scrypt com sal aleatório, comparação constante, hash fora do banco e dos backups do perfil, escrita temporária sincronizada e rename, limite de tamanho do registro e atraso progressivo persistido.
 - `ProfileAccessController`: janela isolada sem acesso à API do navegador; desbloqueio antes de abrir SQLite; bloqueio de IPC antes e após operações; bloqueio manual, por inatividade e pela tela do sistema (Windows/macOS).
 - Bloquear oculta todas as janelas do perfil, grava a sessão e destrói as superfícies. Uma falha de gravação preserva a janela oculta até o desbloqueio. A janela de acesso não pode ser fechada enquanto houver janela preservada.
+- A recuperação de registro corrompido exige desbloquear todos os perfis protegidos antes de oferecer exportação do diretório. A persistência interna só recebe conexões já abertas; ela não abre bancos nem autoriza chamadas do renderer durante o bloqueio.
 - O gerenciador de perfis expõe ativar, alterar/remover senha e configurar bloqueio. Exclusão de outro perfil persistente também passa pela autorização do perfil de destino.
 - Instância secundária e URLs externas não contornam a janela de desbloqueio.
 

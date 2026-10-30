@@ -1,5 +1,5 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
@@ -116,5 +116,24 @@ test("quitting at the startup gate cancels authorization without opening the pro
     application = await launch(directory);
     await document(application, "access");
     await expect.poll(() => application!.windows().some(page => page.url().endsWith("/index.html"))).toBe(false);
+  } finally { if (application) await quit(application); await rm(directory, {recursive: true, force: true, maxRetries: 12, retryDelay: 250}); }
+});
+
+test("a corrupt registry cannot expose emergency recovery before protected profiles are unlocked", async () => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "moon-protected-recovery-"));
+  let application: ElectronApplication | undefined;
+  try {
+    const first = await setup(directory); application = first.application;
+    await first.page.evaluate(async () => (window as unknown as {moonBrowser: MoonBrowserBridge}).moonBrowser.enableProfileAccess("secure-profile-password"));
+    await quit(application); application = undefined;
+    await writeFile(join(directory, "profile", "profiles", "index.json"), "damaged registry");
+    application = await launch(directory);
+    const gate = await document(application, "access");
+    expect(application.windows().some(page => page.url().endsWith("/recovery.html"))).toBe(false);
+    await gate.getByLabel("Senha do perfil").fill("secure-profile-password");
+    await gate.getByRole("button", {name: "Desbloquear", exact: true}).click().catch(error => { if (!gate.isClosed()) throw error; });
+    await document(application, "recovery");
+    expect(application.windows().some(page => page.url().endsWith("/index.html"))).toBe(false);
   } finally { if (application) await quit(application); await rm(directory, {recursive: true, force: true, maxRetries: 12, retryDelay: 250}); }
 });

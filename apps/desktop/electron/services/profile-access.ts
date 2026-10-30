@@ -1,6 +1,6 @@
 // Nexus Inc. — application access gate; this does not encrypt profile contents.
 import { randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
-import { mkdir, open, rename, rm } from "node:fs/promises";
+import { mkdir, open, readdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { parseLocalProfileId } from "../../../../packages/ipc/local-profile-contract.js";
 
@@ -50,6 +50,15 @@ export class ProfileAccessService {
     this.#records.set(id, record);
     if (!record) this.#unlocked.add(id);
   }
+  async protectedProfileIds(): Promise<readonly string[]> {
+    let names: string[];
+    try { names = await readdir(this.directory); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return []; throw error; }
+    if (names.length > 4096) throw new Error("Registro de segurança grande demais. Preserve os arquivos.");
+    const ids = names.filter(name => name.endsWith(".json")).map(name => parseLocalProfileId(name.slice(0, -5))).sort();
+    for (const id of ids) await this.load(id);
+    return ids.filter(id => Boolean(this.#records.get(id)));
+  }
   status(id: string): ProfileAccessStatus {
     if (!this.#records.has(id)) throw new Error("Perfil de segurança não inicializado.");
     const record = this.#records.get(id);
@@ -58,7 +67,6 @@ export class ProfileAccessService {
       retryAfterMs: Math.max(0, (record?.retryAt ?? 0) - this.now())};
   }
   assertUnlocked(id: string): void { if (!this.#unlocked.has(id)) throw new Error("O perfil está bloqueado."); }
-  assertLoadAllowed(id: string): void { if (!this.#unlocked.has(id) && !this.#locking.has(id)) throw new Error("O perfil está bloqueado."); }
   onLock(listener: (id: string) => void): () => void { this.#listeners.add(listener); return () => this.#listeners.delete(listener); }
   beginLock(id: string): boolean {
     if (this.#busy.has(id) || !this.#records.get(id) || !this.#unlocked.has(id)) return false;

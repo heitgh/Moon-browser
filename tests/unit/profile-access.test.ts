@@ -33,7 +33,7 @@ it("rejects wrong passwords, persists bounded retry delay and requires the curre
   await service.enable("default", "correct-password");
   expect(service.beginLock("default")).toBe(true);
   expect(() => service.assertUnlocked("default")).toThrow();
-  service.assertLoadAllowed("default");
+  expect(() => service.assertUnlocked("default")).toThrow(/bloqueado/);
   await expect(service.unlock("default", "correct-password")).rejects.toThrow(/gravacao|gravação/);
   service.finishLock("default");
   expect(await service.unlock("default", "incorrect-password")).toBe(false);
@@ -86,4 +86,14 @@ it("does not race locking against an in-flight password removal", async () => {
   expect(service.beginLock("default")).toBe(false);
   await removing;
   expect(service.status("default")).toMatchObject({enabled: false, locked: false});
+}, 15_000);
+
+it("discovers protected profiles independently of the normal profile registry", async () => {
+  const {directory, service} = await fixture();
+  await service.enable("default", "secure-password");
+  const restarted = new ProfileAccessService(directory);
+  expect(await restarted.protectedProfileIds()).toEqual(["default"]);
+  expect(() => restarted.assertUnlocked("default")).toThrow(/bloqueado/);
+  await writeFile(join(directory, "second.json"), "damaged");
+  await expect(restarted.protectedProfileIds()).rejects.toThrow();
 }, 15_000);
