@@ -30,3 +30,12 @@ it("lets the user opt into the sidebar button", async () => {
   const host = document.createElement("div"); document.body.append(host); panel.mount(host); await settle();
   host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(); expect(change).toHaveBeenCalledWith(true); panel.unmount();
 });
+it("does not overlap slow requests or render a reply after the panel closes", async () => {
+  vi.useFakeTimers(); let resolve!: (value: ResourceSnapshot) => void;
+  const query = vi.fn(() => new Promise<ResourceSnapshot>(done => { resolve = done; }));
+  const panel = new ResourcesPanel(query, {visible: () => false, change: vi.fn()});
+  const host = document.createElement("div"); document.body.append(host); panel.mount(host);
+  await vi.advanceTimersByTimeAsync(6000); expect(query).toHaveBeenCalledTimes(1);
+  panel.unmount(); resolve(sample); await settle();
+  expect(host.textContent).not.toContain("RAM dos processos:");
+});

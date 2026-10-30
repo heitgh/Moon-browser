@@ -46,3 +46,10 @@ it("sorts heavy pages without adding their shared memory to the total twice", ()
   const sample = monitor.snapshot("window");
   expect(sample.tabs[0]!.id).toBe("heavy"); expect(sample.memoryKiB).toBe(5120); expect(sample.activeTabs).toBe(1);
 });
+it("reports partial sums without turning unavailable processes into measured zeros", () => {
+  let now = 1000;
+  const monitor = new ResourceMonitor(() => [processMetric(1), {pid: 2, creationTime: 1, type: "Utility", memory: {workingSetSize: NaN}, cpu: {percentCPUUsage: Infinity}}], () => [], () => now);
+  expect(monitor.snapshot("window")).toMatchObject({memoryKiB: 1024, memoryComplete: false, cpuPercent: null, cpuComplete: false});
+  now += 2000;
+  expect(monitor.snapshot("window")).toMatchObject({memoryKiB: 1024, memoryComplete: false, cpuPercent: 7, cpuComplete: false});
+});
