@@ -61,7 +61,7 @@ export class ProfileAccessService {
   assertLoadAllowed(id: string): void { if (!this.#unlocked.has(id) && !this.#locking.has(id)) throw new Error("O perfil está bloqueado."); }
   onLock(listener: (id: string) => void): () => void { this.#listeners.add(listener); return () => this.#listeners.delete(listener); }
   beginLock(id: string): boolean {
-    if (!this.#records.get(id) || !this.#unlocked.has(id)) return false;
+    if (this.#busy.has(id) || !this.#records.get(id) || !this.#unlocked.has(id)) return false;
     this.#unlocked.delete(id); this.#locking.add(id);
     for (const listener of this.#listeners) {
       try { listener(id); } catch { /* A consumer failure must not reverse the access gate. */ }

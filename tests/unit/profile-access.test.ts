@@ -78,3 +78,12 @@ it("refuses oversized records and keeps access locked when a lock listener fails
   expect(service.beginLock("default")).toBe(true);
   expect(() => service.assertUnlocked("default")).toThrow(/bloqueado/);
 }, 15_000);
+
+it("does not race locking against an in-flight password removal", async () => {
+  const {service} = await fixture();
+  await service.enable("default", "secure-password");
+  const removing = service.disable("default", "secure-password");
+  expect(service.beginLock("default")).toBe(false);
+  await removing;
+  expect(service.status("default")).toMatchObject({enabled: false, locked: false});
+}, 15_000);

@@ -32,3 +32,9 @@ reconstrução; diretórios de perfis com IDs válidos são preservados, mas nom
 podem ser perdidos no registro reconstruído. Exportação de emergência é cópia bruta,
 não criptografada; falha do registro exporta o diretório do aplicativo. Backups
 pré-migração/pré-atualização são snapshots SQLite e não capturam partições Chromium.
+
+## Proteção de acesso ao perfil (etapa 2 em revisão)
+
+`ProfileAccessService` mantém somente sal e chave derivada por scrypt em `userData/profile-access/<id>.json`, separado do SQLite e de seus backups. O registro possui limite de tamanho, parâmetros fixos e atualização temporária sincronizada seguida de rename. Arquivos ausentes representam perfis sem proteção; registros inválidos falham fechados e não são redirecionados para recuperação de banco. Isto é controle de acesso do aplicativo, não criptografia nem resistência contra quem modifica os arquivos locais.
+
+`LocalProfileManager` chama o autorizador antes de retornar armazenamento, inclusive em cache, e antes de excluir um perfil persistente. `ProfileAccessController` expõe apenas desbloqueio à janela isolada e associa o IPC normal ao estado desbloqueado do perfil da janela. Ao bloquear, o fechamento pode finalizar gravações já aceitas, mas o renderer deixa de receber resultados. Operações de credenciais e bloqueio não concorrem; um bloqueio do sistema ocupado é tentado novamente no ciclo seguinte.

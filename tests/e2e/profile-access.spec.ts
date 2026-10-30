@@ -40,7 +40,7 @@ test("security UI activates protection and startup exposes no profile data until
   try {
     const first = await setup(directory); application = first.application;
     await first.page.evaluate(async () => (window as unknown as {moonBrowser: MoonBrowserBridge}).moonBrowser.mutateProfileData({type: "notes:save", content: "Protected note"}));
-    await first.page.getByLabel("Gerenciar perfis", {exact: true}).click();
+    await first.page.getByRole("button", {name: "Gerenciar perfis", exact: true}).first().click();
     await first.page.getByText("Segurança do perfil", {exact: true}).click();
     await first.page.getByLabel("Nova senha", {exact: true}).fill("secure-profile-password");
     await first.page.getByLabel("Confirmar nova senha", {exact: true}).fill("secure-profile-password");

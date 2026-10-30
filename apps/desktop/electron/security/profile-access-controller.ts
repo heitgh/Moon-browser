@@ -14,6 +14,7 @@ export class ProfileAccessController {
   readonly #gates = new Map<string, Gate>();
   readonly #pending = new Set<Promise<void>>();
   #quitting = false;
+  readonly #systemLockRequests = new Set<string>();
   readonly #timer: ReturnType<typeof setInterval>;
   constructor(readonly service: ProfileAccessService, readonly windows: WindowManager,
     readonly application: () => BrowserApplicationService | undefined,
@@ -34,6 +35,10 @@ export class ProfileAccessController {
       return valid;
     });
     this.#timer = setInterval(() => {
+      for (const id of this.#systemLockRequests) {
+        const state = this.service.status(id);
+        if (!state.enabled || state.locked || this.lock(id)) this.#systemLockRequests.delete(id);
+      }
       let idle: number;
       try { idle = powerMonitor.getSystemIdleTime(); } catch { return; }
       for (const id of this.#openProfileIds()) {
@@ -43,7 +48,10 @@ export class ProfileAccessController {
     }, 5000);
     this.#timer.unref();
     powerMonitor.on("lock-screen", () => {
-      for (const id of this.#openProfileIds()) if (this.service.status(id).lockOnSystem) this.lock(id);
+      for (const id of this.#openProfileIds()) if (this.service.status(id).lockOnSystem) {
+        this.#systemLockRequests.add(id);
+        if (this.lock(id)) this.#systemLockRequests.delete(id);
+      }
     });
     app.on("before-quit", () => { this.#quitting = true; });
     app.once("will-quit", () => clearInterval(this.#timer));
@@ -83,7 +91,10 @@ export class ProfileAccessController {
     router.register("profile-access:change", (event, payload: {current?: unknown; next?: unknown}) => this.service.change(profileFor(event), payload?.current, payload?.next));
     router.register("profile-access:disable", (event, payload: {current?: unknown}) => this.service.disable(profileFor(event), payload?.current));
     router.register("profile-access:configure", (event, payload: {current?: unknown; idleMinutes?: unknown; lockOnSystem?: unknown}) => this.service.configure(profileFor(event), payload?.current, payload?.idleMinutes, payload?.lockOnSystem));
-    router.register("profile-access:lock", event => { this.lock(profileFor(event)); return true; });
+    router.register("profile-access:lock", event => {
+      if (!this.lock(profileFor(event))) throw new Error("Ative a proteção e aguarde a operação de segurança em andamento antes de bloquear.");
+      return true;
+    });
   }
   closeGate(id: string): void {
     const gate = this.#gates.get(id);
@@ -96,8 +107,8 @@ export class ProfileAccessController {
     gate.window.show(); gate.window.focus(); return true;
   }
   async drain(): Promise<void> { await Promise.allSettled([...this.#pending]); }
-  lock(id: string): void {
-    if (!this.service.beginLock(id)) throw new Error("Ative a proteção antes de bloquear o perfil.");
+  lock(id: string): boolean {
+    if (!this.service.beginLock(id)) return false;
     const hosts = this.windows.list().filter(window => {
       const windowId = this.windows.idForWebContents(window.webContents);
       return windowId && this.windows.profileId(windowId) === id;
@@ -132,6 +143,7 @@ export class ProfileAccessController {
     })();
     this.#pending.add(work);
     void work.finally(() => this.#pending.delete(work));
+    return true;
   }
   #waitForUnlock(id: string): Promise<void> {
     const existing = this.#gates.get(id);
