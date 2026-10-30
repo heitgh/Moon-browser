@@ -77,7 +77,12 @@ test("keeps cookies through redirects and recovers a crashed site renderer", asy
     await expect.poll(() => application.windows().some(page => /\/authorize/.test(page.url()))).toBe(true);
     const popup = application.windows().find(page => /\/authorize/.test(page.url()))!;
     await popup.waitForURL(/\/authorize/);
-    await popup.locator("#done").click();
+    await popup.locator("#done").click().catch(error => {
+      // Completing OAuth deliberately closes this popup. Require that closure
+      // and still verify the opener's message below; other click errors fail.
+      if (!popup.isClosed() || !(error instanceof Error) || !error.message.includes("Target page, context or browser has been closed")) throw error;
+    });
+    await expect.poll(() => popup.isClosed()).toBe(true);
     await expect.poll(() => application.evaluate(async ({ webContents }, url) => {
       const page = webContents.getAllWebContents().find(item => item.getURL() === url);
       return page?.executeJavaScript("window.oauthResult");
