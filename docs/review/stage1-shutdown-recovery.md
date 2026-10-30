@@ -50,6 +50,20 @@ Resultados finais da execução e do CI devem ser registrados abaixo antes de me
 
 ## Evidências locais — 30/10/2026
 
+### CI do commit e3b7349 e ajuste das fixtures Windows
+
+O workflow de release passou no job de qualidade Linux. O job Windows passou em
+21 E2E e falhou em dois novos ensaios: restauração e fechamento após interrupção.
+Os 30 ciclos nativos passaram. O trace do ensaio de interrupção confirma que o
+dado foi lido após reiniciar e o timeout ocorreu em `application.close()` no final.
+O teste agora usa saída nativa com prazo e continua exigindo código zero.
+
+A fixture de restauração usava o mesmo caminho para SQLite e `--user-data-dir`.
+Isso tentava renomear o diretório ativo do Chromium no Windows. A fixture agora
+separa `userData/profile`, como a instalação real. A recuperação continua tendo
+de preservar o original e demonstrar a reabertura do dado. Esta mudança não é
+considerada prova de correção até a próxima execução Windows/Linux.
+
 - Typecheck e lint passaram.
 - 223 testes unitários (50 arquivos), 35 de integração e 33 Electron/SQLite passaram.
 - A rodada completa headless teve 21 E2E aprovados, 2 falhas e 3 probes externos

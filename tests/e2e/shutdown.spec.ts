@@ -88,7 +88,14 @@ test("reopens committed data after an abrupt process interruption", async () => 
     expect(await page.evaluate(async () => (window as unknown as {moonBrowser: MoonBrowserBridge}).moonBrowser.getProfileData().then(data => data.notes))).toBe("Committed before interruption");
   } finally {
     const child = application.process();
-    if (child.exitCode === null && child.signalCode === null) await application.close();
+    if (child.exitCode === null && child.signalCode === null) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const exit = new Promise<number | null>(resolve => child.once("exit", resolve));
+      void application.evaluate(({ app }) => { setImmediate(() => app.quit()); }).catch(() => undefined);
+      try {
+        expect(await Promise.race([exit, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Post-interruption native quit exceeded deadline")), 12_000); })])).toBe(0);
+      } finally { clearTimeout(timer); if (child.exitCode === null && child.signalCode === null) child.kill(); }
+    }
     await rm(directory, { recursive: true, force: true, maxRetries: 12, retryDelay: 250 });
   }
 });

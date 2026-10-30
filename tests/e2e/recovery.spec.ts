@@ -5,10 +5,10 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { MoonBrowserBridge } from "../../ui/browser-shell/contracts.js";
 
-async function launch(directory: string): Promise<ElectronApplication> {
+async function launch(directory: string, profileDirectory = directory): Promise<ElectronApplication> {
   return electron.launch({
     args: [...(process.env.MOON_HEADLESS === "1" ? ["--ozone-platform=headless"] : []), `--user-data-dir=${directory}`, "."],
-    env: { ...process.env, NODE_ENV: "test", MOON_TEST_OFFLINE: "1", MOON_TEST_PROFILE_DIR: directory }
+    env: { ...process.env, NODE_ENV: "test", MOON_TEST_OFFLINE: "1", MOON_TEST_PROFILE_DIR: profileDirectory }
   });
 }
 
@@ -21,12 +21,18 @@ async function shellWindow(application: ElectronApplication) {
 
 async function exitAfter(application: ElectronApplication, action: () => Promise<unknown>): Promise<void> {
   const child = application.process();
+  let stderr = "";
+  child.stderr?.on("data", chunk => { stderr += String(chunk); });
+  if (child.exitCode !== null || child.signalCode !== null) {
+    expect(child.exitCode, `Process already exited with signal ${child.signalCode}`).toBe(0);
+    return;
+  }
   let timer: ReturnType<typeof setTimeout> | undefined;
   const exited = new Promise<number | null>(resolve => child.once("exit", resolve));
   try {
     void action().catch(() => undefined);
     const code = await Promise.race([exited, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Recovery restart did not exit")), 12_000); })]);
-    expect(code).toBe(0);
+    expect(code, `Signal ${child.signalCode}; stderr: ${stderr}`).toBe(0);
   } finally {
     clearTimeout(timer);
     if (child.exitCode === null && child.signalCode === null) child.kill();
@@ -55,9 +61,13 @@ test("shows profile recovery rather than exiting when SQLite cannot open", async
 test("restores selected backup through recovery UI and reopens the saved data", async () => {
   test.setTimeout(60_000);
   const directory = await mkdtemp(join(tmpdir(), "moon-recovery-restore-"));
+  // Model production: database directory is not Electron's live userData root.
+  // Windows cannot rename the latter while Chromium holds its lock files.
+  const profileDirectory = join(directory, "profile");
+  const launchProfile = () => launch(directory, profileDirectory);
   let application: ElectronApplication | undefined;
   try {
-    application = await launch(directory);
+    application = await launchProfile();
     const shell = await shellWindow(application);
     await expect(shell).toHaveURL(/index\.html$/);
     await shell.waitForLoadState("load");
@@ -65,11 +75,11 @@ test("restores selected backup through recovery UI and reopens the saved data", 
     const healthy = application;
     await exitAfter(healthy, () => healthy.evaluate(({ app }) => { setImmediate(() => app.quit()); }));
     application = undefined;
-    const backups = join(directory, "recovery-backups");
+    const backups = join(profileDirectory, "recovery-backups");
     await mkdir(backups);
-    await copyFile(join(directory, "moon.sqlite3"), join(backups, "before-update-123-abcdef.sqlite3"));
-    await writeFile(join(directory, "moon.sqlite3"), "damaged original");
-    application = await launch(directory);
+    await copyFile(join(profileDirectory, "moon.sqlite3"), join(backups, "before-update-123-abcdef.sqlite3"));
+    await writeFile(join(profileDirectory, "moon.sqlite3"), "damaged original");
+    application = await launchProfile();
     const recovery = await application.firstWindow();
     await expect(recovery.locator("#restore")).toBeEnabled();
     // Test the same main-process confirmation path without an OS modal.
@@ -79,18 +89,21 @@ test("restores selected backup through recovery UI and reopens the saved data", 
     });
     await exitAfter(application, () => recovery.locator("#restore").click());
     application = undefined;
-    const preserved = (await readdir(join(directory, ".."))).find(name => name.startsWith(directory.split(/[\\/]/).at(-1)! + ".preserved-"));
-    expect(await readFile(join(directory, "..", preserved!, "moon.sqlite3"), "utf8")).toBe("damaged original");
+    const preserved = (await readdir(directory)).find(name => name.startsWith("profile.preserved-"));
+    expect(await readFile(join(directory, preserved!, "moon.sqlite3"), "utf8")).toBe("damaged original");
     // The preserved original is intentionally outside the replacement directory.
-    await rm(join(directory, "..", preserved!), { recursive: true, force: true });
-    application = await launch(directory);
+    await rm(join(directory, preserved!), { recursive: true, force: true });
+    application = await launchProfile();
     const reopened = await shellWindow(application);
     await expect(reopened).toHaveURL(/index\.html$/);
     await reopened.waitForLoadState("load");
     const notes = await reopened.evaluate(async () => (window as unknown as {moonBrowser: MoonBrowserBridge}).moonBrowser.getProfileData().then(data => data.notes));
     expect(notes).toBe("Recover this note");
   } finally {
-    if (application) { const app = application; await exitAfter(app, () => app.evaluate(({ app }) => { setImmediate(() => app.quit()); })); }
+    if (application) {
+      const child = application.process();
+      if (child.exitCode === null && child.signalCode === null) { const app = application; await exitAfter(app, () => app.evaluate(({ app }) => { setImmediate(() => app.quit()); })); }
+    }
     await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
