@@ -101,3 +101,59 @@ describe("BrowserApplicationService", () => {
     await application.shutdown();
   });
 });
+
+describe("concurrent profile persistence", () => {
+  it("keeps tabs from multiple windows instead of replacing the snapshot with the last writer", async () => {
+    const browser = new FakeBrowser();
+    const saves: string[][] = [];
+    const profile = {
+      loadBrowserSession: async () => [],
+      saveBrowserSession: async (tabs: readonly BrowserTab[]) => { saves.push(tabs.map(tab => tab.id)); }
+    };
+    const app = new BrowserApplicationService(browser as never, profile as never);
+    await app.createTab("window-a", { url: "https://a.test/" });
+    await app.createTab("window-b", { url: "https://b.test/" });
+    await Promise.all([app.flushWindow("window-a"), app.flushWindow("window-b")]);
+    await app.closeWindow("window-a");
+    await app.closeWindow("window-b");
+    expect(saves.at(-1)).toEqual(["tab-1", "tab-2"]);
+    await app.shutdown();
+  });
+
+  it("waits for an in-flight save before completing shutdown", async () => {
+    const browser = new FakeBrowser();
+    let release!: () => void;
+    let saved = 0;
+    const profile = {
+      loadBrowserSession: async () => [],
+      saveBrowserSession: async () => { saved++; if (saved === 1) await new Promise<void>(resolve => { release = resolve; }); }
+    };
+    const app = new BrowserApplicationService(browser as never, profile as never);
+    await app.createTab("window-a", { url: "https://test.example/" });
+    const flush = app.flushWindow("window-a");
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+    // Wait until the first write starts, without a timer-based race.
+    for (let i = 0; i < 100 && !release; i++) await new Promise(resolve => setImmediate(resolve));
+    expect(release).toBeTypeOf("function");
+    let finished = false;
+    const shutdown = app.shutdown().then(() => { finished = true; });
+    await Promise.resolve();
+    expect(finished).toBe(false);
+    release();
+    await flush;
+    await shutdown;
+    expect(saved).toBeGreaterThanOrEqual(2);
+  });
+
+  it("never persists a private window into the shared multi-window snapshot", async () => {
+    const browser = new FakeBrowser();
+    const saves: BrowserTab[][] = [];
+    const profile = { loadBrowserSession: async () => [], saveBrowserSession: async (tabs: readonly BrowserTab[]) => { saves.push([...tabs]); } };
+    const app = new BrowserApplicationService(browser as never, profile as never);
+    await app.createTab("normal", { url: "https://safe.example/" });
+    await app.createTab("private", { url: "https://secret.example/", private: true });
+    await app.flushWindow("private");
+    expect(saves.at(-1)?.map(tab => tab.url)).toEqual(["https://safe.example/"]);
+    await app.shutdown();
+  });
+});
