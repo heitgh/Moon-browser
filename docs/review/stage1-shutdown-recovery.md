@@ -9,14 +9,14 @@ Nexus Inc. · 30/10/2026 · **não publicada**
 - Shutdown espera gravações de sessão em andamento antes da destruição das abas e do fechamento dos bancos. Uma falha explícita no flush interrompe a sequência, em vez de seguir fechando o banco. O timeout global preexistente ainda força saída em cinco segundos.
 - Atualizador nativo faz flush e backup consistente de cada banco SQLite persistente antes de iniciar a instalação. Falha em qualquer cópia impede a chamada ao instalador.
 - Quando a abertura do perfil padrão falha, a aplicação abre uma janela de recuperação isolada com preload dedicado e canais IPC limitados.
-- A recuperação permite restaurar somente backups SQLite que passaram por `integrity_check`, exportar cópia bruta de emergência da pasta do perfil, ou criar armazenamento limpo. Toda substituição desloca a pasta original para um caminho `*.preserved-...` e tenta rollback em erro.
+- A recuperação permite restaurar somente backups SQLite que passaram por `integrity_check`, exportar cópia bruta de emergência da pasta do perfil, ou criar um perfil novo com ID e partição Chromium próprios, sem reusar cookies. A restauração desloca a pasta original para um caminho `*.preserved-...` e tenta rollback em erro.
 - Os instaladores incluem os quatro arquivos estáticos da tela de recuperação.
 
 ## O que **não** se pode afirmar nesta etapa
 
 - O bug MB-016 foi mitigado por ordenação de gravações, mas ainda não há reprodução e causa raiz comprovadas dos timeouts do runner Windows.
 - Backup de SQLite **não** inclui cookies, sessões de autenticação e partições Chromium fora da pasta do banco. Esta entrega não promete restauração integral dessas partições. A exportação bruta cobre somente a pasta de perfil selecionada.
-- A UI de recuperação inicia quando a abertura do **perfil padrão** falha. Recuperação do registro `profiles/index.json` corrompido e abertura de perfis secundários ainda requerem tratamento próprio.
+- A UI de recuperação inicia quando a abertura do **perfil padrão** falha. O fluxo de perfil novo mantém os arquivos do perfil anterior e altera o default no registro; se o registro estiver corrompido, o fluxo recusa a alteração e recomenda exportação. Recuperação do registro `profiles/index.json` corrompido e abertura de perfis secundários ainda requerem tratamento próprio.
 - O renderer de recuperação não recebe caminhos locais nem acesso direto ao sistema de arquivos.
 - A nova branch não substitui a release pública `v0.6.0-alpha.5`.
 
