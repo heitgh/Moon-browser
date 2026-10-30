@@ -13,17 +13,36 @@ export function registerResearchIpc(router: IpcRouter, windows: WindowManager, b
     if (!id || event.senderFrame !== event.sender.mainFrame || windows.isPrivate(id) || windows.isGuest(id)) throw new Error("Pesquisa e memória estão indisponíveis em janelas privadas ou de convidado.");
     return id;
   };
+  const pendingConsent = new Set<string>();
   router.register("research:capture", async (event, payload: { workspaceId: string; tabIds: string[]; consent: boolean }) => {
     const windowId = windowFor(event); const scope = scopeId(payload?.workspaceId);
     if (payload?.consent !== true || !Array.isArray(payload.tabIds) || payload.tabIds.length < 1 || payload.tabIds.length > 5 || !payload.tabIds.every(id => typeof id === "string" && id.length <= 100)) throw new Error("Selecione até cinco abas e autorize a leitura local.");
+    if (pendingConsent.has(windowId)) throw new Error("Já existe uma solicitação de leitura pendente.");
+    const ids = [...new Set(payload.tabIds)];
     const tabs = await browser.getTabs(windowId);
-    const sources: ResearchSource[] = [];
-    for (const id of new Set(payload.tabIds)) {
+    const selected = ids.map(id => {
       const tab = tabs.find(t => t.id === id && !t.private && (t.workspaceId ?? "research") === scope);
       if (!tab) throw new Error("Aba fora da janela ou do workspace selecionado.");
-      sources.push(await browser.readResearchSource(id, windowId));
-    }
-    return sources;
+      return tab;
+    });
+    pendingConsent.add(windowId);
+    try {
+      // The renderer checkbox is merely UI; only main-process approval grants a read.
+      const approval = await dialog.showMessageBox(windows.require(windowId), {
+        type: "question", title: "Autorizar leitura local",
+        message: `Permitir que o Moon leia ${selected.length} aba(s) selecionada(s)?`,
+        detail: `${selected.map(tab => tab.url.slice(0, 350)).join("\n")}\n\nO conteúdo será processado localmente. Não autorize páginas com informações sensíveis.`,
+        buttons: ["Cancelar", "Permitir uma vez"], defaultId: 0, cancelId: 0
+      });
+      if (approval.response !== 1) throw new Error("Leitura cancelada pelo usuário.");
+      const sources: ResearchSource[] = [];
+      for (const tab of selected) {
+        const live = (await browser.getTabs(windowId)).find(current => current.id === tab.id && !current.private && (current.workspaceId ?? "research") === scope);
+        if (!live || live.url !== tab.url) throw new Error("A página mudou após a autorização. Selecione novamente.");
+        sources.push(await browser.readResearchSource(tab.id, windowId));
+      }
+      return sources;
+    } finally { pendingConsent.delete(windowId); }
   });
   router.register("research:load-memory", async (event, payload: { workspaceId: string }) => {
     const windowId = windowFor(event);
