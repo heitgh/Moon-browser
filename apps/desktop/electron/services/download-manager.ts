@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { shell, type DownloadItem, type Session } from "electron";
+import { dialog, shell, type BrowserWindow, type DownloadItem, type Session } from "electron";
+import { extname } from "node:path";
+import { open as openFile } from "node:fs/promises";
 import type { WindowManager } from "../main/window-manager.js";
 
 export type ManagedDownloadState =
@@ -21,6 +23,37 @@ export interface ManagedDownload {
   readonly percentage: number | null;
   readonly startedAt: number;
   readonly completedAt?: number;
+}
+
+// Executables/scripts can be invoked by the OS when opened through shell.openPath.
+const EXECUTABLE_EXTENSIONS = new Set([
+  ".exe", ".msi", ".msp", ".msix", ".appx", ".bat", ".cmd", ".com", ".scr",
+  ".ps1", ".psm1", ".vbs", ".vbe", ".wsf", ".wsh", ".hta", ".lnk",
+  ".app", ".dmg", ".pkg", ".command", ".sh", ".bash", ".zsh", ".run",
+  ".appimage", ".deb", ".rpm", ".jar", ".desktop", ".py"
+]);
+
+export function needsExecutableConfirmation(filename: string, savePath: string): boolean {
+  return [filename, savePath].some(value => EXECUTABLE_EXTENSIONS.has(extname(value).toLowerCase()));
+}
+
+// Detect common binary/script signatures even when the name has a harmless extension.
+export async function hasExecutableSignature(path: string): Promise<boolean> {
+  let file: Awaited<ReturnType<typeof openFile>> | undefined;
+  try {
+    file = await openFile(path, "r");
+    const bytes = Buffer.alloc(4);
+    const { bytesRead } = await file.read(bytes, 0, 4, 0);
+    if (bytesRead < 2) return false;
+    if (bytes[0] === 0x23 && bytes[1] === 0x21) return true; // Shebang
+    if (bytes[0] === 0x4d && bytes[1] === 0x5a) return true; // PE / MZ
+    if (bytesRead < 4) return false;
+    const magic = bytes.readUInt32BE(0);
+    return magic === 0x7f454c46 || magic === 0xfeedface || magic === 0xcefaedfe
+      || magic === 0xfeedfacf || magic === 0xcffaedfe || magic === 0xcafebabe;
+  } catch {
+    return false; // Opening may still fail later; never grant authorization implicitly.
+  } finally { await file?.close(); }
 }
 
 export class ElectronDownloadManager {
@@ -84,9 +117,30 @@ export class ElectronDownloadManager {
     this.#requireNative(id, profileId).cancel();
   }
 
-  async open(id: string, profileId?: string): Promise<void> {
+  async open(id: string, profileId?: string, owner?: BrowserWindow): Promise<void> {
     const item = this.#require(id, profileId);
     if (item.state !== "completed") throw new Error("Download is not complete");
+    if (needsExecutableConfirmation(item.filename, item.savePath) || await hasExecutableSignature(item.savePath)) {
+      // Authorization stays in Electron main and is required on every attempt.
+      const options = {
+        type: "warning",
+        title: "Confirmar abertura de executável",
+        message: "Este arquivo pode executar programas ou comandos no seu computador.",
+        detail: `Arquivo: ${item.filename}\nDestino: ${item.savePath}\nOrigem: ${item.url}\n\nAbra somente se confiar na origem.`,
+        buttons: ["Cancelar", "Abrir arquivo"],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true
+      } as const;
+      const { response } = owner && !owner.isDestroyed()
+        ? await dialog.showMessageBox(owner, { ...options, buttons: [...options.buttons] })
+        : await dialog.showMessageBox({ ...options, buttons: [...options.buttons] });
+      if (response !== 1) return;
+      // The download can be cleared while the confirmation dialog is open.
+      const current = this.#require(id, profileId);
+      if (current.state !== "completed" || current.savePath !== item.savePath)
+        throw new Error("Download changed during confirmation");
+    }
     const error = await shell.openPath(item.savePath);
     if (error) throw new Error(error);
   }

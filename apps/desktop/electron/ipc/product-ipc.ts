@@ -75,7 +75,7 @@ export function registerProductIpc(
   router.register("download:pause", (event, payload: IdPayload) => downloads.pause(idFrom(payload), downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
   router.register("download:resume", (event, payload: IdPayload) => downloads.resume(idFrom(payload), downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
   router.register("download:cancel", (event, payload: IdPayload) => downloads.cancel(idFrom(payload), downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
-  router.register("download:open", (event, payload: IdPayload) => downloads.open(idFrom(payload), downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
+  router.register("download:open", (event, payload: IdPayload) => { const windowId = windows.idForWebContents(event.sender)!; return downloads.open(idFrom(payload), downloads.scopeForWindow(windowId), windows.require(windowId)); });
   router.register("download:show-in-folder", (event, payload: IdPayload) => downloads.showInFolder(idFrom(payload), downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
   router.register("download:clear-finished", event => downloads.clearFinished(downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
 
