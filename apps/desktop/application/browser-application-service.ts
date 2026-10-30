@@ -25,6 +25,7 @@ export class BrowserApplicationService {
   readonly #profileWrites = new WeakMap<ProfileStorage, Promise<void>>();
   readonly #sessionSnapshots = new WeakMap<ProfileStorage, Map<string, readonly BrowserTab[]>>();
   readonly #pendingFlushes = new Set<Promise<void>>();
+  readonly #normalWindowIds = new Set<string>();
   #shuttingDown = false;
   readonly deletingAreas = new Set<string>();
 
@@ -43,6 +44,7 @@ export class BrowserApplicationService {
   get shuttingDown(): boolean { return this.#shuttingDown; }
 
   async restoreWindow(windowId: string): Promise<number> {
+    this.#normalWindowIds.add(windowId);
     const savedTabs = await (await this.#profileForWindow(windowId)).loadBrowserSession();
     let restored = 0;
     let activeTabId: string | undefined;
@@ -68,6 +70,7 @@ export class BrowserApplicationService {
   async createTab(windowId: string, options: BrowserTabOptions = {}): Promise<BrowserTab> {
     if (this.deletingAreas.has(options.workspaceId ?? "")) throw new Error("Workspace deletion in progress");
     const model = await this.tabs.create({ id: options.id, windowId, url: options.url, active: options.active, private: options.private, workspaceId: options.workspaceId, partitionWorkspaceId: options.partitionWorkspaceId, sessionId: options.sessionId });
+    if (!model.private) this.#normalWindowIds.add(windowId);
     const tab = await this.browser.getTab(model.id);
     if (!tab) throw new Error(`Created tab is unavailable: ${model.id}`);
     return tab;
@@ -110,9 +113,10 @@ export class BrowserApplicationService {
     // Capture all live windows for this profile. Closed windows retain their
     // last captured tabs until application exit, so the last close cannot
     // overwrite a multi-window session with only its own tabs.
-    for (const id of this.browser.windowIds()) {
+    for (const id of new Set([...this.browser.windowIds(), windowId])) {
       if ((await this.#profileForWindow(id)) !== profile) continue;
       const tabs = await this.browser.getTabs(id);
+      if (!tabs.length && !this.#normalWindowIds.has(id) && !snapshots.has(id)) continue;
       if (tabs.length > 0 && tabs.every(tab => tab.private)) continue;
       snapshots.set(id, tabs.filter(tab => !tab.private));
     }
