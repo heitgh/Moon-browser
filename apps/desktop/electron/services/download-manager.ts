@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { dialog, shell, type DownloadItem, type Session } from "electron";
+import { dialog, shell, type BrowserWindow, type DownloadItem, type Session } from "electron";
 import { extname } from "node:path";
 import { open as openFile } from "node:fs/promises";
 import type { WindowManager } from "../main/window-manager.js";
@@ -117,12 +117,12 @@ export class ElectronDownloadManager {
     this.#requireNative(id, profileId).cancel();
   }
 
-  async open(id: string, profileId?: string): Promise<void> {
+  async open(id: string, profileId?: string, owner?: BrowserWindow): Promise<void> {
     const item = this.#require(id, profileId);
     if (item.state !== "completed") throw new Error("Download is not complete");
     if (needsExecutableConfirmation(item.filename, item.savePath) || await hasExecutableSignature(item.savePath)) {
       // Authorization stays in Electron main and is required on every attempt.
-      const { response } = await dialog.showMessageBox({
+      const options = {
         type: "warning",
         title: "Confirmar abertura de executável",
         message: "Este arquivo pode executar programas ou comandos no seu computador.",
@@ -131,10 +131,15 @@ export class ElectronDownloadManager {
         defaultId: 0,
         cancelId: 0,
         noLink: true
-      });
+      } as const;
+      const { response } = owner && !owner.isDestroyed()
+        ? await dialog.showMessageBox(owner, { ...options, buttons: [...options.buttons] })
+        : await dialog.showMessageBox({ ...options, buttons: [...options.buttons] });
       if (response !== 1) return;
       // The download can be cleared while the confirmation dialog is open.
-      if (this.#require(id, profileId).state !== "completed") throw new Error("Download is no longer complete");
+      const current = this.#require(id, profileId);
+      if (current.state !== "completed" || current.savePath !== item.savePath)
+        throw new Error("Download changed during confirmation");
     }
     const error = await shell.openPath(item.savePath);
     if (error) throw new Error(error);
