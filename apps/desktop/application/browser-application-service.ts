@@ -25,6 +25,7 @@ export class BrowserApplicationService {
   readonly #profileWrites = new WeakMap<ProfileStorage, Promise<void>>();
   readonly #sessionSnapshots = new WeakMap<ProfileStorage, Map<string, readonly BrowserTab[]>>();
   readonly #pendingFlushes = new Set<Promise<void>>();
+  readonly #pendingTabUpdates = new Set<Promise<void>>();
   readonly #normalWindowIds = new Set<string>();
   #shuttingDown = false;
   readonly deletingAreas = new Set<string>();
@@ -36,7 +37,12 @@ export class BrowserApplicationService {
     this.#profileForWindow = typeof profile === "function" ? profile : async () => profile;
     this.#browserPlatform = new ElectronBrowserPlatform(browser);
     this.tabs = new TabManager(this.#browserPlatform, this.eventBus, this.stateStore);
-    this.#unsubscribe = browser.onTabUpdated((windowId, update) => this.#handleTabUpdate(windowId, update));
+    this.#unsubscribe = browser.onTabUpdated((windowId, update) => {
+      const pending = this.#handleTabUpdate(windowId, update);
+      this.#pendingTabUpdates.add(pending);
+      void pending.then(() => this.#pendingTabUpdates.delete(pending), () => this.#pendingTabUpdates.delete(pending));
+      return pending;
+    });
   }
 
   readonly #profileForWindow: (windowId: string) => Promise<ProfileStorage>;
@@ -144,6 +150,7 @@ export class BrowserApplicationService {
     if (this.#shuttingDown) return;
     this.#shuttingDown = true;
     this.#unsubscribe();
+    await Promise.all([...this.#pendingTabUpdates]);
     for (const timer of this.#persistenceTimers.values()) clearTimeout(timer);
     this.#persistenceTimers.clear();
     await this.flushAll();
@@ -157,6 +164,7 @@ export class BrowserApplicationService {
   }
 
   #schedulePersistence(windowId: string): void {
+    if (this.#shuttingDown) return;
     const existing = this.#persistenceTimers.get(windowId);
     if (existing) clearTimeout(existing);
     this.#persistenceTimers.set(windowId, setTimeout(() => {
