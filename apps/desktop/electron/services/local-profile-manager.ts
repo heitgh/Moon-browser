@@ -36,7 +36,7 @@ export class LocalProfileManager {
   readonly #guestDirectories = new Map<string, string>();
   readonly #opening = new Map<string, Promise<ProfileStorage>>();
 
-  constructor(readonly profilesDirectory: string, readonly legacyDefaultDirectory: string) {}
+  constructor(readonly profilesDirectory: string, readonly legacyDefaultDirectory: string, readonly authorizeProfile: (id: string) => Promise<void> = async () => undefined) {}
 
   async initialize(): Promise<LocalProfileSummary> {
     await mkdir(this.profilesDirectory, { recursive: true, mode: 0o700 });
@@ -74,6 +74,7 @@ export class LocalProfileManager {
 
   async storage(id: string): Promise<ProfileStorage> {
     const profile = this.require(id);
+    await this.authorizeProfile(id);
     const existing = this.#storages.get(profile.id);
     if (existing) return existing;
     const directory = profile.kind === "guest" ? this.#guestDirectories.get(profile.id) : this.#directoryFor(profile.id);
@@ -152,6 +153,7 @@ export class LocalProfileManager {
   async delete(value: DeleteLocalProfileRequest): Promise<DeletedLocalProfile> {
     const request = parseDeleteLocalProfile(value);
     const summary = this.deletionSummary(request.id);
+    if (summary.profile.kind === "persistent") await this.authorizeProfile(summary.profile.id);
     if (request.confirmation !== summary.profile.name) throw new Error(`Digite exatamente “${summary.profile.name}” para confirmar.`);
     const directory = summary.profile.kind === "guest" ? this.#guestDirectories.get(summary.profile.id) : this.#directoryFor(summary.profile.id);
     if (!directory) throw new Error("Diretório do perfil não encontrado.");

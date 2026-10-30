@@ -1,4 +1,5 @@
 import type { ResearchMemory, ResearchSource } from "../../packages/research/research.js";
+import type { ProfileAccessStatus } from "../../apps/desktop/electron/services/profile-access.js";
 export interface Tab {
   readonly id: string;
   readonly url: string;
@@ -103,6 +104,12 @@ export interface MoonBrowserBridge {
   loadCustomization(legacy?: unknown): Promise<CustomizationSchemaV4>;
   commitCustomization(document: CustomizationSchemaV4): Promise<CustomizationSchemaV4>;
   getProfileData(): Promise<ProfileDataSnapshot>;
+  getProfileAccess(): Promise<ProfileAccessStatus>;
+  enableProfileAccess(password: string): Promise<boolean>;
+  changeProfilePassword(current: string, next: string): Promise<void>;
+  disableProfileAccess(current: string): Promise<void>;
+  configureProfileAccess(current: string, idleMinutes: number, lockOnSystem: boolean): Promise<void>;
+  lockProfile(): Promise<boolean>;
   mutateProfileData(mutation: ProfileDataMutation): Promise<void>;
   listLocalProfiles(): Promise<readonly LocalProfileSummary[]>;
   createLocalProfile(profile: CreateLocalProfileRequest): Promise<LocalProfileSummary>;

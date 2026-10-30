@@ -34,7 +34,7 @@ export default [
     }
   },
   {
-    files: ["preload.cjs"],
+    files: ["preload.cjs", "access-preload.cjs"],
     languageOptions: {
       globals: {
         require: "readonly"

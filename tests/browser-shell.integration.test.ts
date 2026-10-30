@@ -42,6 +42,7 @@ const bridge = {
   fetchFavicon: vi.fn(async () => "data:image/png;base64,YQ=="),
   migrateLegacyProfile: vi.fn(async () => ({ migrated: true, version: 1 })), loadCustomization: vi.fn(async (legacy: unknown) => legacy), commitCustomization: vi.fn(async (document: unknown) => document), getProfileData: vi.fn(async () => profileData), mutateProfileData, onTabUpdated: vi.fn((listener: (update: unknown) => void) => { tabUpdateListeners.push(listener); return () => undefined; }), onTabClosed: vi.fn(() => () => undefined),
   listLocalProfiles: vi.fn(async () => localProfiles),
+  getProfileAccess: vi.fn(async () => ({enabled: false, locked: false, idleMinutes: 0, lockOnSystem: false, supportsSystemLock: false, retryAfterMs: 0})),
   createLocalProfile: vi.fn(async (profile: { name: string; avatar: string; color: string }) => { const created = { id: "profile-product", ...profile, kind: "persistent", default: false, createdAt: 2, lastUsedAt: 2 }; localProfiles = [...localProfiles, created]; return created; }), updateLocalProfile: vi.fn(async (profile: unknown) => profile), openLocalProfile: vi.fn(async () => undefined), createGuestProfile: vi.fn(async () => undefined), getLocalProfileDeletionSummary: vi.fn(async () => undefined), deleteLocalProfile: vi.fn(async () => undefined),
   discoverImportSources: vi.fn(async () => [{ id: "source-12345678", browser: "chromium", name: "Chromium — Default", detectedPath: "/home/test/.config/chromium/Default", modifiedAt: Date.now(), categories: { bookmarks: 3, history: 5 } }]),
   selectManualImportSource: vi.fn(async () => [{ id: "source-manual-1234", browser: "brave", name: "Perfil selecionado — Profile 4", detectedPath: "/mnt/portable/Brave/Profile 4", modifiedAt: Date.now(), categories: { bookmarks: 7, history: 0 } }]),
@@ -76,7 +77,7 @@ describe("Moon browser shell", () => {
   it("shows the active profile and creates a real isolated profile from the manager", async () => {
     (document.querySelector('[aria-label="Gerenciar perfis"]') as HTMLButtonElement).click(); await flush();
     expect(document.querySelector(".moon-profile-card.is-active")?.textContent).toContain("Padrão");
-    const form = [...document.querySelectorAll<HTMLFormElement>(".moon-profile-form")].find(candidate => !candidate.hidden)!;
+    const form = [...document.querySelectorAll<HTMLFormElement>(".moon-profile-form")].find(candidate => !candidate.hidden && candidate.querySelector('input[placeholder="Nome do perfil"]'))!;
     (form.querySelector('input[type="text"], input:not([type])') as HTMLInputElement).value = "Produto";
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await flush();
     expect(bridge.createLocalProfile).toHaveBeenCalledWith(expect.objectContaining({ name: "Produto" }));

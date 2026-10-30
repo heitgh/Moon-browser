@@ -41,3 +41,24 @@ it("drains an in-flight IPC operation even after handlers are disposed", async (
   expect(finished).toBe(true);
   await expect(invoke({ sender, senderFrame: mainFrame }, { safe: true })).rejects.toThrow(/shutting down/i);
 });
+
+it("refuses a locked profile before dispatch and withholds results when it locks during a command", async () => {
+  const mainFrame = { url: pathToFileURL(join(resolve("/moon"), "index.html")).href, detached: false };
+  const sender = { isDestroyed: () => false, mainFrame, getURL: () => mainFrame.url };
+  const windows = { idForWebContents: () => "shell", get: () => ({isDestroyed: () => false, webContents: sender}) } as unknown as WindowManager;
+  let locked = true;
+  let release!: (value: string) => void;
+  const handler = vi.fn(() => new Promise<string>(resolve => { release = resolve; }));
+  const router = new IpcRouter(windows, () => { if (locked) throw new Error("locked"); });
+  router.register("profile:read", handler);
+  const invoke = electron.handle.mock.lastCall![1];
+  const event = {sender, senderFrame: mainFrame};
+  await expect(invoke(event, {})).rejects.toThrow("locked");
+  expect(handler).not.toHaveBeenCalled();
+  locked = false;
+  const pending = invoke(event, {});
+  for (let i = 0; i < 100 && !release; i++) await Promise.resolve();
+  locked = true; release("sensitive data");
+  await expect(pending).rejects.toThrow("locked");
+  router.dispose();
+});
