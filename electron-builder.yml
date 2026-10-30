@@ -10,6 +10,10 @@ files:
   - main.js
   - preload.cjs
   - zoom-preload.cjs
+  - recovery-preload.cjs
+  - recovery.html
+  - recovery.js
+  - recovery.css
   - package.json
 asar: true
 asarUnpack:
