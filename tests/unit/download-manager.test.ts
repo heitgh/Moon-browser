@@ -1,9 +1,12 @@
 import { EventEmitter } from "node:events";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 const openPath = vi.fn(async () => "");
 const showItemInFolder = vi.fn();
-const showMessageBox = vi.fn(async () => ({ response: 0 }));
+const showMessageBox = vi.fn(async (_options?: unknown) => ({ response: 0 }));
 
 vi.mock("electron", () => ({
   shell: { openPath, showItemInFolder },
@@ -182,4 +185,17 @@ it("cannot approve opening a download from another profile", async () => {
   await expect(manager.open(manager.list("owner")[0]!.id, "other")).rejects.toThrow();
   expect(showMessageBox).not.toHaveBeenCalled();
   expect(openPath).not.toHaveBeenCalled();
+});
+
+it("detects executable magic even with a document extension", async () => {
+  const { hasExecutableSignature } = await import("../../apps/desktop/electron/services/download-manager.js");
+  const root = await mkdtemp(join(tmpdir(), "moon-exe-check-"));
+  try {
+    const suspicious = join(root, "renamed.pdf");
+    const harmless = join(root, "document.pdf");
+    await writeFile(suspicious, Buffer.from([0x4d, 0x5a, 0x90, 0]));
+    await writeFile(harmless, Buffer.from("%PDF"));
+    expect(await hasExecutableSignature(suspicious)).toBe(true);
+    expect(await hasExecutableSignature(harmless)).toBe(false);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
