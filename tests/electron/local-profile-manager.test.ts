@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { LocalProfileManager } from "../../apps/desktop/electron/services/local-profile-manager.js";
+import { LocalProfileManager, ProfileOpenError } from "../../apps/desktop/electron/services/local-profile-manager.js";
 
 const directories: string[] = [];
 afterEach(async () => { await Promise.all(directories.splice(0).map(path => rm(path, { recursive: true, force: true }))); });
@@ -15,6 +15,36 @@ async function manager(): Promise<{ root: string; legacy: string; profiles: Loca
 }
 
 describe("LocalProfileManager", () => {
+  it("identifies the actual secondary profile that failed to open", async () => {
+    const { profiles, legacy } = await manager();
+    await profiles.initialize();
+    const second = await profiles.create({ name: "Danificado", avatar: "moon", color: "#2563eb" });
+    await profiles.close();
+    const path = join(profiles.profilesDirectory, second.id);
+    await writeFile(join(path, "moon.sqlite3"), "damaged secondary");
+    const next = new LocalProfileManager(profiles.profilesDirectory, legacy);
+    await next.initialize();
+    try {
+      await expect(next.storage(second.id)).rejects.toBeInstanceOf(ProfileOpenError);
+      await expect(next.storage(second.id)).rejects.toMatchObject({directory: path});
+      expect((await next.storage("default")).profileDirectory).toBe(legacy);
+    } finally { await next.close(); }
+  });
+  it("shares one connection when two windows open the same profile concurrently", async () => {
+    const { profiles, legacy } = await manager();
+    await profiles.initialize();
+    await profiles.close();
+    const reopened = new LocalProfileManager(profiles.profilesDirectory, legacy);
+    // initialize also opens the default; a secondary profile exercises the lazy path.
+    await reopened.initialize();
+    const secondary = await reopened.create({ name: "Concorrente", avatar: "moon", color: "#2563eb" });
+    await reopened.close();
+    const next = new LocalProfileManager(profiles.profilesDirectory, legacy);
+    await next.initialize();
+    const [a, b] = await Promise.all([next.storage(secondary.id), next.storage(secondary.id)]);
+    expect(a).toBe(b);
+    await next.close();
+  });
   it("adopts and preserves the current directory only after SQLite opens", async () => {
     const { legacy, profiles } = await manager();
     const primary = await profiles.initialize();

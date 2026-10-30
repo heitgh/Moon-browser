@@ -21,6 +21,12 @@ export class BrowserApplicationService {
   readonly #unsubscribe: () => void;
   readonly #persistenceTimers = new Map<string, NodeJS.Timeout>();
   readonly #restoringWindows = new Set<string>();
+  // Nexus Inc. — serialize writes per SQLite profile, not per window.
+  readonly #profileWrites = new WeakMap<ProfileStorage, Promise<void>>();
+  readonly #sessionSnapshots = new WeakMap<ProfileStorage, Map<string, readonly BrowserTab[]>>();
+  readonly #pendingFlushes = new Set<Promise<void>>();
+  readonly #pendingTabUpdates = new Set<Promise<void>>();
+  readonly #normalWindowIds = new Set<string>();
   #shuttingDown = false;
   readonly deletingAreas = new Set<string>();
 
@@ -31,7 +37,12 @@ export class BrowserApplicationService {
     this.#profileForWindow = typeof profile === "function" ? profile : async () => profile;
     this.#browserPlatform = new ElectronBrowserPlatform(browser);
     this.tabs = new TabManager(this.#browserPlatform, this.eventBus, this.stateStore);
-    this.#unsubscribe = browser.onTabUpdated((windowId, update) => this.#handleTabUpdate(windowId, update));
+    this.#unsubscribe = browser.onTabUpdated((windowId, update) => {
+      const pending = this.#handleTabUpdate(windowId, update);
+      this.#pendingTabUpdates.add(pending);
+      void pending.then(() => this.#pendingTabUpdates.delete(pending), () => this.#pendingTabUpdates.delete(pending));
+      return pending;
+    });
   }
 
   readonly #profileForWindow: (windowId: string) => Promise<ProfileStorage>;
@@ -39,7 +50,17 @@ export class BrowserApplicationService {
   get shuttingDown(): boolean { return this.#shuttingDown; }
 
   async restoreWindow(windowId: string): Promise<number> {
-    const savedTabs = await (await this.#profileForWindow(windowId)).loadBrowserSession();
+    this.#normalWindowIds.add(windowId);
+    const profile = await this.#profileForWindow(windowId);
+    const savedTabs = await profile.loadBrowserSession();
+    const liveWindowIds = new Set(this.browser.windowIds());
+    let hasLiveProfileWindow = false;
+    for (const id of this.browser.windowIds()) {
+      if (id !== windowId && await this.#profileForWindow(id) === profile && (await this.browser.getTabs(id)).some(tab => !tab.private)) hasLiveProfileWindow = true;
+    }
+    // A reopened profile takes ownership of the saved session. Retaining the
+    // closed window's snapshot here would resurrect tabs closed after reopening.
+    if (!hasLiveProfileWindow) this.#sessionSnapshots.delete(profile);
     let restored = 0;
     let activeTabId: string | undefined;
     this.#restoringWindows.add(windowId);
@@ -47,6 +68,9 @@ export class BrowserApplicationService {
       for (const saved of savedTabs) {
         try {
           await this.tabs.create({ id: saved.id, windowId, url: saved.url, active: false, private: false, workspaceId: saved.workspaceId, partitionWorkspaceId: saved.partitionWorkspaceId, sessionId: saved.sessionId });
+          for (const [oldId, snapshot] of this.#sessionSnapshots.get(profile) ?? []) {
+            if (!liveWindowIds.has(oldId)) this.#sessionSnapshots.get(profile)!.set(oldId, snapshot.filter(tab => tab.id !== saved.id));
+          }
           restored += 1;
           if (saved.active) activeTabId = saved.id;
         } catch (error) {
@@ -64,6 +88,7 @@ export class BrowserApplicationService {
   async createTab(windowId: string, options: BrowserTabOptions = {}): Promise<BrowserTab> {
     if (this.deletingAreas.has(options.workspaceId ?? "")) throw new Error("Workspace deletion in progress");
     const model = await this.tabs.create({ id: options.id, windowId, url: options.url, active: options.active, private: options.private, workspaceId: options.workspaceId, partitionWorkspaceId: options.partitionWorkspaceId, sessionId: options.sessionId });
+    if (!model.private) this.#normalWindowIds.add(windowId);
     const tab = await this.browser.getTab(model.id);
     if (!tab) throw new Error(`Created tab is unavailable: ${model.id}`);
     return tab;
@@ -88,12 +113,37 @@ export class BrowserApplicationService {
   clearPermission(windowId: string, origin: string, permission: string): Promise<void> { return this.browser.clearPermission(windowId, origin, permission); }
 
   async flushWindow(windowId: string): Promise<void> {
+    const pending = this.#flushWindow(windowId);
+    this.#pendingFlushes.add(pending);
+    try { await pending; }
+    finally { this.#pendingFlushes.delete(pending); }
+  }
+
+  async #flushWindow(windowId: string): Promise<void> {
     const timer = this.#persistenceTimers.get(windowId);
     if (timer) clearTimeout(timer);
     this.#persistenceTimers.delete(windowId);
-    const tabs = await this.browser.getTabs(windowId);
-    if (tabs.length > 0 && tabs.every(tab => tab.private)) return;
-    await (await this.#profileForWindow(windowId)).saveBrowserSession(tabs);
+
+    const profile = await this.#profileForWindow(windowId);
+    const snapshots = this.#sessionSnapshots.get(profile) ?? new Map<string, readonly BrowserTab[]>();
+    this.#sessionSnapshots.set(profile, snapshots);
+
+    // Capture all live windows for this profile. Closed windows retain their
+    // last captured tabs until application exit, so the last close cannot
+    // overwrite a multi-window session with only its own tabs.
+    for (const id of new Set([...this.browser.windowIds(), windowId])) {
+      if ((await this.#profileForWindow(id)) !== profile) continue;
+      const tabs = await this.browser.getTabs(id);
+      if (!tabs.length && !this.#normalWindowIds.has(id) && !snapshots.has(id)) continue;
+      if (tabs.length > 0 && tabs.every(tab => tab.private)) continue;
+      snapshots.set(id, tabs.filter(tab => !tab.private));
+    }
+    if (!snapshots.size) return;
+    const combined = [...new Map([...snapshots.values()].flat().map(tab => [tab.id, tab])).values()];
+    const previous = this.#profileWrites.get(profile) ?? Promise.resolve();
+    const write = previous.catch(() => undefined).then(() => profile.saveBrowserSession(combined));
+    this.#profileWrites.set(profile, write);
+    await write;
   }
 
   async closeWindow(windowId: string): Promise<void> {
@@ -102,13 +152,20 @@ export class BrowserApplicationService {
     await this.tabs.forgetWindow(windowId);
   }
 
+  async flushAll(): Promise<void> {
+    await Promise.all([...this.#pendingFlushes]);
+    for (const windowId of this.browser.windowIds()) await this.flushWindow(windowId);
+    await Promise.all([...this.#pendingFlushes]);
+  }
+
   async shutdown(): Promise<void> {
     if (this.#shuttingDown) return;
     this.#shuttingDown = true;
     this.#unsubscribe();
+    await Promise.all([...this.#pendingTabUpdates]);
     for (const timer of this.#persistenceTimers.values()) clearTimeout(timer);
     this.#persistenceTimers.clear();
-    for (const windowId of this.browser.windowIds()) await this.flushWindow(windowId);
+    await this.flushAll();
     await this.browser.destroy();
   }
 
@@ -119,6 +176,7 @@ export class BrowserApplicationService {
   }
 
   #schedulePersistence(windowId: string): void {
+    if (this.#shuttingDown) return;
     const existing = this.#persistenceTimers.get(windowId);
     if (existing) clearTimeout(existing);
     this.#persistenceTimers.set(windowId, setTimeout(() => {

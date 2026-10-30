@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recuperação do Moon Browser</title>
+<link rel="stylesheet" href="./recovery.css">
+</head>
+<body>
+<main>
+<h1>Recuperação de perfil</h1>
+<p>O Moon não conseguiu abrir este perfil. Seus arquivos originais não serão apagados automaticamente.</p>
+<p>Os backups listados são do <strong>banco SQLite</strong>. Cookies e partições Chromium não estão incluídos nessas cópias.</p>
+<section aria-labelledby="restore-title">
+<h2 id="restore-title">Restaurar backup íntegro</h2>
+<label for="backups">Escolha uma cópia verificada</label>
+<select id="backups" aria-label="Backups disponíveis"></select>
+<button id="restore" disabled>Restaurar backup</button>
+</section>
+<section aria-labelledby="export-title">
+<h2 id="export-title">Exportação de emergência</h2>
+<p>Copie os arquivos para outro local, mesmo quando o banco estiver danificado. Se o registro de perfis falhou, a exportação inclui o diretório do aplicativo. A cópia bruta não é criptografada e pode conter dados sensíveis.</p>
+<button id="export">Exportar arquivos do perfil</button>
+</section>
+<section aria-labelledby="new-title">
+<h2 id="new-title">Criar novo perfil isolado</h2>
+<p>O perfil anterior e seus cookies permanecem preservados. Um novo identificador separa as sessões do Chromium. Se o registro de perfis estiver danificado, o Moon guarda uma cópia antes de reconstruí-lo; nomes antigos podem precisar ser ajustados.</p>
+<button id="fresh">Criar perfil limpo</button>
+</section>
+<p id="status" role="status" aria-live="polite">Procurando backups locais…</p>
+</main>
+<script src="./recovery.js"></script>
+</body>
+</html>

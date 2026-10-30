@@ -1,5 +1,14 @@
 # Changelog
 
+## Em revisão — etapa 1: encerramento e recuperação (não publicada)
+
+- Encerramento aguarda IPC, gravações, destruição efetiva das páginas e checkpoint SQLite antes da saída normal.
+- Operações SQLite são enfileiradas por conexão; aberturas concorrentes do mesmo perfil compartilham uma instância.
+- Recuperação isolada restaura backup validado, exporta arquivos brutos ou cria um perfil independente preservando os dados anteriores.
+- Registro danificado pode ser reconstruído mediante confirmação, com cópia do original e preservação das pastas existentes.
+- Backup SQLite antes da instalação de atualização; falha impede iniciar o instalador. Não inclui partições Chromium.
+- MB-016 continua em investigação até homologação Windows/Linux. Não há novo instalador nesta branch.
+
 ## 0.6.0-alpha.5 — publicada como pré-release (2026-10-26)
 
 - Nexus Inc.: atualização nativa do pacote Moon/Chromium, com progresso e confirmação de instalação (Windows instalado e AppImage).

@@ -101,6 +101,18 @@ chmod +x Moon-Browser-0.6.0-alpha.5-Linux-x64.AppImage
 
 ## Estado do projeto
 
+### Etapa 1 em revisão — encerramento e recuperação
+
+Esta branch acrescenta espera de gravações e destruição de páginas, checkpoint SQLite,
+backup antes de atualizações e uma janela isolada quando o perfil não abre.
+Na recuperação é possível restaurar um backup íntegro, exportar os arquivos brutos
+ou criar um perfil independente sem apagar o anterior. Um registro danificado é
+preservado antes de reconstrução confirmada. Backups SQLite não incluem cookies
+ou partições Chromium; a exportação bruta não é criptografada.
+Consulte [escopo, testes e limitações](docs/review/stage1-shutdown-recovery.md).
+Esta implementação não altera os downloads da alpha.5 nem comprova a resolução
+definitiva do MB-016 em todas as plataformas.
+
 | Área | Estado atual |
 | --- | --- |
 | Navegação, abas e janelas | **Disponível / em evolução** |

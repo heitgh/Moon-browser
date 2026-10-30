@@ -15,6 +15,21 @@ const platformArguments = process.env.MOON_HEADLESS === "1" ? ["--ozone-platform
   ? ["--ozone-platform=wayland"]
   : [];
 
+// Exercise the native quit path and retain stderr/signal on failures.
+async function quitDesktop(application: ElectronApplication): Promise<void> {
+  const child = application.process();
+  if (child.exitCode !== null) return;
+  let stderr = "";
+  child.stderr?.on("data", chunk => { stderr += String(chunk); });
+  const exitCode = new Promise<number | null>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("Native Electron quit exceeded 12 seconds")), 12_000);
+    child.once("exit", code => { clearTimeout(timeout); resolve(code); });
+  });
+  // Electron may terminate before the DevTools evaluation can acknowledge quit.
+  void application.evaluate(({ app }) => { setImmediate(() => app.quit()); }).catch(() => undefined);
+  expect(await exitCode, `Signal: ${child.signalCode}; stderr: ${stderr}`).toBe(0);
+}
+
 async function shellWindow(application: ElectronApplication): Promise<Page> {
   await expect.poll(() => application.windows().some(page => page.url().startsWith("file:") && page.url().endsWith("/index.html"))).toBe(true);
   return application.windows().find(page => page.url().startsWith("file:") && page.url().endsWith("/index.html"))!;
@@ -128,9 +143,9 @@ test("preserves OAuth popup semantics and restores the shell after HTML fullscre
     await expect.poll(() => shell.evaluate(() => document.documentElement.dataset.moonHtmlFullscreen)).toBe("false");
     await expect(shell.getByLabel("Página inicial", { exact: true })).toBeVisible();
   } finally {
-    await application.close();
+    await quitDesktop(application);
     await fixture.close();
-    await rm(userData, { recursive: true, force: true });
+    await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -177,8 +192,8 @@ test("starts the packaged desktop shell and opens every primary panel", async ()
     await window.keyboard.press("Control+,"); await expect(window.getByRole("dialog")).toBeVisible(); await window.keyboard.press("Escape");
     await window.keyboard.press("Control+Shift+W"); await expect(window.locator(".moon-drawer-title")).toHaveText("Workspaces");
   } finally {
-    await application.close();
-    await rm(userData, { recursive: true, force: true });
+    await quitDesktop(application);
+    await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -204,7 +219,7 @@ test("restores the real tab session after an application restart", async () => {
       await window.getByLabel("Abrir endereço").click();
       await expect.poll(() => window.evaluate(() => (window as unknown as { moonBrowser: { getTabs(): Promise<Array<{ url: string }>> } }).moonBrowser.getTabs().then(tabs => tabs.map(tab => tab.url)))).toContain("https://example.com/");
     } finally {
-      await application.close();
+      await quitDesktop(application);
     }
 
     application = await launch();
@@ -214,10 +229,10 @@ test("restores the real tab session after an application restart", async () => {
       const restoredUrls = await restored.evaluate(() => (window as unknown as { moonBrowser: { getTabs(): Promise<Array<{ url: string }>> } }).moonBrowser.getTabs().then(tabs => tabs.map(tab => tab.url)));
       expect(restoredUrls).toContain("https://example.com/");
     } finally {
-      await application.close();
+      await quitDesktop(application);
     }
   } finally {
-    await rm(userData, { recursive: true, force: true });
+    await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -239,7 +254,7 @@ test("persists theme, sidebar and Home customization after restart", async () =>
       await window.getByLabel("Aplicar personalização").click();
       await expect.poll(() => window.evaluate(() => document.documentElement.dataset.moonTheme)).toBe("light");
       await expect.poll(() => window.evaluate(() => document.documentElement.dataset.moonSidebar)).toBe("right");
-    } finally { await application.close(); }
+    } finally { await quitDesktop(application); }
 
     application = await launch();
     try {
@@ -249,14 +264,15 @@ test("persists theme, sidebar and Home customization after restart", async () =>
       await expect(restored.locator('.moon-home-clock[data-widget="clock"]')).toHaveCount(0);
       const storedVersion = await restored.evaluate(() => JSON.parse(localStorage.getItem("moon:customization:v4") ?? "{}").version as number);
       expect(storedVersion).toBe(4);
-    } finally { await application.close(); }
-  } finally { await rm(userData, { recursive: true, force: true }); }
+    } finally { await quitDesktop(application); }
+  } finally { await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("exports and imports customization through the real desktop bridge", async () => {
   const userData = await mkdtemp(join(tmpdir(), "moon-e2e-portability-"));
   const exportPath = join(userData, "moon-customization.json");
   const application = await electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData } });
+  const child = application.process();
   try {
     const window = await shellWindow(application);
     await dismissOnboarding(window);
@@ -290,8 +306,10 @@ test("exports and imports customization through the real desktop bridge", async 
     await expect.poll(() => window.evaluate(() => document.documentElement.dataset.moonTheme)).toBe("light");
     await window.getByLabel("Aplicar personalização").click();
   } finally {
-    await application.close();
-    await rm(userData, { recursive: true, force: true });
+    // Preserve the original crash/error instead of masking it with process()
+    // after Playwright has already disposed the terminated application.
+    if (child.exitCode === null && child.signalCode === null) await quitDesktop(application);
+    await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -329,8 +347,8 @@ test("keeps the Phase A chrome readable, reachable and unclipped across target v
     await window.emulateMedia({ reducedMotion: "reduce" });
     expect(await window.evaluate(() => Number.parseFloat(getComputedStyle(document.querySelector(".moon-settings-modal")!).animationDuration || "0"))).toBeLessThanOrEqual(.001);
   } finally {
-    await application.close();
-    await rm(userData, { recursive: true, force: true });
+    await quitDesktop(application);
+    await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });
 
@@ -348,7 +366,7 @@ test("pauses an animated local wallpaper and uses its static poster", async () =
     await window.emulateMedia({ reducedMotion: "no-preference" }); await window.getByLabel("Aplicar personalização").click(); const omnibox = window.getByPlaceholder("Pesquise ou digite um endereço"); await omnibox.fill("https://example.com/"); await window.getByLabel("Abrir endereço").click();
     await expect.poll(() => window.evaluate(() => document.querySelector<HTMLElement>(".moon-home-wallpaper")?.dataset.playback)).toBe("paused");
     await window.getByLabel("Página inicial", { exact: true }).click(); await expect.poll(() => window.evaluate(() => document.querySelector<HTMLElement>(".moon-home-wallpaper")?.dataset.playback)).toBe("running");
-  } finally { await application.close(); await rm(userData, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("opens a real isolated private window and never restores it", async () => {
@@ -375,15 +393,15 @@ test("opens a real isolated private window and never restores it", async () => {
       expect(privateProfile.history).toEqual([]); expect(privateProfile.notes).toBe("");
       await privateWindow.getByLabel("Bloco de notas", { exact: true }).click();
       await expect(privateWindow.locator(".moon-notes-input")).toBeDisabled();
-    } finally { await application.close(); }
+    } finally { await quitDesktop(application); }
 
     application = await launch();
     try {
       const restored = await shellWindow(application);
       const restoredTabs = await restored.evaluate(() => (window as unknown as { moonBrowser: { getTabs(): Promise<Array<{ private: boolean }>> } }).moonBrowser.getTabs());
       expect(restoredTabs.every(tab => !tab.private)).toBe(true);
-    } finally { await application.close(); }
-  } finally { await rm(userData, { recursive: true, force: true }); }
+    } finally { await quitDesktop(application); }
+  } finally { await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("keeps local profile SQLite data and Chromium partitions isolated", async () => {
@@ -399,7 +417,9 @@ test("keeps local profile SQLite data and Chromium partitions isolated", async (
       await bridge.mutateProfileData({ type: "bookmark:save", value: { id: "only-default", title: "Default", url: "https://default.test/", time: Date.now() } });
       return (await bridge.createLocalProfile({ name: "Produto", avatar: "briefcase", color: "#2563eb" })).id;
     });
-    await primary.evaluate(async id => (window as unknown as { moonBrowser: { openLocalProfile(id: string): Promise<unknown> } }).moonBrowser.openLocalProfile(id), secondId);
+    await primary.evaluate(async id => (window as unknown as { moonBrowser: { openLocalProfile(id: string): Promise<unknown> } }).moonBrowser.openLocalProfile(id), secondId).catch(error => {
+      if (!(error instanceof Error) || !error.message.includes("Target page, context or browser has been closed")) throw error;
+    });
     await expect.poll(async () => {
       const pages = application.windows().filter(page => page.url().endsWith("/index.html"));
       const contexts = await Promise.all(pages.map(page => page.evaluate(() => (window as unknown as { moonBrowser: { getWindowContext(): Promise<{ profileId: string }> } }).moonBrowser.getWindowContext()).catch(() => undefined)));
@@ -411,7 +431,11 @@ test("keeps local profile SQLite data and Chromium partitions isolated", async (
     expect(productSnapshot.bookmarks).toEqual([]);
     await product.evaluate(async () => (window as unknown as { moonBrowser: { mutateProfileData(value: unknown): Promise<void> } }).moonBrowser.mutateProfileData({ type: "bookmark:save", value: { id: "only-product", title: "Produto", url: "https://product.test/", time: Date.now() } }));
     expect(await application.evaluate(({ session, webContents }, partition) => webContents.getAllWebContents().some(contents => contents.session === session.fromPartition(partition)), `persist:profile:${secondId}:workspace:research`)).toBe(true);
-    await product.evaluate(async () => (window as unknown as { moonBrowser: { openLocalProfile(id: string): Promise<unknown> } }).moonBrowser.openLocalProfile("default"));
+    await product.evaluate(async () => (window as unknown as { moonBrowser: { openLocalProfile(id: string): Promise<unknown> } }).moonBrowser.openLocalProfile("default")).catch(error => {
+      // Switching deliberately destroys the source window. The assertions below
+      // still require the destination profile, its data and its partition.
+      if (!(error instanceof Error) || !error.message.includes("Target page, context or browser has been closed")) throw error;
+    });
     await expect.poll(async () => {
       const pages = application.windows().filter(page => page.url().endsWith("/index.html"));
       const contexts = await Promise.all(pages.map(page => page.evaluate(() => (window as unknown as { moonBrowser: { getWindowContext(): Promise<{ profileId: string }> } }).moonBrowser.getWindowContext()).catch(() => undefined)));
@@ -422,7 +446,7 @@ test("keeps local profile SQLite data and Chromium partitions isolated", async (
     expect(primarySnapshot.bookmarks.map(item => item.id)).toContain("only-default"); expect(primarySnapshot.bookmarks.map(item => item.id)).not.toContain("only-product");
     expect((await stat(join(userData, "moon.sqlite3"))).isFile()).toBe(true);
     expect((await stat(join(userData, "profiles", secondId, "moon.sqlite3"))).isFile()).toBe(true);
-  } finally { await application.close(); await rm(userData, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("research reads real sources, saves notes and opt-in memory, and recovers after a crash", async () => {
@@ -502,7 +526,7 @@ test("research reads real sources, saves notes and opt-in memory, and recovers a
       const bridge = (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser;
       try { await bridge.loadResearchMemory!("research"); return false; } catch { return true; }
     })).toBe(true);
-  } finally { await application.close(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(userData, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); await new Promise<void>(resolve => server.close(() => resolve())); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("page keyboard zoom is separate from Ctrl wheel UI zoom and the titlebar is integrated", async () => {
@@ -548,7 +572,7 @@ test("page keyboard zoom is separate from Ctrl wheel UI zoom and the titlebar is
     const screenshot = await application.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0]!.webContents.capturePage()).toPNG().toString("base64"));
     const { writeFile } = await import("node:fs/promises");
     await writeFile("test-results/continuous-wallpaper.png", Buffer.from(screenshot, "base64"));
-  } finally { await application.close(); server.close(); await rm(userData, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); server.close(); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("rejects privileged IPC after a registered shell is navigated to a remote page", async () => {
@@ -563,7 +587,7 @@ test("rejects privileged IPC after a registered shell is navigated to a remote p
       try { await bridge.getTabs(); return "allowed"; } catch (error) { return String(error); }
     });
     expect(result).toContain("IPC origin");
-  } finally { await application.close(); await fixture.close(); await rm(userData, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); await fixture.close(); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("manages workspace metadata and deletes populated areas without orphan tabs", async () => {
@@ -589,14 +613,14 @@ test("manages workspace metadata and deletes populated areas without orphan tabs
       return { areas: (await bridge.getProfileData()).workspaces, tabs: await bridge.getTabs() };
     });
     const first = await readState(page); expect(first.areas.some(area => area.id === "area-a")).toBe(false); expect(first.tabs.some(tab => tab.workspaceId === "area-b")).toBe(true); expect(first.tabs.some(tab => tab.workspaceId === "area-a")).toBe(false);
-    await application.close(); application = await launch(); const restored = await readState(await shellWindow(application));
+    await quitDesktop(application); application = await launch(); const restored = await readState(await shellWindow(application));
     expect(restored.tabs.every(tab => restored.areas.some(area => area.id === tab.workspaceId))).toBe(true);
     const cookies = await application.evaluate(async ({ webContents }) => {
       const contents = webContents.getAllWebContents().find(contents => { try { return new URL(contents.getURL()).origin === "https://example.com"; } catch { return false; } });
       return contents ? contents.session.cookies.get({ name: "workspace-cookie" }) : [];
     });
     expect(cookies.some(cookie => cookie.value === "preserved")).toBe(true);
-  } finally { await application.close(); await rm(userData, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("shows checked release notes, defers updates and opens only the checked release", async () => {
@@ -614,7 +638,7 @@ test("shows checked release notes, defers updates and opens only the checked rel
     await page.getByLabel("Configurações", { exact: true }).click(); await page.getByLabel("Workspaces e dados", { exact: true }).click();
     await page.getByLabel("Verificar atualizações", { exact: true }).click(); await page.getByLabel("Baixar atualização", { exact: true }).click();
     expect(await application.evaluate(() => (globalThis as unknown as { checkedUpdateUrl: string }).checkedUpdateUrl)).toBe("https://github.com/heitgh/Moon-browser/releases/tag/v99.0.0");
-  } finally { await application.close(); await rm(userData, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 test("records a local many-tab memory sample without crashing renderers", async () => {
@@ -629,7 +653,7 @@ test("records a local many-tab memory sample without crashing renderers", async 
     const samplePath = test.info().outputPath("memory-sample.json");
     await writeFile(samplePath, JSON.stringify({ beforeKiB: before, ...sample }));
     await test.info().attach("local-memory-sample", { path: samplePath, contentType: "application/json" });
-  } finally { await application.close(); await fixture.close(); await rm(userData, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); await fixture.close(); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
 // Nexus Inc. — real streamed download stays visible while a remote WebContentsView is active.
@@ -661,5 +685,5 @@ test("shows a live download shelf beneath the browsing surface", async () => {
     await expect(shelf).toContainText("Concluído");
     const geometry = await shell.evaluate(() => ({ shelf: document.querySelector(".moon-download-shelf")!.getBoundingClientRect().top, viewport: document.querySelector(".moon-browser-viewport")!.getBoundingClientRect().bottom }));
     expect(geometry.viewport).toBeLessThanOrEqual(geometry.shelf + 1);
-  } finally { await application.close(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(directory, { recursive: true, force: true }); }
+  } finally { await quitDesktop(application); await new Promise<void>(resolve => server.close(() => resolve())); await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });

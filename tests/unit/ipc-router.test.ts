@@ -19,3 +19,25 @@ it("guards registered handlers before dispatching any command", async () => {
   await expect(invoke(event, { size: Infinity })).rejects.toThrow();
   expect(command).not.toHaveBeenCalled(); router.dispose(); expect(electron.removeHandler).toHaveBeenCalledWith("privileged:test");
 });
+
+it("drains an in-flight IPC operation even after handlers are disposed", async () => {
+  const mainFrame = { url: pathToFileURL(join(resolve("/moon"), "index.html")).href, detached: false };
+  const sender = { isDestroyed: () => false, mainFrame, getURL: () => mainFrame.url };
+  const windows = { idForWebContents: () => "shell", get: () => ({ isDestroyed: () => false, webContents: sender }) } as unknown as WindowManager;
+  const router = new IpcRouter(windows);
+  let release!: () => void;
+  router.register("profile:slow-write", async () => new Promise<void>(resolve => { release = resolve; }));
+  const invoke = electron.handle.mock.lastCall![1];
+  const pending = invoke({ sender, senderFrame: mainFrame }, { safe: true });
+  for (let i = 0; i < 100 && !release; i++) await Promise.resolve();
+  expect(release).toBeTypeOf("function");
+  router.dispose();
+  let finished = false;
+  const draining = router.drain().then(() => { finished = true; });
+  await Promise.resolve();
+  expect(finished).toBe(false);
+  release();
+  await pending; await draining;
+  expect(finished).toBe(true);
+  await expect(invoke({ sender, senderFrame: mainFrame }, { safe: true })).rejects.toThrow(/shutting down/i);
+});

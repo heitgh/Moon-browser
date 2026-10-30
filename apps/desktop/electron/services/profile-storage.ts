@@ -85,6 +85,27 @@ export class ProfileStorage {
     await this.#database.close();
   }
 
+  // Nexus Inc. — consistent SQLite snapshot before invoking a native installer.
+  // Chromium cookie/session partitions are outside this SQLite backup.
+  async createUpdateBackup(): Promise<string> {
+    return this.#database.exclusive(async () => {
+    const directory = join(this.profileDirectory, "recovery-backups");
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    const destination = join(directory, `before-update-${Date.now()}-${randomUUID()}.sqlite3`);
+    try {
+      await this.#connection.backup(destination);
+      await chmod(destination, 0o600);
+      const verification = new BetterSqliteConnection(destination, { readonly: true, fileMustExist: true });
+      try { await verification.connect(); }
+      finally { await verification.close(); }
+      return destination;
+    } catch (error) {
+      await rm(destination, { force: true }).catch(() => undefined);
+      throw error;
+    }
+    });
+  }
+
   async loadResearchMemory(workspaceId: string): Promise<ResearchMemory> {
     const key = `research:v1:${scopeId(workspaceId)}`;
     const raw = await this.#settings.getValue<ResearchMemory>(key);

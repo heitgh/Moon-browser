@@ -53,6 +53,11 @@ export class BetterSqliteConnection implements DatabaseConnection {
   }
 
   async close(): Promise<void> {
+    if (this.#database?.open && !this.options.readonly) {
+      // Checkpoint only after the application has drained database operations.
+      const result = this.#database.pragma("wal_checkpoint(TRUNCATE)") as { busy: number }[];
+      if (result.some(row => row.busy !== 0)) throw new Error("O checkpoint do perfil está ocupado. Tente novamente.");
+    }
     this.#database?.close();
     this.#database = undefined;
   }

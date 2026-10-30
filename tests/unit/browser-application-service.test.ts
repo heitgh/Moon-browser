@@ -101,3 +101,115 @@ describe("BrowserApplicationService", () => {
     await application.shutdown();
   });
 });
+
+describe("concurrent profile persistence", () => {
+  it("does not resurrect a closed-window snapshot after reopening the profile and removing its tabs", async () => {
+    const browser = new FakeBrowser();
+    let saved: BrowserTab[] = [];
+    const profile = {
+      loadBrowserSession: async () => saved,
+      saveBrowserSession: async (tabs: readonly BrowserTab[]) => { saved = [...tabs]; }
+    };
+    const app = new BrowserApplicationService(browser as never, profile as never);
+    const tab = await app.createTab("old-window", {url: "https://saved.example/"});
+    await app.closeWindow("old-window");
+    expect(saved.map(item => item.id)).toEqual([tab.id]);
+    await app.restoreWindow("new-window");
+    await app.closeTab(tab.id);
+    await app.flushWindow("new-window");
+    expect(saved).toEqual([]);
+    await app.shutdown();
+  });
+  it("keeps tabs from multiple windows instead of replacing the snapshot with the last writer", async () => {
+    const browser = new FakeBrowser();
+    const saves: string[][] = [];
+    const profile = {
+      loadBrowserSession: async () => [],
+      saveBrowserSession: async (tabs: readonly BrowserTab[]) => { saves.push(tabs.map(tab => tab.id)); }
+    };
+    const app = new BrowserApplicationService(browser as never, profile as never);
+    await app.createTab("window-a", { url: "https://a.test/" });
+    await app.createTab("window-b", { url: "https://b.test/" });
+    await Promise.all([app.flushWindow("window-a"), app.flushWindow("window-b")]);
+    await app.closeWindow("window-a");
+    await app.closeWindow("window-b");
+    expect(saves.at(-1)).toEqual(["tab-1", "tab-2"]);
+    await app.shutdown();
+  });
+
+  it("waits for an in-flight save before completing shutdown", async () => {
+    const browser = new FakeBrowser();
+    let release!: () => void;
+    let saved = 0;
+    const profile = {
+      loadBrowserSession: async () => [],
+      saveBrowserSession: async () => { saved++; if (saved === 1) await new Promise<void>(resolve => { release = resolve; }); }
+    };
+    const app = new BrowserApplicationService(browser as never, profile as never);
+    await app.createTab("window-a", { url: "https://test.example/" });
+    const flush = app.flushWindow("window-a");
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+    // Wait until the first write starts, without a timer-based race.
+    for (let i = 0; i < 100 && !release; i++) await new Promise(resolve => setImmediate(resolve));
+    expect(release).toBeTypeOf("function");
+    let finished = false;
+    const shutdown = app.shutdown().then(() => { finished = true; });
+    await Promise.resolve();
+    expect(finished).toBe(false);
+    release();
+    await flush;
+    await shutdown;
+    expect(saved).toBeGreaterThanOrEqual(2);
+  });
+
+  it("never persists a private window into the shared multi-window snapshot", async () => {
+    const browser = new FakeBrowser();
+    const saves: BrowserTab[][] = [];
+    const profile = { loadBrowserSession: async () => [], saveBrowserSession: async (tabs: readonly BrowserTab[]) => { saves.push([...tabs]); } };
+    const app = new BrowserApplicationService(browser as never, profile as never);
+    await app.createTab("normal", { url: "https://safe.example/" });
+    await app.createTab("private", { url: "https://secret.example/", private: true });
+    await app.flushWindow("private");
+    expect(saves.at(-1)?.map(tab => tab.url)).toEqual(["https://safe.example/"]);
+    await app.shutdown();
+  });
+});
+
+it("persists an intentionally emptied normal window without resurrecting closed tabs", async () => {
+  const browser = new FakeBrowser();
+  const saves: BrowserTab[][] = [];
+  const profile = { loadBrowserSession: async () => [], saveBrowserSession: async (tabs: readonly BrowserTab[]) => { saves.push([...tabs]); } };
+  const app = new BrowserApplicationService(browser as never, profile as never);
+  const tab = await app.createTab("normal", { url: "https://closed.example/" });
+  await app.flushWindow("normal");
+  await app.closeTab(tab.id);
+  await app.flushWindow("normal");
+  expect(saves.at(-1)).toEqual([]);
+  await app.shutdown();
+});
+
+it("drains an in-flight history write before completing shutdown", async () => {
+  const browser = new FakeBrowser();
+  let release!: () => void;
+  const profile = {
+    loadBrowserSession: async () => [],
+    saveBrowserSession: async () => undefined,
+    recordHistoryEntry: async () => { await new Promise<void>(resolve => { release = resolve; }); }
+  };
+  const app = new BrowserApplicationService(browser as never, profile as never);
+  const tab = await app.createTab("window-1", { url: "https://history.example/" });
+  const pending = browser.listener?.("window-1", {
+    tab, navigation: { canGoBack: false, canGoForward: false },
+    historyEntry: { id: "visit", url: tab.url, title: "Visit" }
+  } as never);
+  for (let i = 0; i < 100 && !release; i++) await new Promise(resolve => setImmediate(resolve));
+  expect(release).toBeTypeOf("function");
+  let done = false;
+  const shutdown = app.shutdown().then(() => { done = true; });
+  await Promise.resolve();
+  expect(done).toBe(false);
+  release();
+  await pending;
+  await shutdown;
+  expect(done).toBe(true);
+});

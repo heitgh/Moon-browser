@@ -1,5 +1,14 @@
 # Bugs do Moon Browser
 
+## Etapa 1 em revisão — 30/10/2026
+
+MB-016 permanece aberto. Esta branch ordena drenagem de IPC, persistência, destruição
+efetiva das páginas e fechamento/checkpoint dos bancos. Foram observados encerramentos
+por sinal em headless, além dos timeouts anteriores; passagem isolada não encerra o bug.
+Recuperação agora trata falha do perfil selecionado e reconstrução confirmada de registro
+danificado, preservando os originais. Resultados e limites atuais estão em
+`docs/review/stage1-shutdown-recovery.md`; não confundir com a release alpha.5.
+
 Atualizado em 26 de outubro de 2026.
 
 A alpha.5 foi publicada após a matriz de release Windows/Linux passar (292 testes por sistema e auditoria sem vulnerabilidades). A execução independente Windows falhou no ensaio de encerramento: o trace mostra Close context ultrapassando cinco segundos, seguido de EBUSY na limpeza e timeout do worker. A causa raiz permanece não comprovada; MB-016 continua aberto.
