@@ -157,3 +157,16 @@ describe("concurrent profile persistence", () => {
     await app.shutdown();
   });
 });
+
+it("persists an intentionally emptied normal window without resurrecting closed tabs", async () => {
+  const browser = new FakeBrowser();
+  const saves: BrowserTab[][] = [];
+  const profile = { loadBrowserSession: async () => [], saveBrowserSession: async (tabs: readonly BrowserTab[]) => { saves.push([...tabs]); } };
+  const app = new BrowserApplicationService(browser as never, profile as never);
+  const tab = await app.createTab("normal", { url: "https://closed.example/" });
+  await app.flushWindow("normal");
+  await app.closeTab(tab.id);
+  await app.flushWindow("normal");
+  expect(saves.at(-1)).toEqual([]);
+  await app.shutdown();
+});
