@@ -72,9 +72,25 @@ async function createMainWindow(privateMode = false, profileId = defaultProfileI
   window.webContents.on("will-navigate", event => {
     if (event.url !== window.webContents.getURL()) event.preventDefault();
   });
-  window.once("close", () => {
-    if (application?.shuttingDown) return;
-    void application?.closeWindow(id).catch(error => console.error("Window profile flush failed", error));
+  // Nexus Inc. — a native close must not race an asynchronous session flush.
+  let closing = false;
+  window.on("close", event => {
+    if (shutdownStarted || application?.shuttingDown) return;
+    event.preventDefault();
+    if (closing) return;
+    closing = true;
+    void application?.closeWindow(id).then(() => {
+      if (!window.isDestroyed()) window.destroy();
+    }).catch(error => {
+      closing = false;
+      console.error("Window profile flush failed", error);
+      if (!window.isDestroyed()) void dialog.showMessageBox(window, {
+        type: "error", title: "Não foi possível salvar a sessão",
+        message: "A janela foi mantida aberta para evitar perda de dados.",
+        detail: "Tente fechar novamente após verificar o espaço em disco e as permissões.",
+        buttons: ["Entendi"]
+      });
+    });
   });
   window.once("closed", () => {
     if (localProfile.kind === "guest" && !windows.hasProfileWindows(profileId)) {
@@ -202,7 +218,7 @@ app.on("before-quit", event => {
       void diagnostics.record("shutdown-timeout", { stage });
       app.exit(1);
     },
-    failed: stage => { console.error("Moon shutdown step failed", stage); void diagnostics.record("shutdown-failed", { stage }); }
+    failed: stage => { console.error("Moon shutdown step failed", stage); void diagnostics.record("shutdown-failed", { stage }); app.exit(1); }
   }).then(completed => {
     if (!completed) return;
     shutdownComplete = true;
