@@ -9,11 +9,12 @@ export async function runShutdown(
   const deadline = new Promise<false>(resolve => {
     timer = setTimeout(() => { expired = true; options.timedOut(stage); resolve(false); }, options.timeoutMs);
   });
-  const work = async (): Promise<true> => {
+  const work = async (): Promise<boolean> => {
     for (const step of steps) {
       if (expired) return true;
       stage = step.name;
-      try { await step.run(); } catch { options.failed(stage); }
+      try { await step.run(); }
+      catch { options.failed(stage); return false; }
     }
     return true;
   };
