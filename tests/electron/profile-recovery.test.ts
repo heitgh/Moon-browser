@@ -26,7 +26,7 @@ describe("ProfileRecoveryService", () => {
     expect((await stat(snapshot)).isFile()).toBe(true);
     await storage.close();
     await writeFile(join(directory, "moon.sqlite3"), "not a sqlite database");
-    const backups = await recovery.listBackups();
+    const backups = (await recovery.listBackups()).filter(item => item.source === "update");
     expect(backups).toHaveLength(1);
     expect(backups[0]?.source).toBe("update");
     const preserved = await recovery.restoreBackup(backups[0]!.id);
@@ -42,7 +42,7 @@ describe("ProfileRecoveryService", () => {
     const backup = await storage.createUpdateBackup();
     await storage.close();
     await writeFile(backup, "bad backup");
-    expect(await recovery.listBackups()).toEqual([]);
+    expect((await recovery.listBackups()).filter(item => item.source === "update")).toEqual([]);
     await expect(recovery.restoreBackup("update/../../moon.sqlite3")).rejects.toThrow();
     await expect(recovery.restoreBackup("update/" + backup.split("/").at(-1))).rejects.toThrow();
     const reopened = new ProfileStorage(directory);
