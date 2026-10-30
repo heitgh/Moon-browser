@@ -3,12 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const openPath = vi.fn(async () => "");
 const showItemInFolder = vi.fn();
+const showMessageBox = vi.fn(async () => ({ response: 0 }));
 
 vi.mock("electron", () => ({
-  shell: { openPath, showItemInFolder }
+  shell: { openPath, showItemInFolder },
+  dialog: { showMessageBox }
 }));
 
 class FakeDownload extends EventEmitter {
+  filename = "file.zip";
+  path = "/tmp/file.zip";
   receivedBytes = 0;
   totalBytes = 1_000;
   speed = 0;
@@ -17,8 +21,8 @@ class FakeDownload extends EventEmitter {
   cancelled = false;
 
   getURL(): string { return "https://example.com/file.zip"; }
-  getFilename(): string { return "file.zip"; }
-  getSavePath(): string { return "/tmp/file.zip"; }
+  getFilename(): string { return this.filename; }
+  getSavePath(): string { return this.path; }
   getTotalBytes(): number { return this.totalBytes; }
   getReceivedBytes(): number { return this.receivedBytes; }
   getCurrentBytesPerSecond(): number { return this.speed; }
@@ -33,6 +37,8 @@ describe("ElectronDownloadManager", () => {
   beforeEach(() => {
     openPath.mockClear();
     showItemInFolder.mockClear();
+    showMessageBox.mockReset();
+    showMessageBox.mockResolvedValue({ response: 0 });
   });
 
   it("tracks real progress and terminal state from Electron", async () => {
@@ -131,4 +137,49 @@ it("isolates private downloads, discards metadata on close and ignores late nati
   expect(manager.list(scope)).toEqual([]);
   const preventDefault = vi.fn(); session.emit("will-download", { preventDefault }, new FakeDownload());
   expect(preventDefault).toHaveBeenCalled(); expect(manager.list(scope)).toEqual([]);
+});
+
+it("recognizes common executables and scripts without flagging ordinary documents", async () => {
+  const { needsExecutableConfirmation } = await import("../../apps/desktop/electron/services/download-manager.js");
+  for (const ext of [".EXE", ".msi", ".bat", ".ps1", ".scr", ".AppImage", ".sh", ".jar", ".lnk"]) {
+    expect(needsExecutableConfirmation("download" + ext, "/tmp/download" + ext)).toBe(true);
+  }
+  for (const ext of [".pdf", ".jpg", ".txt", ".zip", ".md"]) {
+    expect(needsExecutableConfirmation("download" + ext, "/tmp/download" + ext)).toBe(false);
+  }
+  expect(needsExecutableConfirmation("masked.exe", "/tmp/masked.txt")).toBe(true);
+});
+
+it("never opens an executable before explicit main-process confirmation", async () => {
+  const { ElectronDownloadManager } = await import("../../apps/desktop/electron/services/download-manager.js");
+  const manager = new ElectronDownloadManager({ list: () => [] } as never);
+  const session = new EventEmitter();
+  const download = new FakeDownload();
+  download.filename = "installer.EXE"; download.path = "/tmp/installer.EXE";
+  manager.attach(session as never); session.emit("will-download", {}, download);
+  download.emit("done", {}, "completed");
+  const id = manager.list()[0]!.id;
+  await manager.open(id);
+  expect(showMessageBox).toHaveBeenCalledOnce();
+  expect(showMessageBox.mock.calls[0]![0]).toMatchObject({
+    type: "warning", cancelId: 0, defaultId: 0, buttons: ["Cancelar", "Abrir arquivo"]
+  });
+  expect(openPath).not.toHaveBeenCalled();
+  showMessageBox.mockResolvedValueOnce({ response: 1 });
+  await manager.open(id);
+  expect(openPath).toHaveBeenCalledWith("/tmp/installer.EXE");
+});
+
+it("cannot approve opening a download from another profile", async () => {
+  const { ElectronDownloadManager } = await import("../../apps/desktop/electron/services/download-manager.js");
+  const manager = new ElectronDownloadManager({ list: () => [] } as never);
+  const session = new EventEmitter();
+  const download = new FakeDownload();
+  download.filename = "malicious.cmd"; download.path = "/tmp/malicious.cmd";
+  manager.attach(session as never, "owner");
+  session.emit("will-download", {}, download);
+  download.emit("done", {}, "completed");
+  await expect(manager.open(manager.list("owner")[0]!.id, "other")).rejects.toThrow();
+  expect(showMessageBox).not.toHaveBeenCalled();
+  expect(openPath).not.toHaveBeenCalled();
 });
