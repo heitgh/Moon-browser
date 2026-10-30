@@ -8,12 +8,14 @@ import type { MoonBrowserBridge } from "../../ui/browser-shell/contracts.js";
 test("native Resources menu displays real unique processes and its optional sidebar button persists", async () => {
   test.setTimeout(90_000);
   const root = await mkdtemp(join(tmpdir(), "moon-resources-"));
-  const server = createServer((request, response) => { response.writeHead(200, {"Content-Type": "text/html"}); response.end(`<title>Resource ${request.url}</title><main><h1>Local resource fixture</h1><p>${"measurement ".repeat(4000)}</p></main>`); });
+  const server = createServer((_request, response) => { response.writeHead(200, {"Content-Type": "text/html"}); response.end(`<title>Resource fixture</title><main><h1>Local resource fixture</h1><p>${"measurement ".repeat(4000)}</p></main>`); });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as {port: number}).port;
   const application = await electron.launch({args: [...(process.env.MOON_HEADLESS === "1" ? ["--ozone-platform=headless"] : []), `--user-data-dir=${root}`, "."], env: {...process.env, NODE_ENV: "test", MOON_TEST_OFFLINE: "1", MOON_TEST_PROFILE_DIR: join(root, "profile")}});
   const child = application.process();
   try {
+    const probe = await fetch(`http://127.0.0.1:${port}/fixture-reflection-probe`);
+    expect(await probe.text()).not.toContain("fixture-reflection-probe");
     await expect.poll(() => application.windows().some(page => page.url().endsWith("/index.html"))).toBe(true);
     const page = application.windows().find(page => page.url().endsWith("/index.html"))!;
     await page.getByLabel("Pular configuração inicial").click();
