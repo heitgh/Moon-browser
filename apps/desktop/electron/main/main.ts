@@ -278,6 +278,7 @@ app.on("before-quit", event => {
   }
   const diagnostics = new LocalDiagnostics(join(app.getPath("userData"), "diagnostics"), process.env.MOON_LOCAL_DIAGNOSTICS === "1");
   void runShutdown([
+    { name: "drain-ipc", run: () => ipc.drain() },
     { name: "flush-and-destroy-tabs", run: () => application!.shutdown() },
     { name: "close-profiles", run: async () => { await profiles?.close(); } }
   ], {
