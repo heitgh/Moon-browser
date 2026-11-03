@@ -74,7 +74,7 @@
     "@types/node": "^24.0.0",
     "@typescript-eslint/eslint-plugin": "^8.40.0",
     "@typescript-eslint/parser": "^8.40.0",
-    "electron": "^45.0.0",
+    "electron": "^45.2.0",
     "electron-builder": "^26.0.0",
     "eslint": "^9.0.0",
     "happy-dom": "^21.0.4",
