@@ -19,6 +19,10 @@ export class ResearchPanel {
   #busy = false;
   #status = element("p", "moon-research-status");
   #query = "";
+  #modelPanel: HTMLElement | undefined;
+  #refreshModel: (() => void) | undefined;
+
+  refreshModel(): void { this.#refreshModel?.(); }
   #tabsKey = "";
   #mode: ResearchMode = "short";
   constructor(readonly options: PanelOptions) { this.#status.setAttribute("role", "status"); }
@@ -41,14 +45,85 @@ export class ResearchPanel {
   #draw(): void {
     this.element.replaceChildren();
     const intro = element("p", "moon-drawer-description", "Leia, organize e retome suas fontes. Processamento local; nenhum conteúdo é enviado a serviços externos.");
-    const unavailable = element("p", "moon-info-card", "IA generativa indisponível: nenhum provedor configurado. O modo local seleciona trechos e cria roteiros de revisão, sem inventar respostas.");
     const tabs = element("div", "moon-research-actions");
     tabs.append(this.#control("Pesquisar e estudar", () => { this.#memoryView = false; this.#draw(); }), this.#control("O que o Moon lembra sobre mim?", () => { this.#memoryView = true; this.#draw(); }));
-    this.element.append(intro, unavailable, tabs);
+    this.element.append(intro, tabs);
     if (this.#memoryView) this.#drawMemory(); else this.#drawResearch();
     this.element.append(this.#status);
     this.element.setAttribute("aria-busy", String(this.#busy));
   }
+  mountModel(container: HTMLElement): void {
+    if (this.options.context().private) {
+      container.append(element("p", "moon-info-card", "Moon AI está disponível em janelas normais."));
+      return;
+    }
+    if (this.#modelPanel) { container.append(this.#modelPanel); return; }
+    const bridge = this.options.bridge;
+    if (!bridge?.getAiState || !bridge.runAi) return;
+    const panel = element("fieldset", "moon-research-sources");
+    const status = element("p", "", "Consultando modelo local…");
+    status.setAttribute("role", "status");
+    const question = element("input", "moon-settings-input");
+    question.maxLength = 1500;
+    question.setAttribute("aria-label", "Pergunta para Moon AI");
+    question.placeholder = "Digite sua pergunta";
+    const answer = element("p", "moon-research-status");
+    const useSelection = element("input");
+    useSelection.type = "checkbox";
+    const useTab = element("input");
+    useTab.type = "checkbox";
+    const tabLabel = element("label");
+    tabLabel.append(useTab, document.createTextNode(" Usar a aba ativa"));
+    const selectionLabel = element("label");
+    selectionLabel.append(useSelection, document.createTextNode(" Usar texto selecionado"));
+    selectionLabel.hidden = true;
+    const update = async () => {
+      const state = await bridge.getAiState!();
+      selectionLabel.hidden = !state.selection;
+      useSelection.checked = Boolean(state.selection);
+      status.textContent = state.model ? `Modelo local: ${state.model.name}` : "Selecione um arquivo GGUF para ativar a geração local.";
+    };
+    const report = (error: unknown) => { status.textContent = error instanceof Error ? error.message : "Falha na Moon AI."; };
+    const choose = this.#control("Escolher GGUF", () => { void bridge.chooseAiModel?.().then(update).catch(report); });
+    const disable = this.#control("Desativar modelo", () => { void bridge.disableAiModel?.().then(update).catch(report); });
+    const cancel = this.#control("Cancelar geração", () => { void bridge.cancelAi?.().catch(report); });
+    cancel.disabled = true;
+    const run = this.#control("Perguntar à Moon AI", () => {
+      const context = this.options.context();
+      const tab = context.tabs.find(tab => tab.active && !tab.private && tab.workspaceId === context.workspaceId && /^https?:/.test(tab.url));
+      if (useTab.checked && !useSelection.checked && !tab) {
+        status.textContent = "Abra uma página web para usar a aba ativa.";
+        return;
+      }
+      const tabId = useTab.checked && !useSelection.checked ? tab?.id : undefined;
+      const id = crypto.randomUUID();
+      answer.textContent = "";
+      run.disabled = true;
+      cancel.disabled = false;
+      const unsubscribe = bridge.onAiChunk?.(chunk => {
+        if (chunk.id === id) answer.append(chunk.text);
+      });
+      void bridge.runAi!({id, mode: "model", operation: "question", question: question.value,
+        context: useSelection.checked ? "selection" : tabId ? "tabs" : "none", tabIds: tabId ? [tabId] : []}).then(result => {
+        answer.textContent = result.text;
+      }).catch(error => {
+        answer.textContent = "";
+        report(error);
+      }).finally(() => {
+        unsubscribe?.();
+        run.disabled = false;
+        cancel.disabled = true;
+        useSelection.checked = false;
+        selectionLabel.hidden = true;
+      });
+    });
+    panel.append(element("legend", "", "Moon AI local"), status, choose, disable, tabLabel, selectionLabel, question, run, cancel, answer);
+    this.#modelPanel = panel;
+    this.#refreshModel = () => { void update().catch(report); };
+    container.append(panel);
+    void update().catch(report);
+  }
+
   #drawResearch(): void {
     const selection = element("fieldset", "moon-research-sources"); selection.append(element("legend", "", "1. Escolha até cinco abas deste workspace"));
     const eligible = this.options.context().tabs.filter(tab => !tab.private && (tab.workspaceId ?? "research") === this.#scope && /^https?:/.test(tab.url));

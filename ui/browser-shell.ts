@@ -188,6 +188,10 @@ class BrowserShell {
     this.#build(); this.#customization.setWorkspace(this.#workspaceId); this.#customization.subscribe(change => this.#applyCustomization(change.config)); this.#bindShortcuts(); this.#observe(); this.#startClock();
     if (this.#customization.loadResult.message) this.#flash(this.#customization.loadResult.message);
     if (!this.#bridge) { this.#status.textContent = "Prévia da interface — use npm run dev:desktop para navegar."; return; }
+    this.#bridge.onAiOpen?.(() => {
+      if (this.#openDrawer !== "ai") this.#toggleDrawer("ai");
+      this.#researchPanel.refreshModel();
+    });
     this.#bridge.onResourcesOpen?.(() => { if (this.#openDrawer !== "resources") this.#toggleDrawer("resources"); });
     this.#bridge.onWorkspaceDeleting?.(({ source, target }) => { this.#workspaceDeleting = true; if (this.#workspaceId === source) this.#workspaceId = target; });
     this.#bridge.onWorkspaceChanged?.(() => { this.#workspaceDeleting = false; void this.#reloadProfileData(); });
@@ -553,9 +557,7 @@ class BrowserShell {
   }
   #linkRow(item: SavedLink, remove?: () => void, meta?: string): HTMLElement { const row = el("div", "moon-link-row"); const open = btn("moon-link-main", `Abrir ${item.title}`); const copy = el("span", "moon-list-copy"); copy.append(el("strong", "", item.title), el("small", "", meta ?? this.#hostname(item.url))); const mark = el("span", "moon-site-mark", item.title[0]?.toUpperCase()); const favicon = this.#faviconForUrl(item.url); if (favicon) { const image = document.createElement("img"); image.src = favicon; image.alt = ""; image.draggable = false; mark.replaceChildren(image); } open.append(mark, copy); open.addEventListener("click", () => void this.#navigate(item.url)); row.append(open); if (remove) { const removeButton = btn("moon-icon-button", `Remover ${item.title}`, "close"); removeButton.addEventListener("click", remove); row.append(removeButton); } return row; }
   #aiDrawer(): void {
-    const hero = el("div", "moon-ai-hero"); hero.append(svg("sparkles"), el("strong", "", "Moon AI"), el("span", "moon-preview-badge", "PREVIEW"));
-    const form = el("form", "moon-ai-form"); const input = el("textarea", "moon-ai-input"); input.placeholder = "O que você quer descobrir?"; input.rows = 5; const search = btn("moon-primary-button", "Pesquisar pergunta", "search"); search.type = "submit"; search.append(el("span", "", "Pesquisar na web")); form.append(input, search); form.addEventListener("submit", event => { event.preventDefault(); void this.#navigate(input.value); });
-    const info = el("div", "moon-info-card"); info.append(svg("sparkles"), el("p", "", "A conexão com um provedor de IA será feita no processo seguro, sem expor chaves na interface.")); this.#drawerBody.append(hero, el("p", "moon-drawer-description", "Nesta versão local, o Moon encaminha a pergunta ao motor de busca escolhido — sem fingir que já existe uma IA conectada."), form, info);
+    this.#researchPanel.mountModel(this.#drawerBody);
   }
   #securityDrawer(): void {
     const hero = el("div", "moon-security-hero"); hero.append(svg("shield"), el("strong", "", "Navegação isolada"), el("span", "", "ATIVA"));

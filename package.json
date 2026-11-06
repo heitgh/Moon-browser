@@ -1,6 +1,6 @@
 {
   "name": "moon-browser",
-  "version": "0.6.0-alpha.5",
+  "version": "0.6.0-alpha.6",
   "description": "Moon Browser — ergonomic, privacy-conscious and highly customizable desktop browser.",
   "desktopName": "moon-browser.desktop",
   "private": true,
@@ -66,6 +66,7 @@
     "cross-fetch": "^4.1.0",
     "electron-store": "^10.1.0",
     "electron-updater": "^6.8.11",
+    "node-llama-cpp": "3.22.3",
     "tldts-experimental": "7.4.10"
   },
   "devDependencies": {

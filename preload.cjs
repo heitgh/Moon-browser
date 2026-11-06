@@ -21,6 +21,13 @@ contextBridge.exposeInMainWorld("moonBrowser", Object.freeze({
     ...(url ? { url } : {}),
     ...(workspaceId ? { workspaceId } : {})
   }),
+  getAiState: () => invoke("ai:state"),
+  chooseAiModel: () => invoke("ai:choose-model"),
+  disableAiModel: () => invoke("ai:disable-model"),
+  runAi: request => invoke("ai:run", request),
+  cancelAi: () => invoke("ai:cancel"),
+  onAiOpen: listener => subscribe("ai:open", listener),
+  onAiChunk: listener => subscribe("ai:chunk", listener),
   captureResearch: (workspaceId, tabIds) => invoke("research:capture", { workspaceId, tabIds }),
   loadResearchMemory: workspaceId => invoke("research:load-memory", { workspaceId }),
   saveResearchMemory: (workspaceId, value) => invoke("research:save-memory", { workspaceId, value }),
