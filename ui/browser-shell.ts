@@ -1,3 +1,4 @@
+import { PrivacyPanel } from "./privacy/privacy-panel.js";
 import { ResourcesPanel, RESOURCE_SIDEBAR_KEY } from "./resources/resources-panel.js";
 import { DownloadShelf } from "./downloads/download-shelf.js";
 import type { NativeUpdateState } from "../packages/ipc/native-update-contract.js";
@@ -214,9 +215,11 @@ class BrowserShell {
         this.#bridge.onUpdateState?.(state => { this.#nativeUpdate = state; this.#downloadShelf.render(this.#downloads, state); this.#renderNativeUpdateControls(); });
       }
       this.#adblock = await this.#bridge.getAdblockStatus();
-      const preferredAdblock = load<boolean>(KEYS.adblock, true);
-      if (this.#adblock.enabled !== preferredAdblock) {
-        this.#adblock = await this.#bridge.setAdblockEnabled(preferredAdblock);
+      // The desktop privacy service owns the current profile preference.
+      // Do not reapply legacy renderer flags or open confirmation on startup.
+      if (!this.#bridge.getPrivacyState) {
+        const preferredAdblock = load<boolean>(KEYS.adblock, true);
+        if (this.#adblock.enabled !== preferredAdblock) this.#adblock = await this.#bridge.setAdblockEnabled(preferredAdblock);
       }
       const tabs = await this.#bridge.getTabs();
       tabs.forEach(tab => this.#tabs.set(tab.id, tab));
@@ -454,8 +457,8 @@ class BrowserShell {
       if (this.#workspaces.some(area => area.id !== workspace.id && !area.archived)) {
         const destination = el("select", "moon-settings-input"); destination.setAttribute("aria-label", `Destino das abas de ${workspace.name}`);
         for (const area of this.#workspaces.filter(area => area.id !== workspace.id && !area.archived)) { const option = el("option", "", area.name); option.value = area.id; destination.append(option); }
-        const remove = btn("moon-text-button", `Mover abas e excluir ${workspace.name}`); remove.textContent = "Mover abas e excluir"; remove.addEventListener("click", () => { if (window.confirm(`Excluir “${workspace.name}” e mover suas abas? Cookies e dados serão mantidos.`)) void this.#removeWorkspace(workspace.id, "move", destination.value); });
-        const close = btn("moon-text-button", `Fechar abas e excluir ${workspace.name}`); close.textContent = "Fechar abas e excluir"; close.addEventListener("click", () => { if (window.confirm(`Fechar todas as abas de “${workspace.name}” e excluir a área? Cookies e dados serão mantidos.`)) void this.#removeWorkspace(workspace.id, "close"); }); row.append(destination, remove, close);
+        const remove = btn("moon-text-button", `Mover abas e excluir ${workspace.name}`); remove.textContent = "Mover abas e excluir"; remove.addEventListener("click", () => { void this.#removeWorkspace(workspace.id, "move", destination.value); });
+        const close = btn("moon-text-button", `Fechar abas e excluir ${workspace.name}`); close.textContent = "Fechar abas e excluir"; close.addEventListener("click", () => { void this.#removeWorkspace(workspace.id, "close"); }); row.append(destination, remove, close);
       }
       list.append(row);
     });
@@ -515,10 +518,17 @@ class BrowserShell {
       if (download.state === "paused") actions.append(this.#downloadAction("Continuar", "play", () => void this.#bridge?.resumeDownload(download.id)));
       if (["in-progress", "paused"].includes(download.state)) actions.append(this.#downloadAction("Cancelar", "close", () => void this.#bridge?.cancelDownload(download.id)));
       if (download.state === "completed") {
-        actions.append(this.#downloadAction("Abrir", "play", () => void this.#bridge?.openDownload(download.id)));
+        actions.append(this.#downloadAction(download.executableHint ? "Revisar abertura" : "Abrir", "play", () => {
+          void this.#bridge?.openDownload(download.id).catch(error => this.#showError(error));
+        }));
         actions.append(this.#downloadAction("Pasta", "folder", () => void this.#bridge?.showDownloadInFolder(download.id)));
       }
-      row.append(header, progress, detail, actions); list.append(row);
+      row.append(header, progress, detail);
+      if (download.savePath) row.append(el("p", "moon-download-detail", `Destino: ${download.savePath}`));
+      row.append(el("p", "moon-download-detail", download.executableHint
+        ? `Pode executar código · ${download.mimeType || "tipo desconhecido"}`
+        : `Tipo informado: ${download.mimeType || "desconhecido"}`), actions);
+      list.append(row);
     });
     this.#drawerBody.append(list);
   }
@@ -550,7 +560,7 @@ class BrowserShell {
   #securityDrawer(): void {
     const hero = el("div", "moon-security-hero"); hero.append(svg("shield"), el("strong", "", "Navegação isolada"), el("span", "", "ATIVA"));
     const adblock = el("div", "moon-adblock-control"); const copy = el("span", "moon-list-copy"); copy.append(el("strong", "", "Moon AdBlock"), el("small", "", this.#adblockDetail()));
-    const toggle = btn(`moon-adblock-toggle${this.#adblock.enabled ? " is-active" : ""}`, this.#adblock.enabled ? "Desativar AdBlock" : "Ativar AdBlock"); toggle.append(el("span")); toggle.disabled = this.#adblock.phase === "loading" || this.#adblock.phase === "failed"; toggle.addEventListener("click", () => void this.#setAdblockEnabled(!this.#adblock.enabled)); adblock.append(copy, toggle);
+    const toggle = btn(`moon-adblock-toggle${this.#adblock.enabled ? " is-active" : ""}`, this.#adblock.enabled ? "Desativar AdBlock" : "Ativar AdBlock"); toggle.append(el("span")); toggle.disabled = this.#windowPrivate || this.#windowGuest || this.#adblock.phase === "loading" || this.#adblock.phase === "failed"; toggle.addEventListener("click", () => void this.#setAdblockEnabled(!this.#adblock.enabled)); adblock.append(copy, toggle);
     const list = el("div", "moon-security-list");
     [["Context isolation", "A página não acessa APIs internas do Moon."], ["Sandbox", "Sites executam em processos restritos do Chromium."], ["Navegação", "Somente HTTP e HTTPS são aceitos."], ["Workspaces", "Cada espaço usa uma sessão separada."]].forEach(([title, detail]) => { const item = el("div", "moon-security-item"); item.append(el("span", "moon-check", "✓"), el("strong", "", title), el("p", "", detail)); list.append(item); });
     const permissionTitle = el("h3", "moon-panel-section-title", "Permissões por site"); const permissions = el("div", "moon-panel-list");
@@ -560,7 +570,18 @@ class BrowserShell {
     this.#drawerBody.append(hero, adblock, list, permissionTitle, permissions);
   }
   #renderAdblock(): void { this.#securityPill.classList.toggle("is-disabled", this.#adblock.phase === "disabled" || this.#adblock.phase === "failed"); this.#securityPill.classList.toggle("is-loading", this.#adblock.phase === "loading"); this.#securityText.textContent = this.#adblock.phase === "loading" ? "AdBlock carregando" : this.#adblock.phase === "failed" ? "AdBlock indisponível" : this.#adblock.enabled ? `${this.#adblock.blockedCount} bloqueados` : "AdBlock desligado"; }
-  async #setAdblockEnabled(enabled: boolean): Promise<void> { if (!this.#bridge) return; this.#adblock = await this.#bridge.setAdblockEnabled(enabled); save(KEYS.adblock, enabled); this.#renderAdblock(); this.#renderDrawer(); }
+  async #setAdblockEnabled(enabled: boolean): Promise<void> {
+    if (!this.#bridge) return;
+    try {
+      this.#adblock = await this.#bridge.setAdblockEnabled(enabled);
+      if (!this.#bridge.getPrivacyState) save(KEYS.adblock, this.#adblock.enabled);
+      this.#renderAdblock();
+      this.#renderDrawer();
+    } catch (error) {
+      this.#showError(error);
+    }
+  }
+
   #adblockDetail(): string { if (this.#adblock.phase === "loading") return "Carregando filtros reais…"; if (this.#adblock.phase === "failed") return `Falhou: ${this.#adblock.error ?? "erro desconhecido"}`; return this.#adblock.enabled ? `${this.#adblock.blockedCount} requisições bloqueadas nesta sessão` : "Proteção de anúncios desativada"; }
   #downloadAction(label: string, name: IconName, action: () => void): HTMLButtonElement { const actionButton = btn("moon-download-action", label, name); actionButton.append(el("span", "", label)); actionButton.addEventListener("click", action); return actionButton; }
   #downloadStateLabel(state: ManagedDownload["state"]): string { return ({ "in-progress": "Baixando", paused: "Pausado", completed: "Concluído", cancelled: "Cancelado", failed: "Falhou" })[state]; }
@@ -585,6 +606,14 @@ class BrowserShell {
       onExport: content => this.#bridge?.exportCustomization(content) ?? Promise.resolve(false),
       onExportDiagnostic: content => this.#bridge?.exportSettingsDiagnostic(content) ?? Promise.resolve(false),
       onImport: () => this.#bridge?.importCustomization() ?? Promise.resolve(null),
+      createPrivacyPanel: this.#bridge?.getPrivacyState && this.#bridge.configurePrivacy && this.#bridge.clearSiteData
+        ? () => new PrivacyPanel({
+          load: () => this.#bridge!.getPrivacyState!(),
+          save: settings => this.#bridge!.configurePrivacy!(settings),
+          clearSite: origin => this.#bridge!.clearSiteData!(origin),
+          forgetPermission: record => this.#bridge!.clearSitePermission(record.origin, record.permission)
+        }).element
+        : undefined,
       onCheckUpdates: () => this.#checkUpdates(),
       onFetchWallpaper: url => this.#bridge?.fetchWallpaper(url) ?? Promise.reject(new Error("Wallpapers HTTPS exigem o aplicativo desktop.")),
       onImportMoonTheme: () => this.#bridge?.importMoonTheme() ?? Promise.reject(new Error("Moon Themes exigem o aplicativo desktop.")),
@@ -778,15 +807,13 @@ class BrowserShell {
     this.#renderDrawer(); this.#refreshHomeData();
   }
   async #deleteHistoryRange(from: number, to: number): Promise<void> {
-    if (!confirm("Excluir permanentemente o histórico deste intervalo?")) return;
+    if (!await this.#mutateProfileData({ type: "history:delete-range", from, to })) return;
     this.#history = this.#history.filter(item => item.startedAt < from || item.startedAt > to);
-    await this.#mutateProfileData({ type: "history:delete-range", from, to });
     this.#renderDrawer(); this.#refreshHomeData();
   }
   async #clearHistory(): Promise<void> {
-    if (!confirm("Limpar permanentemente todo o histórico deste perfil?")) return;
+    if (!await this.#mutateProfileData({ type: "history:clear" })) return;
     this.#history = [];
-    await this.#mutateProfileData({ type: "history:clear" });
     this.#renderDrawer(); this.#refreshHomeData();
   }
   async #migrateLegacyProfile(): Promise<void> {

@@ -30,7 +30,7 @@ export interface Shortcut { readonly id: string; readonly name: string; readonly
 export interface SavedTheme { readonly id: string; readonly name: string; readonly accent: string; readonly wallpaper: string; readonly glassHome: boolean; }
 export type SearchEngine = "duckduckgo" | "google" | "brave";
 export interface Preferences { readonly accent: string; readonly wallpaper: string; readonly searchEngine: SearchEngine; readonly showClock: boolean; readonly showShortcuts: boolean; readonly glassHome: boolean; }
-export interface ManagedDownload { readonly id: string; readonly url: string; readonly filename: string; readonly savePath: string; readonly state: "in-progress" | "paused" | "completed" | "cancelled" | "failed"; readonly receivedBytes: number; readonly totalBytes: number; readonly speedBytesPerSecond: number; readonly percentage: number | null; readonly startedAt: number; readonly completedAt?: number; }
+export interface ManagedDownload { readonly id: string; readonly url: string; readonly filename: string; readonly savePath: string; readonly mimeType?: string; readonly executableHint?: boolean; readonly state: "in-progress" | "paused" | "completed" | "cancelled" | "failed"; readonly receivedBytes: number; readonly totalBytes: number; readonly speedBytesPerSecond: number; readonly percentage: number | null; readonly startedAt: number; readonly completedAt?: number; }
 export interface AdblockStatus { readonly phase: "loading" | "active" | "disabled" | "failed"; readonly enabled: boolean; readonly blockedCount: number; readonly error?: string; }
 export interface PermissionRequest { readonly id: string; readonly origin: string; readonly permission: string; }
 export interface FullscreenState { readonly tabId: string; readonly active: boolean; }
@@ -51,6 +51,9 @@ export type { LocalProfileAvatar, LocalProfileSummary } from "../../packages/ipc
 import type { CreateLocalProfileRequest, DeleteLocalProfileRequest, LocalProfileSummary, UpdateLocalProfileRequest } from "../../packages/ipc/local-profile-contract.js";
 
 export interface MoonBrowserBridge {
+  getPrivacyState?(): Promise<import("../../packages/ipc/privacy-contract.js").PrivacyState>;
+  configurePrivacy?(settings: import("../../packages/ipc/privacy-contract.js").PrivacySettings): Promise<import("../../packages/ipc/privacy-contract.js").PrivacyState>;
+  clearSiteData?(origin: string): Promise<boolean>;
   getResourcePolicy?(): Promise<import("../../packages/ipc/resource-policy-contract.js").ResourcePolicyState>;
   inspectResourcePolicy?(): Promise<import("../../packages/ipc/resource-policy-contract.js").ResourcePolicyState>;
   configureResourcePolicy?(settings: import("../../packages/ipc/resource-policy-contract.js").ResourceSettings): Promise<import("../../packages/ipc/resource-policy-contract.js").ResourcePolicyState>;
@@ -59,7 +62,7 @@ export interface MoonBrowserBridge {
   getResourceSnapshot?(): Promise<import("../../packages/ipc/resource-contract.js").ResourceSnapshot>;
   onResourcesOpen?(listener: () => void): () => void;
   windowAction?(action: "minimize" | "maximize" | "close"): Promise<void>;
-  captureResearch?(workspaceId: string, tabIds: string[], consent: boolean): Promise<ResearchSource[]>;
+  captureResearch?(workspaceId: string, tabIds: string[]): Promise<ResearchSource[]>;
   loadResearchMemory?(workspaceId: string): Promise<ResearchMemory>;
   saveResearchMemory?(workspaceId: string, value: ResearchMemory): Promise<ResearchMemory>;
   researchSessionUrls?(workspaceId: string): Promise<string[]>;

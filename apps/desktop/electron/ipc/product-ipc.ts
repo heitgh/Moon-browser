@@ -1,4 +1,4 @@
-import type { ElectronAdblockService } from "../services/adblock-service.js";
+import { consentText, type NativeConsent } from "../security/native-consent.js";
 import type { ElectronDownloadManager } from "../services/download-manager.js";
 import type { IpcRouter } from "./ipc-router.js";
 import { dialog } from "electron";
@@ -25,12 +25,12 @@ interface IdPayload { readonly id: string; }
 export function registerProductIpc(
   router: IpcRouter,
   downloads: ElectronDownloadManager,
-  adblock: ElectronAdblockService,
   profiles: LocalProfileManager,
   windows: WindowManager,
   homeDirectory: string,
   moonVersion: string,
-  openProfileWindow: (profileId: string) => Promise<void>
+  openProfileWindow: (profileId: string) => Promise<void>,
+  consent: NativeConsent
 ): void {
   const themeServices = new Map<string, MoonThemeService>();
   const importerServices = new Map<string, BrowserProfileImportService>();
@@ -75,18 +75,9 @@ export function registerProductIpc(
   router.register("download:pause", (event, payload: IdPayload) => downloads.pause(idFrom(payload), downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
   router.register("download:resume", (event, payload: IdPayload) => downloads.resume(idFrom(payload), downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
   router.register("download:cancel", (event, payload: IdPayload) => downloads.cancel(idFrom(payload), downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
-  router.register("download:open", (event, payload: IdPayload) => downloads.open(idFrom(payload), downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
+  router.register("download:open", (event, payload: IdPayload) => downloads.open(idFrom(payload), windows.idForWebContents(event.sender)!, () => router.assertActive(event, "download:open")));
   router.register("download:show-in-folder", (event, payload: IdPayload) => downloads.showInFolder(idFrom(payload), downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
   router.register("download:clear-finished", event => downloads.clearFinished(downloads.scopeForWindow(windows.idForWebContents(event.sender)!)));
-
-  router.register("adblock:get-status", () => adblock.status());
-  router.register("adblock:set-enabled", (_event, payload?: { readonly enabled?: boolean }) => {
-    if (!payload || typeof payload.enabled !== "boolean") {
-      throw new TypeError("An enabled value is required");
-    }
-    adblock.setEnabled(payload.enabled);
-    return adblock.status();
-  });
 
   router.register("product:export-data", async (_event, payload?: { readonly content?: string }) => {
     if (!payload || typeof payload.content !== "string" || payload.content.length > 5_000_000) {
@@ -177,7 +168,21 @@ export function registerProductIpc(
     if (!windowId) throw new Error("Browser window is not registered");
     const mutation = parseProfileDataMutation(payload);
     if (mutation.type === "workspace:delete") throw new Error("Use the workspace lifecycle command to delete an area");
-    if (windows.isPrivate(windowId) && (mutation.type === "history:record" || mutation.type === "notes:save" || mutation.type.startsWith("note:"))) throw new Error("Private windows cannot persist history or notes");
+    if (windows.isPrivate(windowId) && (mutation.type.startsWith("history:") || mutation.type === "notes:save" || mutation.type.startsWith("note:"))) throw new Error("Private windows cannot persist history or notes");
+    if (mutation.type === "history:clear" || mutation.type === "history:delete-range" || mutation.type === "note:purge") {
+      const assertContext = () => router.assertActive(event, "profile:mutate");
+      const accepted = await consent.confirm(windows.require(windowId), windows.profileId(windowId), {
+        title: "Confirmar exclusão",
+        message: mutation.type === "note:purge" ? "Apagar permanentemente esta nota?" :
+          mutation.type === "history:clear" ? "Apagar todo o histórico deste perfil?" : "Apagar o histórico do intervalo selecionado?",
+        detail: "A exclusão afeta somente o perfil atual.",
+        accept: "Excluir"
+      }, assertContext);
+      if (!accepted) throw new Error("Exclusão cancelada.");
+      const storage = await profileFor(event);
+      assertContext();
+      return storage.applyProfileMutation(mutation);
+    }
     return (await profileFor(event)).applyProfileMutation(mutation);
   });
   router.register("import:discover", async event => { assertNormalWindow(event); return (await importerFor(event)).discover(); });
@@ -224,7 +229,20 @@ export function registerProductIpc(
   router.register("local-profile:delete-summary", (event, payload?: { readonly id?: unknown }) => { assertNormalWindow(event); return profiles.deletionSummary(parseLocalProfileId(payload?.id)); });
   router.register("local-profile:delete", async (event, payload: unknown) => {
     assertNormalWindow(event); const request = parseDeleteLocalProfile(payload);
+    const windowId = windows.idForWebContents(event.sender)!;
     if (windows.hasProfileWindows(request.id)) throw new Error("Feche todas as janelas deste perfil antes de excluí-lo.");
+    const target = profiles.require(request.id);
+    if (target.name !== request.confirmation) throw new Error("O nome digitado não corresponde ao perfil.");
+    const assertContext = () => router.assertActive(event, "local-profile:delete");
+    const accepted = await consent.confirm(windows.require(windowId), windows.profileId(windowId), {
+      title: "Excluir perfil local",
+      message: `Excluir o perfil “${consentText(target.name, 80)}”?`,
+      detail: request.backup ? "Um backup local será criado antes da exclusão." : "A exclusão permanente foi selecionada sem backup.",
+      accept: "Excluir perfil"
+    }, assertContext);
+    if (!accepted) throw new Error("Exclusão cancelada.");
+    assertContext();
+    if (windows.hasProfileWindows(request.id) || profiles.require(request.id) !== target) throw new Error("O perfil mudou após a revisão.");
     themeServices.delete(request.id); importerServices.delete(request.id); wallpaperServices.delete(request.id); return profiles.delete(request);
   });
 }

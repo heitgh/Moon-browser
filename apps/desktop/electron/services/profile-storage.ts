@@ -1,3 +1,4 @@
+import { DEFAULT_PRIVACY_SETTINGS, parsePrivacySettings, type PrivacySettings } from "../../../../packages/ipc/privacy-contract.js";
 import { DEFAULT_RESOURCE_SETTINGS, parseResourceSettings, type ResourceSettings } from "../../../../packages/ipc/resource-policy-contract.js";
 import { randomUUID } from "node:crypto";
 import { emptyMemory, parseMemory, scopeId, type ResearchMemory } from "../../../../packages/research/research.js";
@@ -130,6 +131,15 @@ export class ProfileStorage {
       await this.#settings.setValue(key, saved);
       return saved;
     });
+  }
+
+  async loadPrivacySettings(): Promise<PrivacySettings> {
+    return parsePrivacySettings(await this.#settings.getValue<unknown>("privacy:v1") ?? DEFAULT_PRIVACY_SETTINGS);
+  }
+  async savePrivacySettings(value: unknown): Promise<PrivacySettings> {
+    const clean = parsePrivacySettings(value);
+    await this.#settings.setValue("privacy:v1", clean);
+    return clean;
   }
 
   async loadResourceSettings(): Promise<ResourceSettings> { return parseResourceSettings(await this.#settings.getValue<unknown>("resource-policy:v1") ?? DEFAULT_RESOURCE_SETTINGS); }

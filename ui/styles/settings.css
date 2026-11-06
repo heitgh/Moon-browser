@@ -52,3 +52,10 @@
 .moon-permission-actions { display: grid; gap: 9px; grid-template-columns: 1fr 1fr; margin-top: 22px; width: 100%; }
 .moon-permission-actions .moon-primary-button, .moon-permission-actions .moon-secondary-button { margin: 0; width: 100%; }
 .moon-permission-actions button:disabled { cursor: wait; opacity: .55; }
+
+.moon-privacy-panel { display: grid; gap: var(--moon-space-3); min-width: 0; overflow-wrap: anywhere; }
+.moon-privacy-fields { display: grid; gap: var(--moon-space-2); min-width: 0; margin: 0; padding: var(--moon-space-4); border: 1px solid var(--moon-border); border-radius: var(--moon-radius-sm); }
+.moon-privacy-fields :is(p, h4) { margin: 0; }
+.moon-privacy-label { display: flex; flex-wrap: wrap; align-items: center; gap: var(--moon-space-2); }
+.moon-privacy-panel :focus-visible { outline: 2px solid var(--moon-text); outline-offset: 2px; }
+.moon-privacy-fields textarea { resize: vertical; }

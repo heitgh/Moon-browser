@@ -237,7 +237,7 @@ describe("Moon browser shell", () => {
   it("exports validated V4 customization through the native bridge", async () => {
     bridge.exportCustomization.mockClear();
     (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
-    (document.querySelector('[aria-label="Workspaces e dados"]') as HTMLButtonElement).click();
+    (document.querySelector('[aria-label="Privacidade e dados"]') as HTMLButtonElement).click();
     (document.querySelector('[aria-label="Exportar tudo"]') as HTMLButtonElement).click(); await flush();
     expect(bridge.exportCustomization).toHaveBeenCalledOnce();
     expect(bridge.exportCustomization.mock.calls[0]?.[0]).toContain('"format": "moon-customization"');
@@ -245,7 +245,7 @@ describe("Moon browser shell", () => {
   });
   it("states honestly that cloud sync and the credential vault are unavailable", async () => {
     (document.querySelector('[aria-label="Configurações"]') as HTMLButtonElement).click(); await flush();
-    (document.querySelector('[data-mode="advanced"]') as HTMLButtonElement).click(); (document.querySelector('[aria-label="Workspaces e dados"]') as HTMLButtonElement).click(); await flush();
+    (document.querySelector('[data-mode="advanced"]') as HTMLButtonElement).click(); (document.querySelector('[aria-label="Privacidade e dados"]') as HTMLButtonElement).click(); await flush();
     expect(document.querySelector(".moon-customization-content")?.textContent).toContain("Sincronização em nuvem ainda não configurada");
     expect(document.querySelector(".moon-customization-content")?.textContent).toContain("Cofre indisponível nesta build");
     (document.querySelector('[aria-label="Fechar e cancelar alterações"]') as HTMLButtonElement).click(); await flush();

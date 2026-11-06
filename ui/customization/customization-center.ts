@@ -32,6 +32,7 @@ export interface CustomizationCenterOptions {
   readonly onExport: (content: string) => Promise<boolean>;
   readonly onExportDiagnostic: (content: string) => Promise<boolean>;
   readonly onImport: () => Promise<string | null>;
+  readonly createPrivacyPanel?: () => HTMLElement;
   readonly onCheckUpdates?: () => Promise<void>;
   readonly onFetchWallpaper: (url: string) => Promise<string>;
   readonly onImportMoonTheme: () => Promise<MoonThemePreview | null>;
@@ -73,7 +74,7 @@ const SECTIONS: readonly [SectionId, string, IconName, string][] = [
   ["home", "Home e widgets", "home", "Grid, cartões e módulos"],
   ["typography", "Tipografia", "note", "Fontes, escalas e legibilidade"],
   ["search", "Pesquisa", "search", "Buscadores e keywords"],
-  ["data", "Workspaces e dados", "download", "Escopo, portabilidade e reset"]
+  ["data", "Privacidade e dados", "shield", "Rastreadores, cookies, permissões, portabilidade e recuperação"]
 ];
 
 const WIDGET_LABELS: Readonly<Record<HomeWidgetId, string>> = {
@@ -175,6 +176,7 @@ export class CustomizationCenter {
       const copy = element("span", "moon-settings-nav-copy"); copy.append(element("strong", "", label), element("small", "", description)); nav.append(copy);
       nav.addEventListener("click", () => {
         this.#active = id;
+        if (id === "data" && this.options.createPrivacyPanel) this.#mode = "advanced";
         this.#view = "section";
         this.options.store.setExperience(this.#mode, id, this.#view);
         this.#search.value = "";
@@ -360,7 +362,8 @@ export class CustomizationCenter {
 
   #data(config: CustomizationConfig): void {
     if (this.options.onCheckUpdates) { const check = button("moon-secondary-button", "Verificar atualizações", "download"); check.append(element("span", "", "Verificar atualizações")); check.addEventListener("click", () => { void this.options.onCheckUpdates?.(); }); this.#content.append(check); }
-    this.#intro("Workspaces e dados", "Escopo global ou por workspace, JSON V4 validado e recuperação segura.");
+    this.#intro("Privacidade e dados", "Controles de navegação do perfil, portabilidade e recuperação.");
+    if (this.options.createPrivacyPanel) this.#content.append(this.options.createPrivacyPanel());
     const portability = this.#group("Portabilidade", "Exporte apenas aparência, o workspace atual ou tudo. Cookies e senhas nunca entram no arquivo.", "importar exportar json aparência workspace tudo preview"); const actions = element("div", "moon-portability-grid");
     for (const [scope, label] of [["appearance", "Exportar aparência"], ["workspace", "Exportar workspace"], ["all", "Exportar tudo"]] as const) { const action = button("moon-secondary-button", label, "download"); action.append(element("span", "", label)); action.addEventListener("click", () => void this.#export(scope)); actions.append(action); }
     const importButton = button("moon-primary-button", "Importar personalização", "folder"); importButton.append(element("span", "", "Importar JSON")); importButton.addEventListener("click", () => void this.#import()); actions.append(importButton); portability.append(actions);
