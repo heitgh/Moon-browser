@@ -30,6 +30,18 @@ async function profile(): Promise<{ directory: string; storage: ProfileStorage }
 }
 
 describe("ProfileStorage", () => {
+  it("persists resource policy without changing existing profile data and rejects invalid policy", async () => {
+    const {directory, storage} = await profile();
+    const initial = await storage.loadResourceSettings();
+    expect(initial.automatic).toBe(false);
+    const settings = {...initial, mode: "custom" as const, reloadSafeOrigins: ["https://example.com"], exceptions: ["https://other.example"], targetMiB: 1024};
+    await storage.saveResourceSettings(settings);
+    await expect(storage.saveResourceSettings({...settings, idleMinutes: 0})).rejects.toThrow();
+    await storage.close();
+    const reopened = new ProfileStorage(directory); await reopened.open();
+    expect(await reopened.loadResourceSettings()).toEqual(settings); await reopened.close();
+  });
+
   it("migrates V3 customization to canonical V4 exactly once", async () => {
     const { storage } = await profile();
     const legacy = { ...createDefaultCustomization(100), version: 3, experience: { mode: "customize", lastSection: "layout" } };

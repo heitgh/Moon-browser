@@ -34,6 +34,7 @@ export class ResourceMonitor {
     });
     this.#previous = keys; this.#sample = {at, processes}; return this.#sample;
   }
+  freshSnapshot(windowId: string): ResourceSnapshot { this.#sample = undefined; return this.snapshot(windowId); }
   snapshot(windowId: string): ResourceSnapshot {
     const sample = this.#measure(); const byPid = new Map(sample.processes.map(metric => [metric.pid, metric]));
     const mappings = this.mappings(); const sharing = new Map<number, number>();

@@ -1,3 +1,4 @@
+import type { PageActivity } from "../../../../packages/ipc/resource-policy-contract.js";
 import { permissionOrigin, permissionRequestOrigin } from "../security/permission-origin.js";
 import { EXTRACT_PAGE_SCRIPT } from "../../../../packages/research/extract-page.js";
 import { researchUrl, parseSources, type ResearchSource } from "../../../../packages/research/research.js";
@@ -45,6 +46,13 @@ export interface BrowserPermissionRequest {
 }
 
 export class ElectronBrowserManager implements ElectronBrowserBackend {
+  #closing = false;
+  readonly #suspended = new Map<string, {activity: PageActivity; entries: Electron.NavigationEntry[]; index: number}>();
+  readonly #lifecycle = new Map<string, Promise<void>>();
+  readonly #closingTabs = new Map<string, Promise<void>>();
+  readonly #closingWindows = new Map<string, Promise<void>>();
+  readonly #observedGet = new Set<number>();
+  readonly #unsafeReload = new Set<number>();
   readonly #surfaces = new Map<string, ElectronBrowserSurface>();
   readonly #tabs = new Map<string, BrowserTab>();
   readonly #tabWindows = new Map<string, string>();
@@ -72,6 +80,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     readonly timeout: NodeJS.Timeout;
   }>();
   readonly #privatePermissions = new WeakMap<Session, Map<string, "allow" | "deny">>();
+  readonly #tabClosedListeners = new Set<(id: string) => void>();
   readonly #tabUpdateListeners = new Set<(windowId: string, update: BrowserTabUpdate) => void | Promise<void>>();
 
   constructor(
@@ -80,7 +89,18 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     readonly adblock?: ElectronAdblockService,
     readonly requestPipeline?: SessionRequestPipeline,
     readonly permissionsForWindow?: (windowId: string) => SitePermissionService | undefined
-  ) {}
+  ) {
+    requestPipeline?.register({id: "suspension-navigation-safety", beforeRequest: details => {
+      if (details.resourceType !== "mainFrame" || typeof details.webContentsId !== "number") return;
+      if (details.method === "GET") this.#observedGet.add(details.webContentsId);
+      else this.#unsafeReload.add(details.webContentsId);
+    }, headersReceived: details => {
+      if (details.resourceType !== "mainFrame" || typeof details.webContentsId !== "number") return;
+      for (const [name, values] of Object.entries(details.responseHeaders ?? {})) {
+        if (["set-cookie", "www-authenticate"].includes(name.toLowerCase()) || (name.toLowerCase() === "cache-control" && /no-store|no-cache|private/i.test(values.join(" ")))) this.#unsafeReload.add(details.webContentsId);
+      }
+    }});
+  }
 
   async readResearchSource(tabId: string, windowId: string): Promise<ResearchSource> {
     const tab = this.#tabs.get(tabId);
@@ -96,6 +116,9 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       return parseSources([{ ...(data as object), tabId, url, title: contents.getTitle() }])[0]!;
     } finally { if (timeout) clearTimeout(timeout); }
   }
+
+  onTabClosed(listener: (id: string) => void): () => void { this.#tabClosedListeners.add(listener); return () => this.#tabClosedListeners.delete(listener); }
+  #notifyTabClosed(id: string): void { for (const listener of this.#tabClosedListeners) { try { listener(id); } catch { /* closing must finish */ } } }
 
   onTabUpdated(listener: (windowId: string, update: BrowserTabUpdate) => void | Promise<void>): () => void {
     this.#tabUpdateListeners.add(listener);
@@ -124,11 +147,8 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
 
   async focusWindow(id: string): Promise<void> { this.windows.focus(id); }
 
-  async createTab(windowId: string, options: BrowserTabOptions = {}): Promise<BrowserTab> {
-    const id = options.id ?? randomUUID();
-    if (this.#tabs.has(id)) throw new Error(`Tab already exists: ${id}`);
+  #newSurface(id: string, windowId: string, options: BrowserTabOptions): ElectronBrowserSurface {
     const sessionId = options.private ? options.sessionId ?? id : options.sessionId;
-
     const window = this.windows.require(windowId);
     const profileId = this.windows.profileId(windowId);
     const guest = this.windows.isGuest(windowId);
@@ -153,6 +173,19 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     this.requestPipeline?.attach(surface.view.webContents.session);
     configureCompatibilityWebContents(surface.view.webContents);
     this.#installPermissionHandler(surface.view.webContents.session);
+
+    const contentsId = surface.view.webContents.id;
+    surface.view.webContents.once("destroyed", () => { this.#observedGet.delete(contentsId); this.#unsafeReload.delete(contentsId); });
+    return surface;
+  }
+
+  async createTab(windowId: string, options: BrowserTabOptions = {}): Promise<BrowserTab> {
+    if (this.#closing || this.#closingWindows.has(windowId)) throw new Error("O navegador está encerrando.");
+    const id = options.id ?? randomUUID();
+    if (this.#tabs.has(id)) throw new Error(`Tab already exists: ${id}`);
+    const sessionId = options.private ? options.sessionId ?? id : options.sessionId;
+
+    const surface = this.#newSurface(id, windowId, {...options, sessionId});
 
     const requestedUrl = options.url ?? "moon://newtab";
     const internalUrl = normalizeMoonInternalUrl(requestedUrl); const isHome = internalUrl !== null;
@@ -197,6 +230,12 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
   }
 
   async closeTab(id: string): Promise<void> {
+    await this.#lifecycle.get(id);
+    const existing = this.#closingTabs.get(id); if (existing) return existing;
+    const work = this.#closeTabInternal(id); this.#closingTabs.set(id, work);
+    try { await work; } finally { this.#closingTabs.delete(id); }
+  }
+  async #closeTabInternal(id: string): Promise<void> {
     const windowId = this.#requireWindowId(id);
     if (this.#htmlFullscreenTabs.get(windowId) === id) this.#leaveHtmlFullscreen(id, windowId);
     this.#closeAuxiliaryWindows(id);
@@ -205,9 +244,11 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       tabId => tabId !== id && this.#tabWindows.get(tabId) === windowId
     );
 
-    await this.#requireSurface(id).destroy();
+    await this.#surfaces.get(id)?.destroy();
+    this.#suspended.delete(id);
     this.#surfaces.delete(id);
     this.#tabs.delete(id);
+    this.#notifyTabClosed(id);
     this.#tabWindows.delete(id);
     this.#homeTabs.delete(id);
     this.#internalHistory.delete(id);
@@ -224,20 +265,27 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       host.webContents.send("browser:tab-closed", { tabId: id });
     }
 
-    if (wasActive && remaining.length > 0) await this.activateTab(remaining.at(-1)!);
+    const next = remaining.reverse().find(tabId => this.#tabs.has(tabId) && !this.#closingTabs.has(tabId));
+    if (wasActive && next) await this.activateTab(next);
   }
 
   async activateTab(id: string): Promise<void> {
+    await this.#lifecycle.get(id);
+    this.#assertTabAvailable(id);
+    if (this.#suspended.has(id)) await this.#resumeTab(id);
+    this.#assertTabAvailable(id);
     const windowId = this.#requireWindowId(id);
     const fullscreenTabId = this.#htmlFullscreenTabs.get(windowId);
     if (fullscreenTabId && fullscreenTabId !== id) await this.#exitHtmlFullscreen(fullscreenTabId, windowId);
+    this.#assertTabAvailable(id);
     this.#activeTabs.set(windowId, id);
 
-    for (const [tabId, surface] of this.#surfaces) {
+    for (const tabId of this.#tabs.keys()) {
+      const surface = this.#surfaces.get(tabId);
       if (this.#tabWindows.get(tabId) !== windowId) continue;
       const active = tabId === id;
       this.#replaceTab(tabId, { active });
-      surface.setVisible(
+      surface?.setVisible(
         active &&
         !this.#homeTabs.has(tabId) &&
         this.#contentVisible.get(windowId) !== false
@@ -253,6 +301,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
   }
 
   async showInternalPage(id: string, input: string, push = true): Promise<void> {
+    await this.#lifecycle.get(id); if (this.#suspended.has(id)) await this.#resumeTab(id);
     const windowId = this.#requireWindowId(id);
     if (this.#htmlFullscreenTabs.get(windowId) === id) await this.#exitHtmlFullscreen(id, windowId);
     this.#historyCandidates.delete(id); this.#nextNavigationTypes.delete(id);
@@ -264,6 +313,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
   }
 
   async navigate(id: string, url: string, _options?: BrowserNavigationOptions): Promise<void> {
+    await this.#lifecycle.get(id); if (this.#suspended.has(id)) await this.#resumeTab(id);
     if (normalizeMoonInternalUrl(url)) return this.showInternalPage(id, url);
     const windowId = this.#requireWindowId(id);
     if (this.#htmlFullscreenTabs.get(windowId) === id) await this.#exitHtmlFullscreen(id, windowId);
@@ -282,22 +332,26 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
   }
 
   async goBack(id: string): Promise<void> {
+    await this.#lifecycle.get(id); if (this.#suspended.has(id)) await this.#resumeTab(id);
     const internal = this.#internalHistory.get(id); const target = this.#homeTabs.has(id) ? internal?.back() : undefined; if (target) { await this.showInternalPage(id, target, false); return; }
     this.#nextNavigationTypes.set(id, "history"); new NavigationController(this.#requireSurface(id).view.webContents).back();
   }
 
   async goForward(id: string): Promise<void> {
+    await this.#lifecycle.get(id); if (this.#suspended.has(id)) await this.#resumeTab(id);
     const internal = this.#internalHistory.get(id); const target = this.#homeTabs.has(id) ? internal?.forward() : undefined; if (target) { await this.showInternalPage(id, target, false); return; }
     this.#nextNavigationTypes.set(id, "history"); new NavigationController(this.#requireSurface(id).view.webContents).forward();
   }
 
   async reload(id: string, bypassCache?: boolean): Promise<void> {
+    await this.#lifecycle.get(id); if (this.#suspended.has(id)) { await this.#resumeTab(id); return; }
     if (this.#homeTabs.has(id)) return;
     this.#nextNavigationTypes.set(id, "reload");
     new NavigationController(this.#requireSurface(id).view.webContents).reload(bypassCache);
   }
 
   async stopLoading(id: string): Promise<void> {
+    if (this.#suspended.has(id)) return;
     new NavigationController(this.#requireSurface(id).view.webContents).stop();
   }
 
@@ -307,6 +361,96 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     return [...this.#tabs.entries()]
       .filter(([id]) => this.#tabWindows.get(id) === windowId)
       .map(([, tab]) => tab);
+  }
+
+  #assertTabAvailable(id: string): void {
+    if (this.#closing || this.#closingTabs.has(id) || this.#closingWindows.has(this.#requireWindowId(id))) throw new Error("A aba ou janela está encerrando.");
+    this.#requireTab(id);
+  }
+  #reloadBlockers(id: string): string[] {
+    const tab = this.#requireTab(id); const windowId = this.#requireWindowId(id); const contents = this.#surfaces.get(id)?.view.webContents;
+    const reasons: string[] = [];
+    if (this.#closing || this.#closingTabs.has(id) || this.#closingWindows.has(windowId)) reasons.push("A aba ou janela está encerrando.");
+    if (tab.active || this.#activeTabs.get(windowId) === id) reasons.push("Aba ativa.");
+    if (tab.private || this.windows.isPrivate(windowId) || this.windows.isGuest(windowId)) reasons.push("Janela privada ou temporária.");
+    if (!contents || contents.isDestroyed()) reasons.push("Superfície não disponível.");
+    else {
+      if (tab.loading || contents.isLoading()) reasons.push("Carregamento em andamento.");
+      if (contents.isCurrentlyAudible()) reasons.push("Áudio em reprodução.");
+      if (!this.#observedGet.has(contents.id) || this.#unsafeReload.has(contents.id)) reasons.push("Recarga não homologada: método, resposta privada, sessão ou cache sensível.");
+    }
+    if ([...this.#auxiliaryWindows.values()].some(item => item.tabId === id)) reasons.push("Há uma janela vinculada à página.");
+    if (this.downloads?.list(this.downloads.scopeForWindow(windowId)).some(item => ["in-progress", "paused"].includes(item.state))) reasons.push("Há downloads em andamento neste perfil.");
+    return reasons;
+  }
+
+  prepareForShutdown(): void {
+    this.#closing = true;
+    for (const surface of this.#surfaces.values()) {
+      const contents = surface.view.webContents;
+      if (!contents.isDestroyed() && contents.isLoading()) contents.stop();
+    }
+  }
+
+  async inspectSuspension(id: string): Promise<PageActivity | null> {
+    if (this.#suspended.has(id)) return null;
+    const blocked = this.#reloadBlockers(id);
+    const contents = this.#surfaces.get(id)?.view.webContents;
+    if (!contents || contents.isDestroyed()) return null;
+    const url = contents.getURL();
+    if (!/^https?:\/\//i.test(url)) return null;
+    if (blocked.length) return {documentId: "0-0-0-0", url, eligible: false, reasons: blocked, scrollX: 0, scrollY: 0};
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const raw: unknown = await Promise.race([contents.executeJavaScriptInIsolatedWorld(1004, [{code: "globalThis.moonResourceActivity?.snapshot()"}]), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Inspeção excedeu o prazo.")), 1000); })]);
+      const value = raw as Partial<PageActivity> | undefined;
+      if (!value || typeof value.documentId !== "string" || !/^[0-9-]{4,100}$/.test(value.documentId) || value.url !== url || typeof value.eligible !== "boolean"
+        || !Array.isArray(value.reasons) || value.reasons.length > 20 || !value.reasons.every(reason => typeof reason === "string" && reason.length < 300)
+        || !Number.isFinite(value.scrollX) || !Number.isFinite(value.scrollY) || Math.abs(value.scrollX!) > 10_000_000 || Math.abs(value.scrollY!) > 10_000_000
+        || value.eligible !== (value.reasons.length === 0) || contents.isDestroyed() || contents.getURL() !== url) return null;
+      const reasons = [...blocked, ...this.#reloadBlockers(id), ...value.reasons];
+      return {documentId: value.documentId, url, scrollX: value.scrollX!, scrollY: value.scrollY!, eligible: reasons.length === 0, reasons: [...new Set(reasons)]};
+    } catch { return null; }
+    finally { clearTimeout(timer); }
+  }
+
+  async suspendTab(id: string, expected: PageActivity, assertAccess: () => void = () => undefined): Promise<void> {
+    if (this.#lifecycle.has(id)) throw new Error("Aguarde a operação da aba.");
+    const work = (async () => {
+      const activity = await this.inspectSuspension(id);
+      assertAccess();
+      if (!activity?.eligible || activity.documentId !== expected.documentId || activity.url !== expected.url || this.#reloadBlockers(id).length) throw new Error("A atividade da página mudou. A aba foi preservada.");
+      const surface = this.#requireSurface(id); const history = surface.view.webContents.navigationHistory;
+      const entries = history.getAllEntries(); const index = history.getActiveIndex();
+      if (!entries.length || entries.length > 200 || entries.some(entry => entry.url !== "about:blank" && !/^https?:\/\//i.test(entry.url)) || entries.reduce((bytes, entry) => bytes + (entry.pageState?.length ?? 0), 0) > 16 * 1024 * 1024) throw new Error("Histórico grande ou incompatível com restauração segura.");
+      const recovery = this.#recoveryTimers.get(id); if (recovery) clearTimeout(recovery); this.#recoveryTimers.delete(id);
+      assertAccess();
+      await surface.destroy(); this.#surfaces.delete(id);
+      this.#suspended.set(id, {activity, entries, index}); this.#replaceTab(id, {suspended: true, loading: false}); this.#emitUpdate(id);
+    })();
+    this.#lifecycle.set(id, work);
+    try { await work; } finally { this.#lifecycle.delete(id); }
+  }
+
+  async #resumeTab(id: string): Promise<void> {
+    this.#assertTabAvailable(id);
+    const saved = this.#suspended.get(id); if (!saved) return;
+    const work = (async () => {
+      const tab = this.#requireTab(id); const windowId = this.#requireWindowId(id);
+      const surface = this.#newSurface(id, windowId, tab);
+      this.#surfaces.set(id, surface); this.#attachWebContentsEvents(id, windowId, surface);
+      const bounds = this.#bounds.get(windowId); if (bounds) surface.setBounds(bounds);
+      this.#suspended.delete(id); this.#replaceTab(id, {suspended: false, loading: true}); this.#emitUpdate(id);
+      try {
+        await surface.view.webContents.navigationHistory.restore({entries: saved.entries, index: saved.index});
+        await surface.view.webContents.executeJavaScriptInIsolatedWorld(1004, [{code: `window.scrollTo(${Number(saved.activity.scrollX)}, ${Number(saved.activity.scrollY)})`}]);
+      } catch (error) {
+        if (!this.#tabs.has(id) || this.#closing || this.#closingTabs.has(id) || this.#closingWindows.has(windowId)) return;
+        if (surface.view.webContents.isDestroyed()) { this.#surfaces.delete(id); this.#suspended.set(id, saved); this.#replaceTab(id, {suspended: true}); }
+        this.#replaceTab(id, {loading: false}); this.#emitUpdate(id, error instanceof Error ? error.message : "Não foi possível recarregar a aba.");
+      }
+    })();
+    this.#lifecycle.set(id, work); try { await work; } finally { this.#lifecycle.delete(id); }
   }
 
   resourceTabMappings(): readonly import("../services/resource-monitor.js").ResourceTabMapping[] {
@@ -385,15 +529,25 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
   clearPermission(windowId: string, origin: string, permission: string): Promise<void> { return this.permissionsForWindow?.(windowId)?.clear(origin, permission) ?? Promise.resolve(); }
 
   async closeTabsForWindow(windowId: string): Promise<void> {
+    const existing = this.#closingWindows.get(windowId); if (existing) return existing;
+    const work = this.#closeTabsInternal(windowId); this.#closingWindows.set(windowId, work);
+    try { await work; } finally { this.#closingWindows.delete(windowId); }
+  }
+  async #closeTabsInternal(windowId: string): Promise<void> {
     const ids = [...this.#tabs.keys()].filter(id => this.#tabWindows.get(id) === windowId);
     const privateSessions = new Set<Session>();
     for (const id of ids) {
+      await this.#lifecycle.get(id);
+      await this.#closingTabs.get(id);
+      if (!this.#tabs.has(id)) continue;
+      this.#suspended.delete(id);
       this.#closeAuxiliaryWindows(id);
       const surface = this.#surfaces.get(id);
       if (surface && this.#tabs.get(id)?.private) privateSessions.add(surface.view.webContents.session);
       await surface?.destroy();
       this.#surfaces.delete(id);
       this.#tabs.delete(id);
+      this.#notifyTabClosed(id);
       this.#tabWindows.delete(id);
       this.#homeTabs.delete(id);
       this.#internalHistory.delete(id);
@@ -489,6 +643,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       this.#emitUpdate(id, navigationFailureMessage(errorCode));
     });
     contents.on("render-process-gone", (_event, details) => {
+      if (this.#lifecycle.has(id) || this.#suspended.has(id)) return;
       if (this.#htmlFullscreenTabs.get(windowId) === id) this.#leaveHtmlFullscreen(id, windowId);
       this.#recoverPage(id, windowId, details.reason);
     });
@@ -678,15 +833,15 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     const tab = this.#tabs.get(id);
     const windowId = this.#tabWindows.get(id);
     const surface = this.#surfaces.get(id);
-    if (!tab || !windowId || !surface) return;
+    if (!tab || !windowId || (!surface && !this.#suspended.has(id))) return;
     const host = this.windows.get(windowId);
     if (!host || host.webContents.isDestroyed()) return;
-    const navigation = surface.view.webContents.navigationHistory; const internal = this.#internalHistory.get(id); const isInternal = this.#homeTabs.has(id);
+    const navigation = surface?.view.webContents.navigationHistory; const suspended = this.#suspended.get(id); const internal = this.#internalHistory.get(id); const isInternal = this.#homeTabs.has(id);
     const update: BrowserTabUpdate = {
       tab,
       navigation: {
-        canGoBack: isInternal ? Boolean(internal?.canGoBack) : navigation.canGoBack(),
-        canGoForward: isInternal ? Boolean(internal?.canGoForward) : navigation.canGoForward()
+        canGoBack: isInternal ? Boolean(internal?.canGoBack) : navigation?.canGoBack() ?? Boolean(suspended && suspended.index > 0),
+        canGoForward: isInternal ? Boolean(internal?.canGoForward) : navigation?.canGoForward() ?? Boolean(suspended && suspended.index < suspended.entries.length - 1)
       },
       ...(error ? { error } : {}),
       ...(historyEntry ? { historyEntry } : {})

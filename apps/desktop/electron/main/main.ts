@@ -1,3 +1,6 @@
+import { ResourcePolicyController } from "../services/resource-policy-controller.js";
+import { TabLifecycleService } from "../services/tab-lifecycle-service.js";
+import { registerResourcePolicyIpc } from "../ipc/resource-policy-ipc.js";
 import { ResourceMonitor } from "../services/resource-monitor.js";
 import { registerResourceIpc } from "../ipc/resource-ipc.js";
 import { UpdateChecker } from "../services/update-checker.js";
@@ -39,6 +42,7 @@ const requestPipeline = new SessionRequestPipeline();
 const permissions = new Map<string, SitePermissionService>();
 const adblock = new ElectronAdblockService(windows, requestPipeline);
 const browser = new ElectronBrowserManager(windows, downloads, adblock, requestPipeline, windowId => permissions.get(windows.profileId(windowId)));
+let resourcePolicy: ResourcePolicyController | undefined;
 let accessController: ProfileAccessController | undefined;
 const ipc = new IpcRouter(windows, (event, channel) => {
   if (!accessController) throw new Error("Segurança do perfil indisponível.");
@@ -248,7 +252,8 @@ app.whenReady().then(async () => {
   const profilesDirectory = testProfileDirectory ? join(testProfileDirectory, "profiles") : join(app.getPath("userData"), "profiles");
   accessController = new ProfileAccessController(new ProfileAccessService(join(app.getPath("userData"), "profile-access")), windows, () => application, id => createMainWindow(false, id));
   accessController.register(ipc);
-  registerResourceIpc(ipc, windows, new ResourceMonitor(() => app.getAppMetrics(), () => browser.resourceTabMappings()));
+  const resourceMonitor = new ResourceMonitor(() => app.getAppMetrics(), () => browser.resourceTabMappings());
+  registerResourceIpc(ipc, windows, resourceMonitor);
   profiles = new LocalProfileManager(profilesDirectory, defaultDirectory, id => accessController!.authorizeStorage(id));
   try { defaultProfileId = (await profiles.initialize()).id; }
   catch (error) {
@@ -274,6 +279,8 @@ app.whenReady().then(async () => {
     return;
   }
   application = new BrowserApplicationService(browser, async windowId => profiles!.openedStorage(windows.profileId(windowId)));
+  resourcePolicy = new ResourcePolicyController(new TabLifecycleService(browser, application), resourceMonitor, windows, profiles, accessController.service);
+  registerResourcePolicyIpc(ipc, windows, resourcePolicy);
   installApplicationMenu(() => { void createMainWindow(true, defaultProfileId); }, (window, action) => {
     const id = windows.idForWebContents(window.webContents); if (id) browser.zoomActivePage(id, action);
   }, window => {
@@ -340,10 +347,13 @@ app.on("before-quit", event => {
   event.preventDefault();
   if (shutdownStarted) return;
   shutdownStarted = true;
+  resourcePolicy?.stop();
+  browser.prepareForShutdown();
   accessController?.closeGates();
   ipc.dispose();
   const diagnostics = new LocalDiagnostics(join(app.getPath("userData"), "diagnostics"), process.env.MOON_LOCAL_DIAGNOSTICS === "1");
   void runShutdown([
+    { name: "drain-resources", run: async () => { await resourcePolicy?.drain(); } },
     { name: "drain-profile-locks", run: async () => { await accessController?.drain(); } },
     { name: "drain-recovery", run: async () => { await recoveryTask?.catch(() => undefined); } },
     { name: "drain-ipc", run: () => ipc.drain() },

@@ -1,9 +1,11 @@
 // Nexus Inc. — local measurements; polling exists only while the panel is mounted.
+import { ResourcePolicyPanel, type ResourcePolicyClient } from "./resource-policy-panel.js";
 import type { ResourceSnapshot } from "../../packages/ipc/resource-contract.js";
 export const RESOURCE_SIDEBAR_KEY = "moon:resources:sidebar:v1";
 export const memoryLabel = (value: number | null): string => value === null ? "Indisponível" : `${(value / 1024).toFixed(1)} MiB`;
 export const cpuLabel = (value: number | null): string => value === null ? "Coletando / indisponível" : `${value.toFixed(1)}%`;
 export class ResourcesPanel {
+  readonly #policy: ResourcePolicyPanel | undefined;
   #timer: ReturnType<typeof setInterval> | undefined;
   #generation = 0;
   #pending = false;
@@ -11,7 +13,7 @@ export class ResourcesPanel {
   readonly #values = document.createElement("div");
   readonly #pages = document.createElement("div");
   readonly #status = document.createElement("p");
-  constructor(readonly sample: () => Promise<ResourceSnapshot>, readonly sidebar: {visible(): boolean; change(visible: boolean): void}) {}
+  constructor(readonly sample: () => Promise<ResourceSnapshot>, readonly sidebar: {visible(): boolean; change(visible: boolean): void}, policy?: ResourcePolicyClient) { if (policy) this.#policy = new ResourcePolicyPanel(policy); }
   mount(container: HTMLElement): void {
     this.unmount(); this.#container = container;
     const heading = (title: string) => { const node = document.createElement("h3"); node.className = "moon-panel-section-title"; node.textContent = title; return node; };
@@ -22,14 +24,15 @@ export class ResourcesPanel {
     this.#status.setAttribute("role", "status");
     const label = document.createElement("label"); const checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.checked = this.sidebar.visible();
     checkbox.addEventListener("change", () => this.sidebar.change(checkbox.checked)); label.append(checkbox, document.createTextNode(" Mostrar Recursos na sidebar"));
-    const economy = document.createElement("p"); economy.textContent = "A suspensão de abas e os modos de economia ainda não estão implementados nesta etapa. Feche abas dispensáveis para reduzir o consumo.";
+    const economy = document.createElement("p"); economy.textContent = "A política de suspensão está indisponível nesta execução. Feche abas dispensáveis para reduzir o consumo.";
     container.replaceChildren();
-    container.append(description, heading("Agora"), this.#values, refresh, this.#status, heading("Páginas pesadas desta janela"), this.#pages, heading("Economizar"), economy, label);
+    container.append(description, heading("Agora"), this.#values, refresh, this.#status, heading("Páginas pesadas desta janela"), this.#pages, heading("Economizar"), this.#policy?.element ?? economy, label);
+    this.#policy?.mount();
     void this.refresh();
     this.#timer = setInterval(() => { void this.refresh(); }, 2000);
   }
   isMounted(container: HTMLElement): boolean { return this.#container === container; }
-  unmount(): void { clearInterval(this.#timer); this.#timer = undefined; this.#container = undefined; this.#generation++; }
+  unmount(): void { this.#policy?.unmount(); clearInterval(this.#timer); this.#timer = undefined; this.#container = undefined; this.#generation++; }
   async refresh(): Promise<void> {
     if (!this.#container || this.#pending) return;
     const generation = this.#generation; this.#pending = true;

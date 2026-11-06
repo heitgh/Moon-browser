@@ -1,6 +1,7 @@
 import type { ResearchMemory, ResearchSource } from "../../packages/research/research.js";
 import type { ProfileAccessStatus } from "../../apps/desktop/electron/services/profile-access.js";
 export interface Tab {
+  readonly suspended?: boolean;
   readonly id: string;
   readonly url: string;
   readonly title: string;
@@ -50,6 +51,11 @@ export type { LocalProfileAvatar, LocalProfileSummary } from "../../packages/ipc
 import type { CreateLocalProfileRequest, DeleteLocalProfileRequest, LocalProfileSummary, UpdateLocalProfileRequest } from "../../packages/ipc/local-profile-contract.js";
 
 export interface MoonBrowserBridge {
+  getResourcePolicy?(): Promise<import("../../packages/ipc/resource-policy-contract.js").ResourcePolicyState>;
+  inspectResourcePolicy?(): Promise<import("../../packages/ipc/resource-policy-contract.js").ResourcePolicyState>;
+  configureResourcePolicy?(settings: import("../../packages/ipc/resource-policy-contract.js").ResourceSettings): Promise<import("../../packages/ipc/resource-policy-contract.js").ResourcePolicyState>;
+  economizeResources?(): Promise<import("../../packages/ipc/resource-policy-contract.js").ResourceEconomyReport>;
+  cancelResourceTask?(): Promise<boolean>;
   getResourceSnapshot?(): Promise<import("../../packages/ipc/resource-contract.js").ResourceSnapshot>;
   onResourcesOpen?(listener: () => void): () => void;
   windowAction?(action: "minimize" | "maximize" | "close"): Promise<void>;
