@@ -1,4 +1,7 @@
+/* global AbortController */
 import assert from "node:assert/strict";
+import console from "node:console";
+import process from "node:process";
 import { app } from "electron";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
