@@ -91,6 +91,28 @@ jobs:
       - name: Build installers
         run: npm run build:desktop
 
+      - name: Download and verify GGUF smoke fixture
+        shell: bash
+        run: |
+          curl --fail --location --retry 3 --max-time 120 \
+            https://huggingface.co/ggml-org/models-moved/resolve/main/tinyllamas/stories15M-q4_0.gguf \
+            --output moon-smoke.gguf
+          echo "66967fbece6dbe97886593fdbb73589584927e29119ec31f08090732d1861739  moon-smoke.gguf" | sha256sum --check
+
+      - name: Smoke test packaged Moon AI on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $electron = (Resolve-Path node_modules/electron/dist/electron.exe).Path
+          $process = Start-Process -FilePath $electron -ArgumentList @("scripts/build/smoke-packaged-ai.mjs", "release/win-unpacked/resources/app.asar", "moon-smoke.gguf") -Wait -PassThru -NoNewWindow
+          exit $process.ExitCode
+
+      - name: Smoke test packaged Moon AI on Linux
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run -a node_modules/electron/dist/electron --no-sandbox \
+            scripts/build/smoke-packaged-ai.mjs release/linux-unpacked/resources/app.asar moon-smoke.gguf
+
       - name: Create Windows checksums
         if: runner.os == 'Windows'
         shell: pwsh
