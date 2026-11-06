@@ -56,7 +56,7 @@ export class PrivacyPanel {
       this.#label("Proteger contra anúncios e rastreadores", this.#tracker),
       this.#filterStatus,
       this.#label("Cookies HTTP", this.#cookies),
-      element("p", "", "O filtro altera os cabeçalhos Cookie e Set-Cookie na rede. Scripts, outros armazenamentos e técnicas de identificação têm controles separados. A opção de terceiros usa o site principal, o domínio registrável e o esquema."),
+      element("p", "", "O filtro altera os cabeçalhos Cookie e Set-Cookie na rede. O filtro não bloqueia document.cookie, outros armazenamentos ou fingerprinting. A opção de terceiros usa o site principal, o domínio registrável e o esquema."),
       this.#label("Exceções de rastreadores (uma origem por linha)", this.#trackerExceptions),
       this.#label("Exceções de cookies (uma origem por linha)", this.#cookieExceptions),
       element("p", "", "Uma exceção vale para a página principal daquela origem. Alguns logins e integrações podem exigir uma exceção. Use https://example.com, sem caminho."),
@@ -88,6 +88,7 @@ export class PrivacyPanel {
   }
 
   #label(text: string, input: HTMLElement): HTMLLabelElement {
+    input.setAttribute("aria-label", text);
     const label = element("label", "moon-privacy-label");
     label.append(element("span", "", text), input);
     return label;

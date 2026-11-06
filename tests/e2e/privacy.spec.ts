@@ -39,13 +39,14 @@ test("privacy settings alter Chromium cookie traffic and clear only reviewed sit
     await expect.poll(cookieNames).toContain("first");
     await open("/baseline");
     expect(seen.get("/baseline")).toContain("first=allowed");
-    await page.evaluate(async () => {
-      const bridge = (window as unknown as {moonBrowser: MoonBrowserBridge}).moonBrowser;
-      const active = (await bridge.getTabs()).find(tab => tab.active)!;
-      await bridge.showInternalPage(active.id, "moon://settings/privacy");
-    });
+    await page.getByLabel("Configurações", {exact: true}).click();
+    await page.getByLabel("Privacidade e dados", {exact: true}).click();
+    await expect(page.getByRole("heading", {name: "Privacidade", exact: true})).toBeVisible();
     const selector = page.getByLabel("Cookies HTTP", {exact: true});
     await expect(selector).toBeEnabled();
+    await selector.focus();
+    await page.keyboard.press("Tab");
+    await expect(page.getByLabel("Exceções de rastreadores (uma origem por linha)", {exact: true})).toBeFocused();
     await selector.selectOption("block-all");
     const save = page.getByRole("button", {name: "Salvar privacidade", exact: true});
     await save.click();
