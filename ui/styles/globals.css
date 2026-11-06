@@ -13,5 +13,6 @@
 @import "./command-center.css";
 
 @import "./window-chrome.css";
+@import "./adaptive-tabs.css";
 
 body { background: var(--moon-bg); color: var(--moon-text); font-family: Inter, ui-sans-serif, system-ui, sans-serif; line-height: 1.5; overflow: hidden; }

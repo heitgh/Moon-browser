@@ -396,7 +396,7 @@ describe("Moon browser shell", () => {
     expect(document.querySelector(".moon-toolbar-v2 > .moon-add-tab")).not.toBeNull();
     position.value = "hidden"; position.dispatchEvent(new Event("change", { bubbles: true })); await flush(); expect(document.querySelector(".moon-add-tab")).toBeNull();
     createTab.mockClear(); window.dispatchEvent(new KeyboardEvent("keydown", { key: "t", ctrlKey: true })); await flush(); expect(createTab).toHaveBeenCalledOnce();
-    (document.querySelector('[aria-label="Cancelar mudanças"]') as HTMLButtonElement).click(); await flush(); expect(document.querySelector(".moon-tabs-bar > .moon-add-tab")).not.toBeNull();
+    (document.querySelector('[aria-label="Cancelar mudanças"]') as HTMLButtonElement).click(); await flush(); expect(document.querySelector(".moon-tabs-list > .moon-add-tab")).not.toBeNull();
   });
   it("queues site permissions and sends an explicit user decision", async () => {
     bridge.respondToPermission.mockClear(); setContentVisible.mockClear();

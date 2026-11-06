@@ -1,0 +1,30 @@
+.moon-browser-main .moon-tabs-list {
+  min-height: 0;
+  overflow: auto hidden;
+  scrollbar-width: none;
+  -webkit-app-region: no-drag;
+}
+
+.moon-browser-main .moon-tabs-list > .moon-tab {
+  flex: 0 1 var(--moon-tabs-width);
+  min-width: 64px;
+  max-width: var(--moon-tabs-width);
+}
+
+.moon-tabs-list > .moon-add-tab,
+.moon-tab-favicon,
+.moon-tab-close {
+  flex-shrink: 0;
+}
+
+@media (min-width: 701px) {
+  :is([data-moon-tabs="left"], [data-moon-tabs="right"]):not([data-zen="true"]) .moon-browser-main .moon-tabs-list {
+    overflow: hidden auto;
+  }
+
+  :is([data-moon-tabs="left"], [data-moon-tabs="right"]):not([data-zen="true"]) .moon-browser-main .moon-tabs-list > .moon-tab {
+    flex: 0 0 var(--moon-control-height);
+    min-width: 0;
+    max-width: none;
+  }
+}
