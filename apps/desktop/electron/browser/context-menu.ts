@@ -2,7 +2,7 @@ import { clipboard, Menu, type BrowserWindow, type ContextMenuParams, type MenuI
 import { buildContextMenu, type ContextMenuAction } from "./context-menu-model.js";
 
 export interface ContextMenuTab { readonly id: string; readonly workspaceId?: string; readonly partitionWorkspaceId?: string; readonly sessionId?: string; readonly private: boolean; }
-export interface ElectronContextMenuOptions { readonly windowId: string; readonly window: BrowserWindow; readonly contents: WebContents; readonly params: ContextMenuParams; readonly tab: ContextMenuTab; readonly searchUrl: (selection: string) => string; readonly createTab: (url: string, tab: ContextMenuTab) => Promise<unknown>; readonly navigate: (tabId: string, url: string) => Promise<void>; }
+export interface ElectronContextMenuOptions { readonly windowId: string; readonly window: BrowserWindow; readonly contents: WebContents; readonly params: ContextMenuParams; readonly tab: ContextMenuTab; readonly searchUrl: (selection: string) => string; readonly createTab: (url: string, tab: ContextMenuTab) => Promise<unknown>; readonly onAiSelection?: () => void; readonly navigate: (tabId: string, url: string) => Promise<void>; }
 
 export function openElectronContextMenu(options: ElectronContextMenuOptions): void {
   const { contents, params } = options;
@@ -12,6 +12,10 @@ export function openElectronContextMenu(options: ElectronContextMenuOptions): vo
     if (entry.kind === "separator") return { type: "separator" };
     if (entry.kind === "role") return { role: entry.role, enabled: entry.enabled };
     return { label: entry.label, enabled: entry.enabled !== false, click: () => void execute(entry.id!, options).catch(error => console.error("Context menu action failed", error)) };
+  });
+  if (options.onAiSelection) template.push({
+    label: "Usar seleção na Moon AI",
+    click: options.onAiSelection
   });
   Menu.buildFromTemplate(template).popup({ window: options.window });
 }

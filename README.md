@@ -42,6 +42,12 @@ A `v0.6.0-alpha.5` adiciona atualização nativa Moon/Chromium e barra de downlo
 
 **Atualização inicial:** instale a alpha.5 uma vez. A alpha.4 pode abrir a página oficial pelo aviso existente. Depois, Windows instalado e Linux AppImage oferecem download e instalação dentro do Moon, com confirmação; demais formatos mantêm a instalação manual.
 
+## Moon AI local em desenvolvimento
+
+No código de desenvolvimento, abra **Moon AI → Escolher GGUF** para selecionar um modelo de instruções compatível armazenado no seu computador. A geração usa CPU e o modelo é fornecido separadamente. Para incluir uma página, marque **Usar a aba ativa** ou selecione um trecho na página e use **Usar seleção na Moon AI**. O Moon pede autorização antes de ler o conteúdo para a tarefa. Use **Cancelar geração** para interromper o processo.
+
+Este fluxo ainda precisa de validação com modelo real nos pacotes Windows e Linux.
+
 ## O que é o Moon?
 
 O Moon é um navegador desktop open source construído sobre **Electron + Chromium**. O projeto explora uma ideia simples:

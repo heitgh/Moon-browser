@@ -105,6 +105,8 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     }});
   }
 
+  onAiSelection?: (windowId: string, tabId: string, selection: string) => void;
+
   researchDocument(tabId: string, windowId: string) {
     const tab = this.#tabs.get(tabId);
     if (!tab || this.#tabWindows.get(tabId) !== windowId || tab.private || this.windows.isPrivate(windowId) || this.windows.isGuest(windowId)) {
@@ -617,7 +619,16 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     this.#installWindowOpenHandler(id, windowId, contents);
     contents.on("context-menu", (_event, params) => {
       const tab = this.#requireTab(id); const window = this.windows.get(windowId); if (!window || contents.isDestroyed()) return;
-      openElectronContextMenu({ windowId, window, contents, params, tab: { id, workspaceId: tab.workspaceId, partitionWorkspaceId: tab.partitionWorkspaceId, sessionId: tab.sessionId, private: tab.private }, searchUrl: selection => (this.#searchTemplates.get(windowId) ?? "https://duckduckgo.com/?q={query}").replace("{query}", encodeURIComponent(selection)), createTab: (url, source) => this.createTab(windowId, { url, active: true, workspaceId: source.workspaceId, partitionWorkspaceId: source.partitionWorkspaceId, sessionId: source.sessionId, private: source.private }), navigate: (tabId, url) => this.navigate(tabId, url) });
+      const version = this.#documentVersions.get(contents);
+      const selectionUrl = contents.getURL();
+      const offerAi = this.onAiSelection && !tab.private && !this.windows.isGuest(windowId) &&
+        !params.isEditable && params.frame === contents.mainFrame && /^https?:/.test(selectionUrl) && params.selectionText.trim();
+      const onAiSelection = offerAi ? () => {
+        if (!contents.isDestroyed() && contents.getURL() === selectionUrl && this.#documentVersions.get(contents) === version) {
+          this.onAiSelection?.(windowId, id, params.selectionText);
+        }
+      } : undefined;
+      openElectronContextMenu({ windowId, window, contents, params, ...(onAiSelection ? { onAiSelection } : {}), tab: { id, workspaceId: tab.workspaceId, partitionWorkspaceId: tab.partitionWorkspaceId, sessionId: tab.sessionId, private: tab.private }, searchUrl: selection => (this.#searchTemplates.get(windowId) ?? "https://duckduckgo.com/?q={query}").replace("{query}", encodeURIComponent(selection)), createTab: (url, source) => this.createTab(windowId, { url, active: true, workspaceId: source.workspaceId, partitionWorkspaceId: source.partitionWorkspaceId, sessionId: source.sessionId, private: source.private }), navigate: (tabId, url) => this.navigate(tabId, url) });
     });
 
     contents.on("will-navigate", event => {

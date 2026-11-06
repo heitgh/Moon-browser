@@ -1,3 +1,7 @@
+import { AiContextService } from "../ai/ai-context-service.js";
+import { LocalLlamaProvider } from "../ai/ai-provider.js";
+import { AiService } from "../ai/ai-service.js";
+import { registerAiIpc } from "../ipc/ai-ipc.js";
 import { PrivacyService } from "../services/privacy-service.js";
 import { registerPrivacyIpc } from "../ipc/privacy-ipc.js";
 import { DEFAULT_PRIVACY_SETTINGS } from "../../../../packages/ipc/privacy-contract.js";
@@ -48,6 +52,7 @@ const permissions = new Map<string, SitePermissionService>();
 const privacy = new PrivacyService(requestPipeline);
 const adblock = new ElectronAdblockService(windows, requestPipeline, privacy);
 const browser = new ElectronBrowserManager(windows, downloads, adblock, requestPipeline, windowId => permissions.get(windows.profileId(windowId)), privacy);
+let ai: AiService | undefined;
 let resourcePolicy: ResourcePolicyController | undefined;
 let accessController: ProfileAccessController | undefined;
 const ipc = new IpcRouter(windows, (event, channel) => {
@@ -296,6 +301,21 @@ app.whenReady().then(async () => {
   }
   application = new BrowserApplicationService(browser, async windowId => profiles!.openedStorage(windows.profileId(windowId)));
   accessController.service.onLock(profileId => consent.cancelProfile(profileId));
+  ai = new AiService(windows, profiles, new AiContextService(browser, windows, consent), consent, new LocalLlamaProvider());
+  const moonAi = ai;
+  registerAiIpc(ipc, windows, moonAi);
+  browser.onAiSelection = (windowId, tabId, selection) => {
+    try {
+      const window = windows.require(windowId);
+      accessController?.service.assertUnlocked(windows.profileId(windowId));
+      if (!moonAi.context.offerSelection(windowId, tabId, selection)) return;
+      moonAi.watchWindow(windowId);
+      window.webContents.send("ai:open");
+    } catch {
+      // A stale or restricted document is no longer eligible.
+    }
+  };
+  accessController.service.onLock(profileId => moonAi.cancelProfile(profileId));
   resourcePolicy = new ResourcePolicyController(new TabLifecycleService(browser, application), resourceMonitor, windows, profiles, accessController.service);
   registerResourcePolicyIpc(ipc, windows, resourcePolicy);
   installApplicationMenu(() => { void createMainWindow(true, defaultProfileId); }, (window, action) => {
@@ -382,6 +402,7 @@ app.on("before-quit", event => {
   event.preventDefault();
   if (shutdownStarted) return;
   shutdownStarted = true;
+  ai?.stop();
   consent.stop();
   resourcePolicy?.stop();
   browser.prepareForShutdown();

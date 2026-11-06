@@ -1,3 +1,4 @@
+import type { AiChunk, AiRequest, AiResult, AiState } from "../../packages/ipc/ai-contract.js";
 import type { ResearchMemory, ResearchSource } from "../../packages/research/research.js";
 import type { ProfileAccessStatus } from "../../apps/desktop/electron/services/profile-access.js";
 export interface Tab {
@@ -62,6 +63,13 @@ export interface MoonBrowserBridge {
   getResourceSnapshot?(): Promise<import("../../packages/ipc/resource-contract.js").ResourceSnapshot>;
   onResourcesOpen?(listener: () => void): () => void;
   windowAction?(action: "minimize" | "maximize" | "close"): Promise<void>;
+  getAiState?(): Promise<AiState>;
+  chooseAiModel?(): Promise<AiState>;
+  disableAiModel?(): Promise<AiState>;
+  runAi?(request: AiRequest): Promise<AiResult>;
+  cancelAi?(): Promise<void>;
+  onAiOpen?(listener: () => void): () => void;
+  onAiChunk?(listener: (chunk: AiChunk) => void): () => void;
   captureResearch?(workspaceId: string, tabIds: string[]): Promise<ResearchSource[]>;
   loadResearchMemory?(workspaceId: string): Promise<ResearchMemory>;
   saveResearchMemory?(workspaceId: string, value: ResearchMemory): Promise<ResearchMemory>;

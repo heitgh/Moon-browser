@@ -1,3 +1,4 @@
+import { parseAiModelFile, type AiModelFile } from "../ai/ai-model-file.js";
 import { DEFAULT_PRIVACY_SETTINGS, parsePrivacySettings, type PrivacySettings } from "../../../../packages/ipc/privacy-contract.js";
 import { DEFAULT_RESOURCE_SETTINGS, parseResourceSettings, type ResourceSettings } from "../../../../packages/ipc/resource-policy-contract.js";
 import { randomUUID } from "node:crypto";
@@ -131,6 +132,13 @@ export class ProfileStorage {
       await this.#settings.setValue(key, saved);
       return saved;
     });
+  }
+
+  async loadAiModel(): Promise<AiModelFile | null> {
+    return parseAiModelFile(await this.#settings.getValue<unknown>("local-ai-model:v1"));
+  }
+  async saveAiModel(value: AiModelFile | null): Promise<void> {
+    await this.#settings.setValue("local-ai-model:v1", parseAiModelFile(value));
   }
 
   async loadPrivacySettings(): Promise<PrivacySettings> {
