@@ -1,6 +1,6 @@
 import { _electron as electron, expect, test } from "@playwright/test";
 import { createServer } from "node:http";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { MoonBrowserBridge } from "../../ui/browser-shell/contracts.js";
@@ -53,14 +53,15 @@ test("economy destroys only verified background surfaces, preserves stateful pag
     expect(report.suspendedIds).toHaveLength(30); expect(report.suspendedIds).toContain(first.id);
     expect(await application.evaluate(({webContents}, id) => Boolean(webContents.fromId(id)), oldContentsId)).toBe(false);
     const after = await page.evaluate(async () => (window as unknown as {moonBrowser: MoonBrowserBridge}).moonBrowser.getResourceSnapshot!());
-    await info.attach("measured-economy.json", {body: JSON.stringify({before, report, after}), contentType: "application/json"});
+    await mkdir(info.outputDir, {recursive: true});
+    await writeFile(info.outputPath("measured-economy.json"), JSON.stringify({before, report, after}));
     expect(after.tabs.filter(tab => tab.pid === null).length).toBeGreaterThanOrEqual(30);
     expect(await application.evaluate(async ({webContents}, url) => webContents.getAllWebContents().find(contents => contents.getURL() === url)?.executeJavaScript("document.querySelector('input').value"), `${origin}/form`)).toBe("unsaved-value");
     expect(await application.evaluate(async ({webContents}, url) => webContents.getAllWebContents().find(contents => contents.getURL() === url)?.executeJavaScript("window.importantState"), `${origin}/script`)).toBe(42);
     await application.evaluate(({Menu, BrowserWindow}) => {const item = Menu.getApplicationMenu()!.getMenuItemById("moon-resources")!; item.click(item, BrowserWindow.getAllWindows()[0]!);});
     await page.getByRole("button", {name: "Avaliar abas", exact: true}).click();
     await expect(page.getByText("Static fixture · suspensa", {exact: true}).first()).toBeVisible();
-    await info.attach("economy-ui.png", {body: await page.screenshot(), contentType: "image/png"});
+    await page.screenshot({path: info.outputPath("economy-ui.png")});
     await page.evaluate(async id => (window as unknown as {moonBrowser: MoonBrowserBridge}).moonBrowser.activateTab(id), first.id);
     const restored = await application.evaluate(async ({webContents}, url) => {
       const contents = webContents.getAllWebContents().find(contents => contents.getURL() === url)!;
