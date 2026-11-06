@@ -49,7 +49,7 @@ test("opens a profile created by the public installer in the candidate package",
       })).toEqual(expect.objectContaining({
         urls: expect.arrayContaining([url]),
         profile: expect.objectContaining({
-          notes: expect.arrayContaining([expect.objectContaining({ title, content: "Dados preservados" })])
+          noteDocuments: expect.arrayContaining([expect.objectContaining({ title, content: "Dados preservados" })])
         })
       }));
       await expect(page.getByLabel("Pular configuração inicial")).toBeHidden();
