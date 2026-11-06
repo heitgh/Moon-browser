@@ -367,7 +367,10 @@ class BrowserShell {
       this.#resourcesPanel ??= new ResourcesPanel(async () => {
         if (!this.#bridge?.getResourceSnapshot) throw new Error("Métricas indisponíveis.");
         return this.#bridge.getResourceSnapshot();
-      }, {visible: () => load<unknown>(RESOURCE_SIDEBAR_KEY, false) === true, change: visible => { save(RESOURCE_SIDEBAR_KEY, visible); const control = this.#rail.get("resources"); if (control) control.hidden = !visible; }});
+      }, {visible: () => load<unknown>(RESOURCE_SIDEBAR_KEY, false) === true, change: visible => { save(RESOURCE_SIDEBAR_KEY, visible); const control = this.#rail.get("resources"); if (control) control.hidden = !visible; }}, this.#bridge?.getResourcePolicy && this.#bridge.inspectResourcePolicy && this.#bridge.configureResourcePolicy && this.#bridge.economizeResources && this.#bridge.cancelResourceTask ? {
+        load: () => this.#bridge!.getResourcePolicy!(), inspect: () => this.#bridge!.inspectResourcePolicy!(), save: settings => this.#bridge!.configureResourcePolicy!(settings),
+        economize: () => this.#bridge!.economizeResources!(), cancel: () => this.#bridge!.cancelResourceTask!(), restore: id => this.#bridge!.activateTab(id)
+      } : undefined);
       this.#resourcesPanel.mount(this.#drawerBody);
     }
     if (this.#openDrawer === "research") this.#researchPanel.mount(this.#drawerBody);

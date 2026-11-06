@@ -15,7 +15,7 @@ export class TabStrip {
   render(tabs: readonly Tab[], activeTabId: string | undefined, favicons: ReadonlyMap<string, string> = new Map()): void {
     this.element.replaceChildren();
     for (const tab of tabs) {
-      const label = tab.title || "Nova aba";
+      const label = `${tab.title || "Nova aba"}${tab.suspended ? " · suspensa" : ""}`;
       const tabButton = button(`moon-tab${tab.id === activeTabId ? " is-active" : ""}`, label);
       const favicon = element("span", `moon-tab-favicon${tab.loading ? " is-loading" : ""}`);
       const faviconData = builtinSiteIcon(tab.url) ?? favicons.get(tab.id);

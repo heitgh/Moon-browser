@@ -9,6 +9,7 @@ export interface BrowserTabOptions {
 }
 
 export interface BrowserTab {
+  readonly suspended?: boolean;
   readonly id: string;
   readonly url: string;
   readonly title: string;

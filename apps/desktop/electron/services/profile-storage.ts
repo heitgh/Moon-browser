@@ -1,3 +1,4 @@
+import { DEFAULT_RESOURCE_SETTINGS, parseResourceSettings, type ResourceSettings } from "../../../../packages/ipc/resource-policy-contract.js";
 import { randomUUID } from "node:crypto";
 import { emptyMemory, parseMemory, scopeId, type ResearchMemory } from "../../../../packages/research/research.js";
 import { mkdir, rename, writeFile, readdir, rm, chmod } from "node:fs/promises";
@@ -130,6 +131,9 @@ export class ProfileStorage {
       return saved;
     });
   }
+
+  async loadResourceSettings(): Promise<ResourceSettings> { return parseResourceSettings(await this.#settings.getValue<unknown>("resource-policy:v1") ?? DEFAULT_RESOURCE_SETTINGS); }
+  async saveResourceSettings(value: unknown): Promise<ResourceSettings> { const clean = parseResourceSettings(value); await this.#settings.setValue("resource-policy:v1", clean); return clean; }
 
   async loadCustomization(legacyDocument?: unknown): Promise<CustomizationSchemaV4> {
     const stored = await this.#settings.getValue<unknown>(CUSTOMIZATION_SETTING);
