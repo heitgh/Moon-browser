@@ -176,6 +176,7 @@ export class CustomizationCenter {
       const copy = element("span", "moon-settings-nav-copy"); copy.append(element("strong", "", label), element("small", "", description)); nav.append(copy);
       nav.addEventListener("click", () => {
         this.#active = id;
+        if (id === "data" && this.options.createPrivacyPanel) this.#mode = "advanced";
         this.#view = "section";
         this.options.store.setExperience(this.#mode, id, this.#view);
         this.#search.value = "";

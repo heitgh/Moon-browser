@@ -215,9 +215,11 @@ class BrowserShell {
         this.#bridge.onUpdateState?.(state => { this.#nativeUpdate = state; this.#downloadShelf.render(this.#downloads, state); this.#renderNativeUpdateControls(); });
       }
       this.#adblock = await this.#bridge.getAdblockStatus();
-      const preferredAdblock = load<boolean>(KEYS.adblock, true);
-      if (this.#adblock.enabled !== preferredAdblock) {
-        this.#adblock = await this.#bridge.setAdblockEnabled(preferredAdblock);
+      // The desktop privacy service owns the current profile preference.
+      // Do not reapply legacy renderer flags or open confirmation on startup.
+      if (!this.#bridge.getPrivacyState) {
+        const preferredAdblock = load<boolean>(KEYS.adblock, true);
+        if (this.#adblock.enabled !== preferredAdblock) this.#adblock = await this.#bridge.setAdblockEnabled(preferredAdblock);
       }
       const tabs = await this.#bridge.getTabs();
       tabs.forEach(tab => this.#tabs.set(tab.id, tab));
@@ -568,7 +570,18 @@ class BrowserShell {
     this.#drawerBody.append(hero, adblock, list, permissionTitle, permissions);
   }
   #renderAdblock(): void { this.#securityPill.classList.toggle("is-disabled", this.#adblock.phase === "disabled" || this.#adblock.phase === "failed"); this.#securityPill.classList.toggle("is-loading", this.#adblock.phase === "loading"); this.#securityText.textContent = this.#adblock.phase === "loading" ? "AdBlock carregando" : this.#adblock.phase === "failed" ? "AdBlock indisponível" : this.#adblock.enabled ? `${this.#adblock.blockedCount} bloqueados` : "AdBlock desligado"; }
-  async #setAdblockEnabled(enabled: boolean): Promise<void> { if (!this.#bridge) return; this.#adblock = await this.#bridge.setAdblockEnabled(enabled); save(KEYS.adblock, enabled); this.#renderAdblock(); this.#renderDrawer(); }
+  async #setAdblockEnabled(enabled: boolean): Promise<void> {
+    if (!this.#bridge) return;
+    try {
+      this.#adblock = await this.#bridge.setAdblockEnabled(enabled);
+      if (!this.#bridge.getPrivacyState) save(KEYS.adblock, this.#adblock.enabled);
+      this.#renderAdblock();
+      this.#renderDrawer();
+    } catch (error) {
+      this.#showError(error);
+    }
+  }
+
   #adblockDetail(): string { if (this.#adblock.phase === "loading") return "Carregando filtros reais…"; if (this.#adblock.phase === "failed") return `Falhou: ${this.#adblock.error ?? "erro desconhecido"}`; return this.#adblock.enabled ? `${this.#adblock.blockedCount} requisições bloqueadas nesta sessão` : "Proteção de anúncios desativada"; }
   #downloadAction(label: string, name: IconName, action: () => void): HTMLButtonElement { const actionButton = btn("moon-download-action", label, name); actionButton.append(el("span", "", label)); actionButton.addEventListener("click", action); return actionButton; }
   #downloadStateLabel(state: ManagedDownload["state"]): string { return ({ "in-progress": "Baixando", paused: "Pausado", completed: "Concluído", cancelled: "Cancelado", failed: "Falhou" })[state]; }
