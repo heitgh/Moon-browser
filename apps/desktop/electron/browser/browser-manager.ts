@@ -385,11 +385,9 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
   }
 
   prepareForShutdown(): void {
+    // Block new lifecycle operations without aborting accepted navigations.
+    // Stopping a pending navigation can replace its session URL with about:blank.
     this.#closing = true;
-    for (const surface of this.#surfaces.values()) {
-      const contents = surface.view.webContents;
-      if (!contents.isDestroyed() && contents.isLoading()) contents.stop();
-    }
   }
 
   async inspectSuspension(id: string): Promise<PageActivity | null> {
