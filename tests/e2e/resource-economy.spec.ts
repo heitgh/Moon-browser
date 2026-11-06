@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { MoonBrowserBridge } from "../../ui/browser-shell/contracts.js";
 import { DEFAULT_RESOURCE_SETTINGS } from "../../packages/ipc/resource-policy-contract.js";
-test("economy destroys only verified background surfaces, preserves stateful pages and restores real history and scroll", async (_fixtures, info) => {
+test("economy destroys only verified background surfaces, preserves stateful pages and restores real history and scroll", async () => {
+  const info = test.info();
   test.setTimeout(180_000);
   const directory = await mkdtemp(join(tmpdir(), "moon-economy-"));
   const server = createServer((request, response) => {
