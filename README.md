@@ -267,6 +267,6 @@ Em **Gerenciar perfis → Segurança do perfil**, a próxima atualização permi
 
 A senha impede acesso casual pelo aplicativo, mas **não criptografa os arquivos**. Não há recuperação de senha nesta implementação: o aviso nativo precisa ser confirmado ao ativar. Quem controla a conta e os arquivos do sistema pode remover essa proteção. Consulte os [passos de teste e limites](docs/review/stage2-profile-access.md). A matriz de testes e builds Windows/Linux passou no PR #39; os downloads públicos permanecem na versão publicada.
 
-### Recursos em revisão (etapa 3, ainda não publicada)
+### Recursos em revisão (ainda não publicados)
 
-**Menu Moon → Recursos** ou **Ctrl/Cmd+Shift+E** abre RAM, CPU, processos únicos e páginas pesadas. A opção do próprio painel adiciona o botão à sidebar. O consumo por aba corresponde ao processo inteiro, que pode ser compartilhado; amostras indisponíveis ou parciais são identificadas. Ainda não há suspensão nesta etapa. Consulte os [limites e passos de teste](docs/review/stage3-resource-monitor.md).
+**Menu Moon → Recursos** ou **Ctrl/Cmd+Shift+E** abre RAM, CPU, processos únicos e páginas pesadas. A opção do próprio painel adiciona o botão à sidebar. O consumo por aba corresponde ao processo inteiro, que pode ser compartilhado; amostras indisponíveis ou parciais são identificadas. Em Economizar, declare os sites seguros para recarga e avalie quais abas estáticas podem ser suspensas. A automação começa desativada. Consulte o [medidor de recursos](docs/review/stage3-resource-monitor.md) e a [política de suspensão](docs/review/stage4-resource-economy.md).

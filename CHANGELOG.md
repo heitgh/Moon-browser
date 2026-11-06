@@ -3,6 +3,7 @@
 ## Em revisão — etapa 3: medidor de recursos (não publicada)
 
 - Menu Recursos, coleta nativa de RAM/CPU, contagem de processos únicos e associação de abas a PIDs compartilhadas.
+- Política de economia por perfil com suspensão opt-in de abas estáticas autorizadas, exceções, indicador visual e retomada com histórico e rolagem em memória.
 - Amostras iniciais/indisponíveis e totais parciais indicados; consulta limitada ao painel aberto, sem telemetria.
 - Nenhuma suspensão de abas ou limitação rígida de recursos nesta etapa.
 

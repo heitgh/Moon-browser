@@ -59,6 +59,12 @@ test("economy destroys only verified background surfaces, preserves stateful pag
     expect(await application.evaluate(async ({webContents}, url) => webContents.getAllWebContents().find(contents => contents.getURL() === url)?.executeJavaScript("document.querySelector('input').value"), `${origin}/form`)).toBe("unsaved-value");
     expect(await application.evaluate(async ({webContents}, url) => webContents.getAllWebContents().find(contents => contents.getURL() === url)?.executeJavaScript("window.importantState"), `${origin}/script`)).toBe(42);
     await application.evaluate(({Menu, BrowserWindow}) => {const item = Menu.getApplicationMenu()!.getMenuItemById("moon-resources")!; item.click(item, BrowserWindow.getAllWindows()[0]!);});
+    const mode = page.getByLabel("Modo de desempenho", {exact: true});
+    await expect(mode).toBeVisible();
+    await expect.poll(() => mode.evaluate(element => {
+      const drawer = element.closest(".moon-drawer")!;
+      return element.getBoundingClientRect().right <= drawer.getBoundingClientRect().right;
+    })).toBe(true);
     await page.getByRole("button", {name: "Avaliar abas", exact: true}).click();
     await expect(page.getByText("Static fixture · suspensa", {exact: true}).first()).toBeVisible();
     await page.screenshot({path: info.outputPath("economy-ui.png")});

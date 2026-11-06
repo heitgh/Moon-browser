@@ -128,3 +128,25 @@
 .moon-update-notice progress { width: 100%; accent-color: var(--moon-accent); }
 
 .moon-browser-main > .moon-update-notice { position: static; order: 6; flex: 0 0 auto; width: auto; margin: 8px 12px; max-height: 28vh; padding: 12px; }
+
+/* Fit resource controls to the actual drawer width, including compact mode. */
+.moon-drawer:has(.moon-resource-policy) :is(.moon-drawer-header, .moon-drawer-body) {
+  min-width: 0;
+}
+.moon-resource-policy {
+  overflow-wrap: anywhere;
+}
+.moon-resource-policy label {
+  display: block;
+  margin-block: var(--moon-space-2);
+}
+.moon-resource-policy .moon-settings-input[type="checkbox"] {
+  width: 1rem;
+  min-height: 1rem;
+  padding: 0;
+  vertical-align: middle;
+  margin-inline-start: var(--moon-space-2);
+}
+.moon-resource-policy textarea {
+  resize: vertical;
+}
