@@ -689,3 +689,37 @@ test("shows a live download shelf beneath the browsing surface", async () => {
     expect(geometry.viewport).toBeLessThanOrEqual(geometry.shelf + 1);
   } finally { await quitDesktop(application); await new Promise<void>(resolve => server.close(() => resolve())); await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
+
+test("keeps the new tab button after the last tab when the strip overflows", async () => {
+  const userData = await mkdtemp(join(tmpdir(), "moon-e2e-tab-strip-"));
+  const application = await electron.launch({
+    args: [...platformArguments, `--user-data-dir=${userData}`, "."],
+    cwd: process.cwd(),
+    env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData }
+  });
+  try {
+    const page = await shellWindow(application);
+    await dismissOnboarding(page);
+    await setViewport(application, page, 800, 720);
+    const strip = page.locator(".moon-tabs-list");
+    const tabs = strip.locator(".moon-tab");
+    const add = strip.getByRole("button", { name: "Nova aba (Ctrl+T)", exact: true });
+    const initialWidth = await tabs.first().evaluate(tab => tab.getBoundingClientRect().width);
+
+    for (let count = 2; count <= 16; count++) {
+      await add.click();
+      await expect(tabs).toHaveCount(count);
+    }
+
+    expect(await tabs.first().evaluate(tab => tab.getBoundingClientRect().width)).toBeLessThan(initialWidth);
+    await expect(strip.locator(".moon-tab + .moon-add-tab:last-child")).toHaveCount(1);
+    await expect.poll(() => strip.evaluate(node => node.scrollWidth > node.clientWidth && node.scrollLeft > 0)).toBe(true);
+    await expect(add).toBeInViewport();
+    await strip.hover();
+    await page.mouse.wheel(0, -3000);
+    await expect.poll(() => strip.evaluate(node => node.scrollLeft)).toBe(0);
+  } finally {
+    await quitDesktop(application);
+    await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  }
+});

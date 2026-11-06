@@ -868,7 +868,7 @@ class BrowserShell {
     this.#addTab.hidden = position === "hidden"; this.#addTab.classList.toggle("is-end", position === "end-bar");
     if (position === "hidden") { this.#addTab.remove(); return; }
     if (position === "before-tabs") this.#tabStrip.element.before(this.#addTab);
-    else if (position === "after-tabs") this.#tabStrip.element.after(this.#addTab);
+    else if (position === "after-tabs") this.#tabStrip.element.append(this.#addTab);
     else if (position === "end-bar") this.#tabsBar.append(this.#addTab);
     else if (position === "toolbar") this.#toolbar.element.append(this.#addTab);
     else this.#railElement.querySelector(".moon-rail-spacer")?.before(this.#addTab);
