@@ -113,6 +113,31 @@ jobs:
           xvfb-run -a node_modules/electron/dist/electron --no-sandbox \
             scripts/build/smoke-packaged-ai.mjs release/linux-unpacked/resources/app.asar moon-smoke.gguf
 
+      - name: Validate Windows profile upgrade from alpha.5
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $previous = Join-Path $env:RUNNER_TEMP "moon-alpha5"
+          $installer = Join-Path $env:RUNNER_TEMP "moon-alpha5-setup.exe"
+          curl.exe --fail --location --retry 3 --output $installer https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.5/Moon-Browser-0.6.0-alpha.5-Windows-x64-Setup.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $setup = Start-Process -FilePath $installer -ArgumentList "/S /D=$previous" -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { exit $setup.ExitCode }
+          $env:MOON_PREVIOUS_EXECUTABLE = (Resolve-Path "$previous/Moon Browser.exe").Path
+          $env:MOON_CANDIDATE_EXECUTABLE = (Resolve-Path "release/win-unpacked/Moon Browser.exe").Path
+          npx playwright test tests/e2e/packaged-upgrade.spec.ts
+
+      - name: Validate Linux profile upgrade from alpha.5
+        if: runner.os == 'Linux'
+        run: |
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/moon-alpha5.deb" \
+            https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.5/Moon-Browser-0.6.0-alpha.5-Linux-x64.deb
+          dpkg-deb -x "$RUNNER_TEMP/moon-alpha5.deb" "$RUNNER_TEMP/moon-alpha5"
+          export MOON_PREVIOUS_EXECUTABLE="$(find "$RUNNER_TEMP/moon-alpha5/opt" -type f -name moon-browser -print -quit)"
+          test -x "$MOON_PREVIOUS_EXECUTABLE"
+          export MOON_CANDIDATE_EXECUTABLE="$PWD/release/linux-unpacked/moon-browser"
+          xvfb-run -a npx playwright test tests/e2e/packaged-upgrade.spec.ts
+
       - name: Create Windows checksums
         if: runner.os == 'Windows'
         shell: pwsh
