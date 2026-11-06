@@ -1,3 +1,4 @@
+import { PrivacyPanel } from "./privacy/privacy-panel.js";
 import { ResourcesPanel, RESOURCE_SIDEBAR_KEY } from "./resources/resources-panel.js";
 import { DownloadShelf } from "./downloads/download-shelf.js";
 import type { NativeUpdateState } from "../packages/ipc/native-update-contract.js";
@@ -454,8 +455,8 @@ class BrowserShell {
       if (this.#workspaces.some(area => area.id !== workspace.id && !area.archived)) {
         const destination = el("select", "moon-settings-input"); destination.setAttribute("aria-label", `Destino das abas de ${workspace.name}`);
         for (const area of this.#workspaces.filter(area => area.id !== workspace.id && !area.archived)) { const option = el("option", "", area.name); option.value = area.id; destination.append(option); }
-        const remove = btn("moon-text-button", `Mover abas e excluir ${workspace.name}`); remove.textContent = "Mover abas e excluir"; remove.addEventListener("click", () => { if (window.confirm(`Excluir “${workspace.name}” e mover suas abas? Cookies e dados serão mantidos.`)) void this.#removeWorkspace(workspace.id, "move", destination.value); });
-        const close = btn("moon-text-button", `Fechar abas e excluir ${workspace.name}`); close.textContent = "Fechar abas e excluir"; close.addEventListener("click", () => { if (window.confirm(`Fechar todas as abas de “${workspace.name}” e excluir a área? Cookies e dados serão mantidos.`)) void this.#removeWorkspace(workspace.id, "close"); }); row.append(destination, remove, close);
+        const remove = btn("moon-text-button", `Mover abas e excluir ${workspace.name}`); remove.textContent = "Mover abas e excluir"; remove.addEventListener("click", () => { void this.#removeWorkspace(workspace.id, "move", destination.value); });
+        const close = btn("moon-text-button", `Fechar abas e excluir ${workspace.name}`); close.textContent = "Fechar abas e excluir"; close.addEventListener("click", () => { void this.#removeWorkspace(workspace.id, "close"); }); row.append(destination, remove, close);
       }
       list.append(row);
     });
@@ -515,10 +516,17 @@ class BrowserShell {
       if (download.state === "paused") actions.append(this.#downloadAction("Continuar", "play", () => void this.#bridge?.resumeDownload(download.id)));
       if (["in-progress", "paused"].includes(download.state)) actions.append(this.#downloadAction("Cancelar", "close", () => void this.#bridge?.cancelDownload(download.id)));
       if (download.state === "completed") {
-        actions.append(this.#downloadAction("Abrir", "play", () => void this.#bridge?.openDownload(download.id)));
+        actions.append(this.#downloadAction(download.executableHint ? "Revisar abertura" : "Abrir", "play", () => {
+          void this.#bridge?.openDownload(download.id).catch(error => this.#showError(error));
+        }));
         actions.append(this.#downloadAction("Pasta", "folder", () => void this.#bridge?.showDownloadInFolder(download.id)));
       }
-      row.append(header, progress, detail, actions); list.append(row);
+      row.append(header, progress, detail);
+      if (download.savePath) row.append(el("p", "moon-download-detail", `Destino: ${download.savePath}`));
+      row.append(el("p", "moon-download-detail", download.executableHint
+        ? `Pode executar código · ${download.mimeType || "tipo desconhecido"}`
+        : `Tipo informado: ${download.mimeType || "desconhecido"}`), actions);
+      list.append(row);
     });
     this.#drawerBody.append(list);
   }
@@ -550,7 +558,7 @@ class BrowserShell {
   #securityDrawer(): void {
     const hero = el("div", "moon-security-hero"); hero.append(svg("shield"), el("strong", "", "Navegação isolada"), el("span", "", "ATIVA"));
     const adblock = el("div", "moon-adblock-control"); const copy = el("span", "moon-list-copy"); copy.append(el("strong", "", "Moon AdBlock"), el("small", "", this.#adblockDetail()));
-    const toggle = btn(`moon-adblock-toggle${this.#adblock.enabled ? " is-active" : ""}`, this.#adblock.enabled ? "Desativar AdBlock" : "Ativar AdBlock"); toggle.append(el("span")); toggle.disabled = this.#adblock.phase === "loading" || this.#adblock.phase === "failed"; toggle.addEventListener("click", () => void this.#setAdblockEnabled(!this.#adblock.enabled)); adblock.append(copy, toggle);
+    const toggle = btn(`moon-adblock-toggle${this.#adblock.enabled ? " is-active" : ""}`, this.#adblock.enabled ? "Desativar AdBlock" : "Ativar AdBlock"); toggle.append(el("span")); toggle.disabled = this.#windowPrivate || this.#windowGuest || this.#adblock.phase === "loading" || this.#adblock.phase === "failed"; toggle.addEventListener("click", () => void this.#setAdblockEnabled(!this.#adblock.enabled)); adblock.append(copy, toggle);
     const list = el("div", "moon-security-list");
     [["Context isolation", "A página não acessa APIs internas do Moon."], ["Sandbox", "Sites executam em processos restritos do Chromium."], ["Navegação", "Somente HTTP e HTTPS são aceitos."], ["Workspaces", "Cada espaço usa uma sessão separada."]].forEach(([title, detail]) => { const item = el("div", "moon-security-item"); item.append(el("span", "moon-check", "✓"), el("strong", "", title), el("p", "", detail)); list.append(item); });
     const permissionTitle = el("h3", "moon-panel-section-title", "Permissões por site"); const permissions = el("div", "moon-panel-list");
@@ -585,6 +593,14 @@ class BrowserShell {
       onExport: content => this.#bridge?.exportCustomization(content) ?? Promise.resolve(false),
       onExportDiagnostic: content => this.#bridge?.exportSettingsDiagnostic(content) ?? Promise.resolve(false),
       onImport: () => this.#bridge?.importCustomization() ?? Promise.resolve(null),
+      createPrivacyPanel: this.#bridge?.getPrivacyState && this.#bridge.configurePrivacy && this.#bridge.clearSiteData
+        ? () => new PrivacyPanel({
+          load: () => this.#bridge!.getPrivacyState!(),
+          save: settings => this.#bridge!.configurePrivacy!(settings),
+          clearSite: origin => this.#bridge!.clearSiteData!(origin),
+          forgetPermission: record => this.#bridge!.clearSitePermission(record.origin, record.permission)
+        }).element
+        : undefined,
       onCheckUpdates: () => this.#checkUpdates(),
       onFetchWallpaper: url => this.#bridge?.fetchWallpaper(url) ?? Promise.reject(new Error("Wallpapers HTTPS exigem o aplicativo desktop.")),
       onImportMoonTheme: () => this.#bridge?.importMoonTheme() ?? Promise.reject(new Error("Moon Themes exigem o aplicativo desktop.")),
@@ -778,15 +794,13 @@ class BrowserShell {
     this.#renderDrawer(); this.#refreshHomeData();
   }
   async #deleteHistoryRange(from: number, to: number): Promise<void> {
-    if (!confirm("Excluir permanentemente o histórico deste intervalo?")) return;
+    if (!await this.#mutateProfileData({ type: "history:delete-range", from, to })) return;
     this.#history = this.#history.filter(item => item.startedAt < from || item.startedAt > to);
-    await this.#mutateProfileData({ type: "history:delete-range", from, to });
     this.#renderDrawer(); this.#refreshHomeData();
   }
   async #clearHistory(): Promise<void> {
-    if (!confirm("Limpar permanentemente todo o histórico deste perfil?")) return;
+    if (!await this.#mutateProfileData({ type: "history:clear" })) return;
     this.#history = [];
-    await this.#mutateProfileData({ type: "history:clear" });
     this.#renderDrawer(); this.#refreshHomeData();
   }
   async #migrateLegacyProfile(): Promise<void> {

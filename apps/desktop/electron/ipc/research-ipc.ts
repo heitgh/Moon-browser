@@ -1,3 +1,4 @@
+import { consentText, type NativeConsent } from "../security/native-consent.js";
 import { dialog } from "electron";
 import { writeFile } from "node:fs/promises";
 import type { IpcRouter } from "./ipc-router.js";
@@ -7,21 +8,44 @@ import type { BrowserApplicationService } from "../../application/browser-applic
 import type { LocalProfileManager } from "../services/local-profile-manager.js";
 import { researchUrl, scopeId, type ResearchSource } from "../../../../packages/research/research.js";
 
-export function registerResearchIpc(router: IpcRouter, windows: WindowManager, browser: ElectronBrowserManager, application: BrowserApplicationService, profiles: LocalProfileManager): void {
+export function registerResearchIpc(router: IpcRouter, windows: WindowManager, browser: ElectronBrowserManager, application: BrowserApplicationService, profiles: LocalProfileManager, consent: NativeConsent): void {
   const windowFor = (event: Electron.IpcMainInvokeEvent): string => {
     const id = windows.idForWebContents(event.sender);
     if (!id || event.senderFrame !== event.sender.mainFrame || windows.isPrivate(id) || windows.isGuest(id)) throw new Error("Pesquisa e memória estão indisponíveis em janelas privadas ou de convidado.");
     return id;
   };
-  router.register("research:capture", async (event, payload: { workspaceId: string; tabIds: string[]; consent: boolean }) => {
-    const windowId = windowFor(event); const scope = scopeId(payload?.workspaceId);
-    if (payload?.consent !== true || !Array.isArray(payload.tabIds) || payload.tabIds.length < 1 || payload.tabIds.length > 5 || !payload.tabIds.every(id => typeof id === "string" && id.length <= 100)) throw new Error("Selecione até cinco abas e autorize a leitura local.");
-    const tabs = await browser.getTabs(windowId);
+  router.register("research:capture", async (event, payload: { workspaceId: string; tabIds: string[] }) => {
+    const windowId = windowFor(event);
+    const scope = scopeId(payload?.workspaceId);
+    if (!Array.isArray(payload.tabIds) || payload.tabIds.length < 1 || payload.tabIds.length > 5 || !payload.tabIds.every(id => typeof id === "string" && id.length <= 100)) {
+      throw new Error("Selecione até cinco abas para revisar a leitura local.");
+    }
+    const reviewed = [...new Set(payload.tabIds)].map(id => {
+      const document = browser.researchDocument(id, windowId);
+      if (document.workspaceId !== scope) throw new Error("Aba fora do workspace selecionado.");
+      return { id, document };
+    });
+    const assertContext = () => router.assertActive(event, "research:capture");
+    const accepted = await consent.confirm(windows.require(windowId), windows.profileId(windowId), {
+      title: "Autorizar leitura local",
+      message: "Permitir que o Moon Research leia o texto visível destas abas?",
+      detail: "Revise os sites. Autorize somente páginas sem dados sensíveis. O texto é analisado localmente.\n\n" +
+        reviewed.map(({document}) => `${consentText(document.title, 100)} — ${new URL(document.url).origin}`).join("\n"),
+      accept: "Autorizar leitura"
+    }, assertContext);
+    if (!accepted) throw new Error("Leitura cancelada.");
+    const checkDocument = ({id, document}: (typeof reviewed)[number]) => {
+      assertContext();
+      const current = browser.researchDocument(id, windowId);
+      if (current.contentsId !== document.contentsId || current.version !== document.version || current.url !== document.url || current.workspaceId !== scope) {
+        throw new Error("O documento mudou após a revisão. Selecione as abas novamente.");
+      }
+    };
     const sources: ResearchSource[] = [];
-    for (const id of new Set(payload.tabIds)) {
-      const tab = tabs.find(t => t.id === id && !t.private && (t.workspaceId ?? "research") === scope);
-      if (!tab) throw new Error("Aba fora da janela ou do workspace selecionado.");
-      sources.push(await browser.readResearchSource(id, windowId));
+    for (const item of reviewed) {
+      checkDocument(item);
+      sources.push(await browser.readResearchSource(item.id, windowId));
+      checkDocument(item);
     }
     return sources;
   });

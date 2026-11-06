@@ -1,3 +1,7 @@
+import { PrivacyService } from "../services/privacy-service.js";
+import { registerPrivacyIpc } from "../ipc/privacy-ipc.js";
+import { DEFAULT_PRIVACY_SETTINGS } from "../../../../packages/ipc/privacy-contract.js";
+import { NativeConsent, consentText } from "../security/native-consent.js";
 import { ResourcePolicyController } from "../services/resource-policy-controller.js";
 import { TabLifecycleService } from "../services/tab-lifecycle-service.js";
 import { registerResourcePolicyIpc } from "../ipc/resource-policy-ipc.js";
@@ -37,11 +41,13 @@ const primaryInstance = app.requestSingleInstanceLock();
 if (!primaryInstance) app.quit();
 
 const windows = new WindowManager();
-const downloads = new ElectronDownloadManager(windows);
+const consent = new NativeConsent();
+const downloads = new ElectronDownloadManager(windows, consent);
 const requestPipeline = new SessionRequestPipeline();
 const permissions = new Map<string, SitePermissionService>();
-const adblock = new ElectronAdblockService(windows, requestPipeline);
-const browser = new ElectronBrowserManager(windows, downloads, adblock, requestPipeline, windowId => permissions.get(windows.profileId(windowId)));
+const privacy = new PrivacyService(requestPipeline);
+const adblock = new ElectronAdblockService(windows, requestPipeline, privacy);
+const browser = new ElectronBrowserManager(windows, downloads, adblock, requestPipeline, windowId => permissions.get(windows.profileId(windowId)), privacy);
 let resourcePolicy: ResourcePolicyController | undefined;
 let accessController: ProfileAccessController | undefined;
 const ipc = new IpcRouter(windows, (event, channel) => {
@@ -133,7 +139,10 @@ async function ensureProfilePermissions(profileId: string): Promise<void> {
   if (permissions.has(profileId)) return;
   if (!profiles) throw new Error("Profile manager is not ready");
   const service = new SitePermissionService();
-  await service.hydrate(await profiles.storage(profileId));
+  const storage = await profiles.storage(profileId);
+  await service.hydrate(storage);
+  try { privacy.hydrate(profileId, await storage.loadPrivacySettings()); }
+  catch { privacy.hydrate(profileId, DEFAULT_PRIVACY_SETTINGS, "Não foi possível carregar as opções salvas. Confira e salve novamente."); }
   permissions.set(profileId, service);
 }
 
@@ -198,6 +207,7 @@ async function createMainWindow(privateMode = false, profileId = defaultProfileI
   window.once("closed", () => {
     if (localProfile.kind === "guest" && !windows.hasProfileWindows(profileId)) {
       permissions.delete(profileId);
+      privacy.forget(profileId);
       void profiles?.releaseGuest(profileId).catch(error => console.error("Guest profile cleanup failed", error));
     }
   });
@@ -235,8 +245,13 @@ app.whenReady().then(async () => {
   ipc.register("updates:install", async event => {
     const id = updateWindow(event);
     if (nativeUpdates.state.phase !== "downloaded") throw new Error("Nenhuma atualização pronta.");
-    const confirmation = await dialog.showMessageBox(windows.require(id), { type: "question", title: "Atualizar Moon e Chromium", message: "Salvou seu trabalho?", detail: "O Moon será fechado para abrir o instalador oficial. O motor Chromium é atualizado junto do aplicativo. Esta pré-release não possui promessa de assinatura digital do instalador.", buttons: ["Cancelar", "Instalar e reiniciar"], defaultId: 0, cancelId: 0 });
-    if (confirmation.response === 1) {
+    const assertContext = () => ipc.assertActive(event, "updates:install");
+    const accepted = await consent.confirm(windows.require(id), windows.profileId(id), {
+      title: "Atualizar Moon e Chromium", message: "Salvou seu trabalho?",
+      detail: "O Moon será fechado para abrir o instalador oficial. O Chromium é atualizado junto do aplicativo.",
+      accept: "Instalar e reiniciar"
+    }, assertContext);
+    if (accepted) {
       // Refuse to install if any persistent SQLite profile cannot be backed up.
       // This is deliberately not described as a copy of Chromium cookie stores.
       await application?.flushAll();
@@ -244,6 +259,7 @@ app.whenReady().then(async () => {
         if (profile.kind !== "persistent") continue;
         await (await profiles!.storage(profile.id)).createUpdateBackup();
       }
+      assertContext();
       nativeUpdates.install();
     }
   });
@@ -279,6 +295,7 @@ app.whenReady().then(async () => {
     return;
   }
   application = new BrowserApplicationService(browser, async windowId => profiles!.openedStorage(windows.profileId(windowId)));
+  accessController.service.onLock(profileId => consent.cancelProfile(profileId));
   resourcePolicy = new ResourcePolicyController(new TabLifecycleService(browser, application), resourceMonitor, windows, profiles, accessController.service);
   registerResourcePolicyIpc(ipc, windows, resourcePolicy);
   installApplicationMenu(() => { void createMainWindow(true, defaultProfileId); }, (window, action) => {
@@ -306,6 +323,23 @@ app.whenReady().then(async () => {
     if (!areas.some(area => area.id === mutation.id) || !areas.some(area => area.id !== mutation.id && !area.archived)) throw new Error("Keep at least one active workspace");
     if (!mutation.tabs || (mutation.tabs === "move" && !areas.some(area => area.id === mutation.targetId && area.id !== mutation.id && !area.archived))) throw new Error("Choose how to handle the tabs and an active destination");
     if (application!.deletingAreas.has(mutation.id)) throw new Error("Workspace deletion in progress");
+    const assertContext = () => ipc.assertActive(event, "workspace:delete");
+    const area = areas.find(item => item.id === mutation.id)!;
+    const accepted = await consent.confirm(windows.require(source), profileId, {
+      title: "Excluir área",
+      message: `Excluir a área “${consentText(area.name, 100)}”?`,
+      detail: mutation.tabs === "move" ? "As abas serão movidas. Cookies e dados dos sites serão mantidos." :
+        "As abas serão fechadas. Salve o que estiver preenchendo antes de continuar.",
+      accept: "Excluir área"
+    }, assertContext);
+    if (!accepted) throw new Error("Exclusão cancelada.");
+    const currentAreas = (await storage.loadProfileData()).workspaces;
+    assertContext();
+    if (application!.deletingAreas.has(mutation.id) || !currentAreas.some(item => item.id === area.id && item.name === area.name) ||
+        !currentAreas.some(item => item.id !== area.id && !item.archived) ||
+        (mutation.tabs === "move" && !currentAreas.some(item => item.id === mutation.targetId && !item.archived))) {
+      throw new Error("A área ou o destino mudou após a revisão.");
+    }
     application!.deletingAreas.add(mutation.id);
     try {
     for (const window of windows.list()) {
@@ -328,8 +362,9 @@ app.whenReady().then(async () => {
     }
     }
   });
-  registerProductIpc(ipc, downloads, adblock, profiles, windows, app.getPath("home"), app.getVersion(), profileId => createMainWindow(false, profileId));
-  if (featureEnabled(DEFAULT_FEATURE_FLAGS, "research")) registerResearchIpc(ipc, windows, browser, application, profiles);
+  registerProductIpc(ipc, downloads, profiles, windows, app.getPath("home"), app.getVersion(), profileId => createMainWindow(false, profileId), consent);
+  registerPrivacyIpc(ipc, windows, profiles, privacy, adblock, consent, browser);
+  if (featureEnabled(DEFAULT_FEATURE_FLAGS, "research")) registerResearchIpc(ipc, windows, browser, application, profiles, consent);
   registerApplicationLifecycle(windows, createMainWindow);
   await createMainWindow();
   if (!offlineTest) void adblock.initialize();
@@ -347,6 +382,7 @@ app.on("before-quit", event => {
   event.preventDefault();
   if (shutdownStarted) return;
   shutdownStarted = true;
+  consent.stop();
   resourcePolicy?.stop();
   browser.prepareForShutdown();
   accessController?.closeGates();

@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { shell, type DownloadItem, type Session } from "electron";
+import { inspectDownloadedFile, mayExecute } from "../security/download-file.js";
+import { consentText, type NativeConsent } from "../security/native-consent.js";
 import type { WindowManager } from "../main/window-manager.js";
 
 export type ManagedDownloadState =
@@ -14,6 +16,8 @@ export interface ManagedDownload {
   readonly url: string;
   readonly filename: string;
   readonly savePath: string;
+  readonly mimeType: string;
+  readonly executableHint: boolean;
   readonly state: ManagedDownloadState;
   readonly receivedBytes: number;
   readonly totalBytes: number;
@@ -30,7 +34,7 @@ export class ElectronDownloadManager {
   readonly #items = new Map<string, ManagedDownload>();
   readonly #itemProfiles = new Map<string, string>();
 
-  constructor(readonly windows: WindowManager) {}
+  constructor(readonly windows: WindowManager, readonly consent: NativeConsent) {}
 
   // Nexus Inc. — private download metadata belongs to its window, never the profile.
   scopeForWindow(windowId: string): string {
@@ -84,11 +88,28 @@ export class ElectronDownloadManager {
     this.#requireNative(id, profileId).cancel();
   }
 
-  async open(id: string, profileId?: string): Promise<void> {
-    const item = this.#require(id, profileId);
-    if (item.state !== "completed") throw new Error("Download is not complete");
+  async open(id: string, windowId: string, assertContext: () => void): Promise<void> {
+    const scope = this.scopeForWindow(windowId);
+    const item = this.#require(id, scope);
+    if (item.state !== "completed" || !item.savePath) throw new Error("O download ainda não está disponível para abrir.");
+    const before = await inspectDownloadedFile(item.savePath, item.mimeType);
+    assertContext();
+    if (item.executableHint || before.executable) {
+      const accepted = await this.consent.confirm(this.windows.require(windowId), this.windows.profileId(windowId), {
+        title: "Abrir arquivo executável",
+        message: "Este arquivo pode executar código no seu computador.",
+        detail: `Arquivo: ${consentText(item.filename, 180)}\nDestino: ${consentText(item.savePath, 500)}\nTipo informado: ${consentText(item.mimeType || "desconhecido", 120)}\nAbra apenas se confiar na origem.`,
+        accept: "Abrir mesmo assim"
+      }, assertContext);
+      if (!accepted) return;
+    }
+    const after = await inspectDownloadedFile(item.savePath, item.mimeType);
+    assertContext();
+    if (this.#require(id, scope) !== item || before.identity !== after.identity || before.executable !== after.executable) {
+      throw new Error("O arquivo mudou. Confira o destino e tente novamente.");
+    }
     const error = await shell.openPath(item.savePath);
-    if (error) throw new Error(error);
+    if (error) throw new Error("O sistema não conseguiu abrir este arquivo.");
   }
 
   showInFolder(id: string, profileId?: string): void {
@@ -115,6 +136,8 @@ export class ElectronDownloadManager {
       url: item.getURL(),
       filename: item.getFilename(),
       savePath: item.getSavePath(),
+      mimeType: item.getMimeType(),
+      executableHint: mayExecute(item.getFilename(), item.getMimeType()),
       state: "in-progress",
       receivedBytes: item.getReceivedBytes(),
       totalBytes,

@@ -1,9 +1,12 @@
-import type { CallbackResponse, HeadersReceivedResponse, OnBeforeRequestListenerDetails, OnHeadersReceivedListenerDetails, Session } from "electron";
+import type { CallbackResponse, HeadersReceivedResponse, OnBeforeRequestListenerDetails, OnBeforeSendHeadersListenerDetails, OnHeadersReceivedListenerDetails, Session } from "electron";
+
+type RequestHeaderResult = { readonly cancel?: boolean; readonly requestHeaders?: Record<string, string> };
 
 export interface SessionRequestPolicy {
   readonly id: string;
-  beforeRequest?(details: OnBeforeRequestListenerDetails): Promise<CallbackResponse | void> | CallbackResponse | void;
-  headersReceived?(details: OnHeadersReceivedListenerDetails): Promise<HeadersReceivedResponse | void> | HeadersReceivedResponse | void;
+  beforeRequest?(details: OnBeforeRequestListenerDetails, session: Session): Promise<CallbackResponse | void> | CallbackResponse | void;
+  beforeSendHeaders?(details: OnBeforeSendHeadersListenerDetails, session: Session): RequestHeaderResult | void;
+  headersReceived?(details: OnHeadersReceivedListenerDetails, session: Session): Promise<HeadersReceivedResponse | void> | HeadersReceivedResponse | void;
 }
 
 export class SessionRequestPipeline {
@@ -22,18 +25,34 @@ export class SessionRequestPipeline {
     if (this.#sessions.has(session)) return;
     this.#sessions.add(session);
     session.webRequest.onBeforeRequest({ urls: ["<all_urls>"] }, (details, callback) => {
-      void this.#runBeforeRequest(details).then(callback, error => { console.error("Moon request policy failed", error); callback({}); });
+      void this.#runBeforeRequest(details, session).then(callback, error => { console.error("Moon request policy failed", error); callback({}); });
+    });
+    session.webRequest.onBeforeSendHeaders({ urls: ["<all_urls>"] }, (details, callback) => {
+      let result: RequestHeaderResult = {};
+      for (const policy of this.#policies.values()) {
+        if (!policy.beforeSendHeaders) continue;
+        try {
+          const next = policy.beforeSendHeaders({ ...details, requestHeaders: result.requestHeaders ?? details.requestHeaders }, session);
+          if (next) result = { ...result, ...next };
+          if (result.cancel) break;
+        } catch (error) {
+          console.error("Moon request header policy failed", error);
+          result = { cancel: true };
+          break;
+        }
+      }
+      callback(result);
     });
     session.webRequest.onHeadersReceived({ urls: ["<all_urls>"] }, (details, callback) => {
-      void this.#runHeadersReceived(details).then(callback, error => { console.error("Moon response policy failed", error); callback({}); });
+      void this.#runHeadersReceived(details, session).then(callback, error => { console.error("Moon response policy failed", error); callback({}); });
     });
   }
 
-  async #runBeforeRequest(details: OnBeforeRequestListenerDetails): Promise<CallbackResponse> {
+  async #runBeforeRequest(details: OnBeforeRequestListenerDetails, session: Session): Promise<CallbackResponse> {
     let result: CallbackResponse = {};
     for (const policy of this.#policies.values()) {
       if (!policy.beforeRequest) continue;
-      const next = await this.#runPolicy(policy.id, () => policy.beforeRequest!(details));
+      const next = await this.#runPolicy(policy.id, () => policy.beforeRequest!(details, session));
       if (!next) continue;
       result = { ...result, ...next };
       if (result.cancel) break;
@@ -58,12 +77,12 @@ export class SessionRequestPipeline {
     }
   }
 
-  async #runHeadersReceived(details: OnHeadersReceivedListenerDetails): Promise<HeadersReceivedResponse> {
+  async #runHeadersReceived(details: OnHeadersReceivedListenerDetails, session: Session): Promise<HeadersReceivedResponse> {
     let result: HeadersReceivedResponse = {};
     let current = details;
     for (const policy of this.#policies.values()) {
       if (!policy.headersReceived) continue;
-      const next = await this.#runPolicy(policy.id, () => policy.headersReceived!(current));
+      const next = await this.#runPolicy(policy.id, () => policy.headersReceived!(current, session));
       if (!next) continue;
       result = { ...result, ...next, responseHeaders: next.responseHeaders ?? result.responseHeaders };
       if (result.cancel) break;

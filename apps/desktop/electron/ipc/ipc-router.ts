@@ -11,9 +11,7 @@ export class IpcRouter {
     if (this.#channels.has(channel)) throw new Error(`IPC channel already registered: ${channel}`);
     ipcMain.handle(channel, (event, ...args: unknown[]) => {
       const task = Promise.resolve().then(() => {
-        if (this.#disposed) throw new Error("Moon is shutting down");
-        assertShellCaller(event, this.windows, app.getAppPath());
-        this.authorize(event, channel);
+        this.assertActive(event, channel);
         if (args.length > 1) throw new TypeError("IPC accepts one payload");
         assertBoundedPayload(args[0]);
         return Promise.resolve(handler(event, args[0] as T)).then(result => { this.authorize(event, channel); return result; });
@@ -23,6 +21,11 @@ export class IpcRouter {
       return task;
     });
     this.#channels.add(channel);
+  }
+  assertActive(event: IpcMainInvokeEvent, channel: string): void {
+    if (this.#disposed) throw new Error("Moon is shutting down");
+    assertShellCaller(event, this.windows, app.getAppPath());
+    this.authorize(event, channel);
   }
   unregister(channel: string): void { ipcMain.removeHandler(channel); this.#channels.delete(channel); }
   dispose(): void { this.#disposed = true; for (const channel of this.#channels) ipcMain.removeHandler(channel); this.#channels.clear(); }

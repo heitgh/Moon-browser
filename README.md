@@ -133,6 +133,8 @@ Para a matriz detalhada de implementação e validação, consulte [`docs/update
 
 ## Privacidade e controle
 
+Na versão em desenvolvimento, abra **Configurações → Privacidade e dados** para revisar rastreadores, cookies HTTP, exceções e permissões por site. Leia o [guia da central de privacidade](docs/review/stage5-privacy.md) para entender o escopo e a limpeza.
+
 O Moon tenta tornar explícito quando uma ferramenta lê ou guarda informação.
 
 - Research trabalha somente com abas selecionadas no fluxo atual.

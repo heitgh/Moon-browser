@@ -3,6 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const openPath = vi.fn(async () => "");
 const showItemInFolder = vi.fn();
+const { inspect, confirm } = vi.hoisted(() => ({
+  inspect: vi.fn(async (_path: string, _type: string) => ({ executable: false, identity: "same-file" })),
+  confirm: vi.fn(async () => true)
+}));
+vi.mock("../../apps/desktop/electron/security/download-file.js", async original => ({
+  ...(await original<typeof import("../../apps/desktop/electron/security/download-file.js")>()),
+  inspectDownloadedFile: inspect
+}));
+const consent = { confirm } as never;
+const normal = { list: () => [], profileId: () => "default", isPrivate: () => false, require: () => ({}) } as never;
 
 vi.mock("electron", () => ({
   shell: { openPath, showItemInFolder }
@@ -18,6 +28,7 @@ class FakeDownload extends EventEmitter {
 
   getURL(): string { return "https://example.com/file.zip"; }
   getFilename(): string { return "file.zip"; }
+  getMimeType(): string { return "application/zip"; }
   getSavePath(): string { return "/tmp/file.zip"; }
   getTotalBytes(): number { return this.totalBytes; }
   getReceivedBytes(): number { return this.receivedBytes; }
@@ -39,7 +50,7 @@ describe("ElectronDownloadManager", () => {
     const { ElectronDownloadManager } = await import(
       "../../apps/desktop/electron/services/download-manager.js"
     );
-    const manager = new ElectronDownloadManager({ list: () => [] } as never);
+    const manager = new ElectronDownloadManager(normal, consent);
     const session = new EventEmitter();
     const download = new FakeDownload();
     manager.attach(session as never);
@@ -69,7 +80,7 @@ describe("ElectronDownloadManager", () => {
     download.receivedBytes = 1_000;
     download.emit("done", {}, "completed");
     expect(manager.list()[0]).toMatchObject({ state: "completed", percentage: 100 });
-    await manager.open(id);
+    await manager.open(id, "window", () => undefined);
     manager.showInFolder(id);
     expect(openPath).toHaveBeenCalledWith("/tmp/file.zip");
     expect(showItemInFolder).toHaveBeenCalledWith("/tmp/file.zip");
@@ -79,7 +90,7 @@ describe("ElectronDownloadManager", () => {
     const { ElectronDownloadManager } = await import(
       "../../apps/desktop/electron/services/download-manager.js"
     );
-    const manager = new ElectronDownloadManager({ list: () => [] } as never);
+    const manager = new ElectronDownloadManager(normal, consent);
     const session = new EventEmitter();
     const download = new FakeDownload();
     manager.attach(session as never);
@@ -95,7 +106,7 @@ describe("ElectronDownloadManager", () => {
 
   it("never exposes or controls a download from another profile", async () => {
     const { ElectronDownloadManager } = await import("../../apps/desktop/electron/services/download-manager.js");
-    const manager = new ElectronDownloadManager({ list: () => [] } as never);
+    const manager = new ElectronDownloadManager(normal, consent);
     const sessionA = new EventEmitter(); const sessionB = new EventEmitter(); const first = new FakeDownload(); const second = new FakeDownload();
     manager.attach(sessionA as never, "profile-a"); manager.attach(sessionB as never, "profile-b");
     sessionA.emit("will-download", {}, first); sessionB.emit("will-download", {}, second);
@@ -113,7 +124,7 @@ it("isolates private downloads, discards metadata on close and ignores late nati
   const normal = Object.assign(new EventEmitter(), { webContents: { id: 1, isDestroyed: () => false, send: normalEvents } });
   const privateWindow = Object.assign(new EventEmitter(), { webContents: { id: 2, isDestroyed: () => false, send: privateEvents } });
   const windows = { list: () => [normal, privateWindow], profileId: () => "profile-a", isPrivate: (id: string) => id === "private", require: () => privateWindow, idForWebContents: (wc: { id: number }) => wc.id === 1 ? "normal" : "private" };
-  const manager = new ElectronDownloadManager(windows as never);
+  const manager = new ElectronDownloadManager(windows as never, consent);
   const session = new EventEmitter(); const download = new FakeDownload();
   const scope = manager.scopeForWindow("private");
   manager.attach(session as never, scope, "private");
@@ -123,7 +134,7 @@ it("isolates private downloads, discards metadata on close and ignores late nati
   expect(normalEvents).toHaveBeenLastCalledWith("download:updated", []);
   expect(privateEvents.mock.lastCall![1]).toHaveLength(1);
   expect(() => manager.pause(id, "profile-a")).toThrow();
-  await expect(manager.open(id, "profile-a")).rejects.toThrow();
+  await expect(manager.open(id, "profile-a", () => undefined)).rejects.toThrow();
   expect(() => manager.showInFolder(id, "profile-a")).toThrow();
   manager.clearFinished("profile-a"); expect(manager.list(scope)).toHaveLength(1);
   privateWindow.emit("closed"); expect(download.cancelled).toBe(true);
@@ -131,4 +142,34 @@ it("isolates private downloads, discards metadata on close and ignores late nati
   expect(manager.list(scope)).toEqual([]);
   const preventDefault = vi.fn(); session.emit("will-download", { preventDefault }, new FakeDownload());
   expect(preventDefault).toHaveBeenCalled(); expect(manager.list(scope)).toEqual([]);
+});
+
+it("requires executable review and refuses a replaced file or a locked profile", async () => {
+  const { ElectronDownloadManager } = await import("../../apps/desktop/electron/services/download-manager.js");
+  const manager = new ElectronDownloadManager(normal, consent);
+  const session = new EventEmitter();
+  const download = new FakeDownload();
+  download.getFilename = () => "unsafe.EXE";
+  manager.attach(session as never);
+  session.emit("will-download", {}, download);
+  download.emit("done", {}, "completed");
+  const id = manager.list()[0]!.id;
+  openPath.mockClear();
+  confirm.mockResolvedValueOnce(false);
+  await manager.open(id, "window", () => undefined);
+  expect(confirm).toHaveBeenCalled();
+  expect(openPath).not.toHaveBeenCalled();
+
+  inspect.mockResolvedValueOnce({executable: true, identity: "original"});
+  inspect.mockResolvedValueOnce({executable: true, identity: "replacement"});
+  await expect(manager.open(id, "window", () => undefined)).rejects.toThrow("mudou");
+  expect(openPath).not.toHaveBeenCalled();
+
+  let allowed = true;
+  confirm.mockImplementationOnce(async () => { allowed = false; return true; });
+  await expect(manager.open(id, "window", () => { if (!allowed) throw new Error("locked"); })).rejects.toThrow("locked");
+  expect(openPath).not.toHaveBeenCalled();
+
+  await manager.open(id, "window", () => undefined);
+  expect(openPath).toHaveBeenCalledOnce();
 });

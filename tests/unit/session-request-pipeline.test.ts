@@ -5,7 +5,7 @@ describe("SessionRequestPipeline", () => {
   it("installs one listener per stage and composes policies in order", async () => {
     let before: ((details: Electron.OnBeforeRequestListenerDetails, callback: (response: Electron.CallbackResponse) => void) => void) | undefined;
     let headers: ((details: Electron.OnHeadersReceivedListenerDetails, callback: (response: Electron.HeadersReceivedResponse) => void) => void) | undefined;
-    const webRequest = { onBeforeRequest: vi.fn((_filter, listener) => { before = listener; }), onHeadersReceived: vi.fn((_filter, listener) => { headers = listener; }) };
+    const webRequest = { onBeforeRequest: vi.fn((_filter, listener) => { before = listener; }), onBeforeSendHeaders: vi.fn(), onHeadersReceived: vi.fn((_filter, listener) => { headers = listener; }) };
     const session = { webRequest } as never;
     const pipeline = new SessionRequestPipeline();
     const order: string[] = [];
@@ -21,7 +21,7 @@ describe("SessionRequestPipeline", () => {
 
   it("fails open when a policy exceeds its deadline", async () => {
     let before: ((details: Electron.OnBeforeRequestListenerDetails, callback: (response: Electron.CallbackResponse) => void) => void) | undefined;
-    const session = { webRequest: { onBeforeRequest: (_filter: unknown, listener: typeof before) => { before = listener; }, onHeadersReceived: vi.fn() } } as never;
+    const session = { webRequest: { onBeforeRequest: (_filter: unknown, listener: typeof before) => { before = listener; }, onBeforeSendHeaders: vi.fn(), onHeadersReceived: vi.fn() } } as never;
     const pipeline = new SessionRequestPipeline(5);
     pipeline.register({ id: "stalled", beforeRequest: () => new Promise(() => undefined) });
     pipeline.attach(session);
@@ -33,7 +33,7 @@ describe("SessionRequestPipeline", () => {
 
   it("fails open when a policy throws", async () => {
     let before: ((details: Electron.OnBeforeRequestListenerDetails, callback: (response: Electron.CallbackResponse) => void) => void) | undefined;
-    const session = { webRequest: { onBeforeRequest: (_filter: unknown, listener: typeof before) => { before = listener; }, onHeadersReceived: vi.fn() } } as never;
+    const session = { webRequest: { onBeforeRequest: (_filter: unknown, listener: typeof before) => { before = listener; }, onBeforeSendHeaders: vi.fn(), onHeadersReceived: vi.fn() } } as never;
     const pipeline = new SessionRequestPipeline(); pipeline.register({ id: "broken", beforeRequest: () => { throw new Error("broken policy"); } }); pipeline.attach(session);
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     expect(await new Promise(resolve => before!({} as never, resolve))).toEqual({}); spy.mockRestore();

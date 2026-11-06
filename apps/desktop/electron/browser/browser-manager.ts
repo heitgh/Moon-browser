@@ -1,3 +1,4 @@
+import type { PrivacyService } from "../services/privacy-service.js";
 import type { PageActivity } from "../../../../packages/ipc/resource-policy-contract.js";
 import { permissionOrigin, permissionRequestOrigin } from "../security/permission-origin.js";
 import { EXTRACT_PAGE_SCRIPT } from "../../../../packages/research/extract-page.js";
@@ -51,6 +52,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
   readonly #lifecycle = new Map<string, Promise<void>>();
   readonly #closingTabs = new Map<string, Promise<void>>();
   readonly #closingWindows = new Map<string, Promise<void>>();
+  readonly #documentVersions = new WeakMap<WebContents, number>();
   readonly #observedGet = new Set<number>();
   readonly #unsafeReload = new Set<number>();
   readonly #surfaces = new Map<string, ElectronBrowserSurface>();
@@ -88,7 +90,8 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     readonly downloads?: ElectronDownloadManager,
     readonly adblock?: ElectronAdblockService,
     readonly requestPipeline?: SessionRequestPipeline,
-    readonly permissionsForWindow?: (windowId: string) => SitePermissionService | undefined
+    readonly permissionsForWindow?: (windowId: string) => SitePermissionService | undefined,
+    readonly privacy?: PrivacyService
   ) {
     requestPipeline?.register({id: "suspension-navigation-safety", beforeRequest: details => {
       if (details.resourceType !== "mainFrame" || typeof details.webContentsId !== "number") return;
@@ -102,18 +105,31 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     }});
   }
 
-  async readResearchSource(tabId: string, windowId: string): Promise<ResearchSource> {
+  researchDocument(tabId: string, windowId: string) {
     const tab = this.#tabs.get(tabId);
-    if (!tab || this.#tabWindows.get(tabId) !== windowId || tab.private || this.windows.isPrivate(windowId)) throw new Error("Aba indisponível para pesquisa.");
+    if (!tab || this.#tabWindows.get(tabId) !== windowId || tab.private || this.windows.isPrivate(windowId) || this.windows.isGuest(windowId)) {
+      throw new Error("Aba indisponível para pesquisa.");
+    }
     const contents = this.#surfaces.get(tabId)?.view.webContents;
-    if (!contents || contents.isDestroyed()) throw new Error("Abra uma página antes de pesquisar.");
-    const url = researchUrl(contents.getURL());
+    if (!contents || contents.isDestroyed() || contents.isLoadingMainFrame()) throw new Error("Aguarde a página terminar de carregar.");
+    return {
+      url: researchUrl(contents.getURL()), title: contents.getTitle(), workspaceId: tab.workspaceId ?? "research",
+      contentsId: contents.id, version: this.#documentVersions.get(contents) ?? 0
+    };
+  }
+
+  async readResearchSource(tabId: string, windowId: string): Promise<ResearchSource> {
+    const reviewed = this.researchDocument(tabId, windowId);
+    const contents = this.#requireSurface(tabId).view.webContents;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const read = contents.executeJavaScriptInIsolatedWorld(1001, [{ code: EXTRACT_PAGE_SCRIPT }]);
     try {
       const data: unknown = await Promise.race([read, new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error("A leitura excedeu 5 segundos. Tente novamente.")), 5000); })]);
-      if (contents.isDestroyed() || contents.getURL() !== url) throw new Error("A página mudou durante a leitura. Selecione novamente.");
-      return parseSources([{ ...(data as object), tabId, url, title: contents.getTitle() }])[0]!;
+      const current = this.researchDocument(tabId, windowId);
+      if (current.contentsId !== reviewed.contentsId || current.version !== reviewed.version || current.url !== reviewed.url || current.workspaceId !== reviewed.workspaceId) {
+        throw new Error("A página mudou durante a leitura. Selecione novamente.");
+      }
+      return parseSources([{ ...(data as object), tabId, url: reviewed.url, title: current.title }])[0]!;
     } finally { if (timeout) clearTimeout(timeout); }
   }
 
@@ -170,6 +186,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       }
     });
     this.downloads?.attach(surface.view.webContents.session, this.downloads.scopeForWindow(windowId), this.windows.isPrivate(windowId) ? windowId : undefined);
+    this.privacy?.registerSession(surface.view.webContents.session, profileId, !options.private && !guest);
     this.requestPipeline?.attach(surface.view.webContents.session);
     configureCompatibilityWebContents(surface.view.webContents);
     this.#installPermissionHandler(surface.view.webContents.session);
@@ -606,6 +623,9 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     contents.on("will-navigate", event => {
       const protocol = new URL(event.url).protocol;
       if (protocol !== "http:" && protocol !== "https:") event.preventDefault();
+    });
+    contents.on("did-start-navigation", details => {
+      if (details.isMainFrame) this.#documentVersions.set(contents, (this.#documentVersions.get(contents) ?? 0) + 1);
     });
     contents.on("did-start-loading", () => {
       this.#replaceTab(id, { loading: true });

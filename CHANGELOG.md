@@ -1,11 +1,16 @@
 # Changelog
 
-## Em revisão — etapa 3: medidor de recursos (não publicada)
+## Em revisão — etapa 5: privacidade (não publicada)
+
+- Central de privacidade por perfil, exceções por origem, filtro de cookies HTTP, permissões e limpeza de dados do site.
+- Revisão nativa para executáveis baixados, leitura do Research e exclusões sensíveis.
+
+## Integradas — etapas 3 e 4: medidor e economia de recursos (não publicadas)
 
 - Menu Recursos, coleta nativa de RAM/CPU, contagem de processos únicos e associação de abas a PIDs compartilhadas.
 - Política de economia por perfil com suspensão opt-in de abas estáticas autorizadas, exceções, indicador visual e retomada com histórico e rolagem em memória.
 - Amostras iniciais/indisponíveis e totais parciais indicados; consulta limitada ao painel aberto, sem telemetria.
-- Nenhuma suspensão de abas ou limitação rígida de recursos nesta etapa.
+- O alvo de RAM é indicativo. A suspensão recarrega páginas estáticas verificadas ao retomar.
 
 ## Integrada — etapa 2: proteção de acesso (não publicada)
 

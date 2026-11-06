@@ -1,3 +1,5 @@
+import type { PrivacyService } from "./privacy-service.js";
+import type { Session } from "electron";
 import { app } from "electron";
 import { ElectronBlocker } from "@ghostery/adblocker-electron";
 import fetch from "cross-fetch";
@@ -17,16 +19,15 @@ export interface AdblockStatus {
 
 export class ElectronAdblockService {
   #blocker: ElectronBlocker | undefined;
-  #enabled = true;
-  #blockedCount = 0;
+  readonly #blockedCounts = new Map<string, number>();
   #phase: AdblockPhase = "loading";
   #error: string | undefined;
 
-  constructor(readonly windows: WindowManager, pipeline: SessionRequestPipeline) {
+  constructor(readonly windows: WindowManager, pipeline: SessionRequestPipeline, readonly privacy: PrivacyService) {
     pipeline.register({
       id: "adblock",
-      beforeRequest: details => this.#beforeRequest(details),
-      headersReceived: details => this.#headersReceived(details)
+      beforeRequest: (details, session) => this.#beforeRequest(details, session),
+      headersReceived: (details, session) => this.#headersReceived(details, session)
     });
   }
 
@@ -38,11 +39,7 @@ export class ElectronAdblockService {
         read: readFile,
         write: writeFile
       });
-      this.#blocker.on("request-blocked", () => {
-        this.#blockedCount += 1;
-        this.#broadcast();
-      });
-      this.#phase = this.#enabled ? "active" : "disabled";
+      this.#phase = "active";
     } catch (error) {
       this.#phase = "failed";
       this.#error = error instanceof Error ? error.message : String(error);
@@ -51,38 +48,40 @@ export class ElectronAdblockService {
     this.#broadcast();
   }
 
-  setEnabled(enabled: boolean): void {
-    this.#enabled = enabled;
-    if (this.#blocker) {
-      this.#phase = enabled ? "active" : "disabled";
-    }
-    this.#broadcast();
-  }
+  refresh(): void { this.#broadcast(); }
 
-  status(): AdblockStatus {
+  status(profileId: string): AdblockStatus {
+    const enabled = this.privacy.settings(profileId).trackerProtection;
     return {
-      phase: this.#phase,
-      enabled: this.#enabled,
-      blockedCount: this.#blockedCount,
+      phase: enabled ? this.#phase : "disabled",
+      enabled,
+      blockedCount: this.#blockedCounts.get(profileId) ?? 0,
       ...(this.#error ? { error: this.#error } : {})
     };
   }
 
-  #beforeRequest(details: Electron.OnBeforeRequestListenerDetails): Promise<Electron.CallbackResponse> | undefined {
-    const blocker = this.#blocker; if (!this.#enabled || !blocker || shouldBypassContentBlocking(details)) return undefined;
-    return new Promise(resolve => blocker.onBeforeRequest(details, resolve));
+  #beforeRequest(details: Electron.OnBeforeRequestListenerDetails, session: Session): Promise<Electron.CallbackResponse> | undefined {
+    const blocker = this.#blocker; if (!blocker || !this.privacy.blocksTrackers(session, details) || shouldBypassContentBlocking(details)) return undefined;
+    return new Promise(resolve => blocker.onBeforeRequest(details, result => {
+      const owner = this.privacy.persistentOwner(session);
+      if (result.cancel && owner) {
+        this.#blockedCounts.set(owner, (this.#blockedCounts.get(owner) ?? 0) + 1);
+        this.#broadcast();
+      }
+      resolve(result);
+    }));
   }
 
-  #headersReceived(details: Electron.OnHeadersReceivedListenerDetails): Promise<Electron.HeadersReceivedResponse> | undefined {
-    const blocker = this.#blocker; if (!this.#enabled || !blocker) return undefined;
+  #headersReceived(details: Electron.OnHeadersReceivedListenerDetails, session: Session): Promise<Electron.HeadersReceivedResponse> | undefined {
+    const blocker = this.#blocker; if (!blocker || !this.privacy.blocksTrackers(session, details)) return undefined;
     return new Promise(resolve => blocker.onHeadersReceived(details, resolve));
   }
 
   #broadcast(): void {
-    const status = this.status();
     for (const window of this.windows.list()) {
       if (!window.webContents.isDestroyed()) {
-        window.webContents.send("adblock:status", status);
+        const id = this.windows.idForWebContents(window.webContents);
+        if (id) window.webContents.send("adblock:status", this.status(this.windows.profileId(id)));
       }
     }
   }

@@ -55,16 +55,16 @@ export class ResearchPanel {
     const chosen = new Set<string>();
     eligible.forEach(tab => { const label = element("label"); const check = element("input"); check.type = "checkbox"; check.value = tab.id; check.checked = tab.active; if (check.checked) chosen.add(tab.id); check.addEventListener("change", () => { if (check.checked) chosen.add(tab.id); else chosen.delete(tab.id); }); label.append(check, element("span", "", `${tab.title || tab.url} — ${tab.url}`)); selection.append(label); });
     if (!eligible.length) selection.append(element("p", "", "Abra uma página web para começar. PDFs e páginas sensíveis ainda não são aceitos."));
-    const consentLabel = element("label", "moon-research-consent"); const consent = element("input"); consent.type = "checkbox"; consentLabel.append(consent, element("span", "", "Autorizo a leitura local destas abas e confirmei que não contêm dados sensíveis."));
+    const consentInfo = element("p", "", "Revise as abas no diálogo do Moon antes da leitura. Escolha páginas sem dados sensíveis.");
     const mode = element("select", "moon-select"); mode.setAttribute("aria-label", "Formato da pesquisa");
     const modes: [ResearchMode, string][] = [["short", "Trechos principais"], ["detailed", "Leitura detalhada"], ["question", "Buscar trechos por pergunta"], ["flashcards", "Cartões de revisão"], ["checklist", "Roteiro de estudo"], ["compare", "Comparar fontes"]];
     modes.forEach(([value, label]) => { const option = element("option", "", label); option.value = value; mode.append(option); }); mode.value = this.#mode; mode.addEventListener("change", () => { this.#mode = mode.value as ResearchMode; });
     const query = element("input", "moon-settings-input"); query.maxLength = 1000; query.placeholder = "Pergunta ou termos para localizar nas fontes"; query.setAttribute("aria-label", "Pergunta sobre as fontes"); query.value = this.#query; query.addEventListener("input", () => { this.#query = query.value; });
     const read = this.#control("Ler fontes selecionadas", () => {
-      if (!consent.checked || !chosen.size || chosen.size > 5) { this.#message("Selecione de uma a cinco abas e autorize a leitura local."); return; }
+      if (!chosen.size || chosen.size > 5) { this.#message("Selecione de uma a cinco abas para revisar a leitura."); return; }
       const scope = this.#scope; const generation = ++this.#generation; const requestedMode = this.#mode; const requestedQuery = this.#query;
       void this.#run(async () => {
-        const sources = await this.options.bridge?.captureResearch?.(scope, [...chosen], true);
+        const sources = await this.options.bridge?.captureResearch?.(scope, [...chosen]);
         if (generation !== this.#generation || scope !== this.#scope) return;
         if (!sources) throw new Error("A leitura exige o aplicativo desktop atualizado.");
         this.#result = localResearch(sources, requestedMode, requestedQuery); this.#message("Leitura concluída. As fontes estão apenas neste painel até você salvar."); this.#draw();
@@ -72,8 +72,8 @@ export class ResearchPanel {
     }); read.disabled = this.#busy;
     const cancel = this.#control("Cancelar leitura", () => { this.#generation += 1; this.#busy = false; this.#message("Leitura cancelada; nenhum resultado será guardado."); this.#draw(); });
     if (this.#result) {
-      const controls = element("details"); controls.append(element("summary", "", "Alterar fontes e formato"), selection, consentLabel, mode, query, read, cancel); this.element.append(controls);
-    } else this.element.append(selection, consentLabel, mode, query, read, cancel);
+      const controls = element("details"); controls.append(element("summary", "", "Alterar fontes e formato"), selection, consentInfo, mode, query, read, cancel); this.element.append(controls);
+    } else this.element.append(selection, consentInfo, mode, query, read, cancel);
     if (!this.#result) return;
     const output = element("textarea", "moon-research-output"); output.rows = 16; output.readOnly = true; output.value = this.#result.markdown; output.setAttribute("aria-label", "Resultado com fontes em Markdown");
     const actions = element("div", "moon-research-actions");

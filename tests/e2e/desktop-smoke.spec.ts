@@ -286,7 +286,7 @@ test("exports and imports customization through the real desktop bridge", async 
     await window.getByLabel("Configurações", { exact: true }).click();
     await window.getByLabel("Aparência", { exact: true }).click();
     await selectValue(window, "Modo", "light");
-    await window.getByLabel("Workspaces e dados", { exact: true }).click();
+    await window.getByLabel("Privacidade e dados", { exact: true }).click();
     await window.getByLabel("Exportar tudo").click();
     await expect.poll(async () => (await readFile(exportPath, "utf8")).includes('"moon-customization"')).toBe(true);
 
@@ -300,7 +300,7 @@ test("exports and imports customization through the real desktop bridge", async 
       });
       return true;
     }, exportPath);
-    await window.getByLabel("Workspaces e dados", { exact: true }).click();
+    await window.getByLabel("Privacidade e dados", { exact: true }).click();
     window.once("dialog", dialog => { void dialog.accept().catch(() => undefined); });
     await window.getByLabel("Importar personalização").click();
     await expect.poll(() => window.evaluate(() => document.documentElement.dataset.moonTheme)).toBe("light");
@@ -474,9 +474,10 @@ test("research reads real sources, saves notes and opt-in memory, and recovers a
     await expect.poll(() => page.evaluate(async target => (await (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser.getTabs()).some(t => t.url === target && t.title === "Estudo de energia"), url)).toBe(true);
     await page.getByLabel("Moon Research", { exact: true }).click();
     await expect(page.getByText("Estudo de energia —", { exact: false })).toBeVisible();
+    await application.evaluate(({dialog}) => {dialog.showMessageBox = async () => ({response: 0, checkboxChecked: false});});
     await page.getByLabel("Ler fontes selecionadas", { exact: true }).click();
-    await expect(page.getByRole("status")).toContainText("autorize");
-    await page.getByLabel("Autorizo a leitura local destas abas e confirmei que não contêm dados sensíveis.").check();
+    await expect(page.getByRole("status")).toContainText("Leitura cancelada");
+    await application.evaluate(({dialog}) => {dialog.showMessageBox = async () => ({response: 1, checkboxChecked: false});});
     await page.getByLabel("Ler fontes selecionadas", { exact: true }).click();
     const result = page.getByLabel("Resultado com fontes em Markdown");
     await expect(result).toHaveValue(/fotossíntese/);
@@ -505,7 +506,7 @@ test("research reads real sources, saves notes and opt-in memory, and recovers a
     const crossWorkspace = await page.evaluate(async () => {
       const bridge = (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser;
       const tabs = await bridge.getTabs();
-      try { await bridge.captureResearch!("other", [tabs[0]!.id], true); return false; } catch { return true; }
+      try { await bridge.captureResearch!("other", [tabs[0]!.id]); return false; } catch { return true; }
     }); expect(crossWorkspace).toBe(true);
     const child = application.process(); const exited = new Promise<void>(resolve => child.once("exit", () => resolve())); await application.evaluate(({ app }) => app.exit(1)).catch(() => undefined); await exited;
     application = await launch(); page = await shellWindow(application);
@@ -597,6 +598,7 @@ test("manages workspace metadata and deletes populated areas without orphan tabs
   try {
     const page = await shellWindow(application); await dismissOnboarding(page);
     await application.evaluate(async ({ session }) => { await session.fromPartition("persist:profile:default:workspace:area-a").cookies.set({ url: "https://example.com", name: "workspace-cookie", value: "preserved", expirationDate: Math.floor(Date.now() / 1000) + 86400 }); await session.fromPartition("persist:profile:default:workspace:area-a").cookies.flushStore(); });
+    await application.evaluate(({dialog}) => {dialog.showMessageBox = async () => ({response: 1, checkboxChecked: false});});
     await page.evaluate(async () => {
       const bridge = (window as unknown as { moonBrowser: {
         mutateProfileData(value: unknown): Promise<void>; createTab(url: string, area: string): Promise<unknown>;
@@ -635,7 +637,7 @@ test("shows checked release notes, defers updates and opens only the checked rel
     const notice = page.getByLabel("Atualização disponível", { exact: true }); await expect(notice).toContainText("v99.0.0"); await expect(notice).toContainText("Novidades de teste");
     // Dismiss the browsing-surface notice before opening the modal settings overlay.
     await page.getByLabel("Adiar atualização", { exact: true }).click(); await expect(notice).toHaveCount(0);
-    await page.getByLabel("Configurações", { exact: true }).click(); await page.getByLabel("Workspaces e dados", { exact: true }).click();
+    await page.getByLabel("Configurações", { exact: true }).click(); await page.getByLabel("Privacidade e dados", { exact: true }).click();
     await page.getByLabel("Verificar atualizações", { exact: true }).click(); await page.getByLabel("Baixar atualização", { exact: true }).click();
     expect(await application.evaluate(() => (globalThis as unknown as { checkedUpdateUrl: string }).checkedUpdateUrl)).toBe("https://github.com/heitgh/Moon-browser/releases/tag/v99.0.0");
   } finally { await quitDesktop(application); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
