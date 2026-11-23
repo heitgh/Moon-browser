@@ -1,10 +1,10 @@
 # Security architecture
 
-Renderer defaults are `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`, and `webviewTag: false`. Preload exposes a frozen bridge with an explicit channel allowlist.
+Every shell window, web tab, authentication popup, access window and recovery window now uses a shared policy with `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`, `webSecurity: true`, `allowRunningInsecureContent: false` and `webviewTag: false`. Webview attachment is denied. Preload exposes a frozen bridge with an explicit channel allowlist. The release build sets five Electron fuses; CI reads the resulting executable and fails if any required fuse differs.
 
 Controles ativos hoje: validação de protocolos HTTP/HTTPS, posse de aba por janela no IPC, limites básicos de payload, partições por workspace, sessões privadas efêmeras, prompt explícito de permissões, CSP local e schema de backup. Page content is always untrusted and never receives the Moon preload.
 
-Capability permissions, permission persistence/revocation, extension/plugin sandboxes, composed network policy, signed updates and AI isolation remain design contracts. They must not be described as operational until their adapters, UI, threat tests and revocation paths are connected.
+Capability permissions and permission revocation have a UI and main-process adapter, but require device testing. Extension/plugin sandboxes, signed production releases and AI isolation remain design contracts. Windows Authenticode and Linux signatures now have release gates, yet no production key or cross-version update test is available. They must not be described as released controls.
 
 Destructive, external, or high-risk actions require explicit user confirmation.
 

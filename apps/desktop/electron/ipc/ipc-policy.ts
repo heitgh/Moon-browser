@@ -1,8 +1,9 @@
 // Nexus Inc. — all privileged commands originate in the registered shell main frame.
-import type { IpcMainEvent, IpcMainInvokeEvent } from "electron";
+import type { IpcMainEvent, IpcMainInvokeEvent, WebContents } from "electron";
 import { pathToFileURL } from "node:url";
 import { join } from "node:path";
 import type { WindowManager } from "../main/window-manager.js";
+import { isWebNavigation } from "../security/web-preferences.js";
 
 type Caller = Pick<IpcMainInvokeEvent | IpcMainEvent, "sender" | "senderFrame">;
 export function assertShellCaller(event: Caller, windows: WindowManager, appRoot: string): void {
@@ -16,6 +17,28 @@ export function assertShellCaller(event: Caller, windows: WindowManager, appRoot
   const expected = pathToFileURL(join(appRoot, "index.html")).href;
   // Exact document identity: no sibling files, remote origins, query strings or inherited origins.
   if (frame.url !== expected || sender.getURL() !== expected) throw new Error("IPC origin is not the Moon shell");
+}
+
+// The wheel preload also runs in ordinary tabs. It may only request shell zoom
+// from the registered shell document or an owned HTTP(S) tab's main frame.
+export function trustedWheelWindowId(
+  event: Caller,
+  windows: WindowManager,
+  appRoot: string,
+  pageWindowId: (contents: WebContents) => string | undefined
+): string | undefined {
+  const sender = event.sender;
+  const frame = event.senderFrame;
+  if (sender.isDestroyed() || !frame || frame !== sender.mainFrame || frame.detached) return undefined;
+  const shellId = windows.idForWebContents(sender);
+  if (shellId) {
+    try { assertShellCaller(event, windows, appRoot); return shellId; }
+    catch { return undefined; }
+  }
+  const url = sender.getURL();
+  if (frame.url !== url || !isWebNavigation(url)) return undefined;
+  const pageId = pageWindowId(sender);
+  return pageId && windows.get(pageId) ? pageId : undefined;
 }
 
 export function assertBoundedPayload(payload: unknown): void {

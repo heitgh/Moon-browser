@@ -30,8 +30,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      - run: npm run test:unit
-      - run: npm run test:integration
+      - run: npm run test:coverage
       - run: npm run native:electron
       - run: npm run test:electron-storage
       - run: xvfb-run -a npm run test:e2e
@@ -44,7 +43,16 @@ jobs:
           name: desktop-e2e-results-${{ matrix.os }}-${{ github.run_attempt }}
           path: test-results/**
           if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-${{ matrix.os }}-${{ github.run_attempt }}
+          path: |
+            coverage/lcov.info
+            coverage/coverage-summary.json
+          if-no-files-found: ignore
       - run: npm audit --audit-level=high
       - run: sudo apt-get update && sudo apt-get install --no-install-recommends -y rpm libarchive-tools
         if: runner.os == 'Linux'
       - run: npm run build:desktop
+      - run: npm run verify:fuses

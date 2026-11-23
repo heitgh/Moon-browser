@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
 import { ProfileAccessService } from "../services/profile-access.js";
+import { denyWebviewAttachment, secureWebPreferences } from "./web-preferences.js";
 import type { WindowManager } from "../main/window-manager.js";
 import type { BrowserApplicationService } from "../../application/browser-application-service.js";
 import type { IpcRouter } from "../ipc/ipc-router.js";
@@ -155,8 +156,8 @@ export class ProfileAccessController {
     if (existing) { existing.window.show(); existing.window.focus(); return existing.promise; }
     const window = new BrowserWindow({width: 560, height: 520, minWidth: 400, minHeight: 420,
       title: "Moon — Perfil bloqueado", backgroundColor: "#10121a", autoHideMenuBar: true,
-      webPreferences: {nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: false,
-        partition: `access:${randomUUID()}`, preload: join(app.getAppPath(), "access-preload.cjs")}});
+      webPreferences: secureWebPreferences({partition: `access:${randomUUID()}`, preload: join(app.getAppPath(), "access-preload.cjs")})});
+    denyWebviewAttachment(window.webContents);
     let resolve!: () => void; let reject!: (error: Error) => void;
     const promise = new Promise<void>((ok, fail) => { resolve = ok; reject = fail; });
     this.#gates.set(id, {window, promise, resolve, reject});

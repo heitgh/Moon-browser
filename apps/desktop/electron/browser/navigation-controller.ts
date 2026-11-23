@@ -1,15 +1,12 @@
 import type { WebContents } from "electron";
-
-const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
+import { isWebNavigation } from "../security/web-preferences.js";
 
 export class NavigationController {
   constructor(readonly contents: WebContents) {}
 
   async navigate(value: string): Promise<void> {
+    if (!isWebNavigation(value)) throw new Error("Navigation URL is not allowed");
     const url = new URL(value);
-    if (!ALLOWED_PROTOCOLS.has(url.protocol)) {
-      throw new Error(`Navigation protocol is not allowed: ${url.protocol}`);
-    }
     await this.contents.loadURL(url.toString());
   }
 

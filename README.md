@@ -99,6 +99,8 @@ chmod +x Moon-Browser-0.6.0-alpha.5-Linux-x64.AppImage
 
 > A `v0.6.0-alpha.5` é uma prerelease pública. Windows e Linux possuem instaladores oficiais e checksums; macOS ainda não possui build publicado.
 
+O código da `0.6.0-alpha.8` está em desenvolvimento. A [auditoria atual](docs/audits/moon-browser-2026-11-23.md) e a [política de release](docs/security/release-policy.md) distinguem as proteções já testadas dos gates que ainda precisam de chaves e máquinas de homologação. Não há instalador alpha.8 publicado.
+
 ## Estado do projeto
 
 ### Etapa 1 em revisão — encerramento e recuperação
@@ -126,10 +128,11 @@ definitiva do MB-016 em todas as plataformas.
 | Sync e cofre | **Fundação técnica; produção bloqueada** |
 | IA generativa | **Não disponível** |
 | Extração de PDF | **Não disponível** |
-| Atualizador automático assinado | **Não disponível** |
+| Atualizador automático assinado | **Código preparado na alpha.8; release assinada não publicada** |
 | macOS / ARM / mobile | **Não homologados** |
 
 Para a matriz detalhada de implementação e validação, consulte [`docs/update/RELATORIO.md`](docs/update/RELATORIO.md) e [`docs/update/ARQUITETURA.md`](docs/update/ARQUITETURA.md).
+Veja também [requisições automáticas de rede](docs/security/network-requests.md), [compatibilidade](docs/roadmap/compatibility.md) e [capacidades reais](docs/product/capabilities.md).
 
 ## Privacidade e controle
 

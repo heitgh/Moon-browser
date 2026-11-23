@@ -1,4 +1,5 @@
 import { BrowserWindow, type BrowserWindowConstructorOptions, type WebContents } from "electron";
+import { denyWebviewAttachment, secureWebPreferences } from "../security/web-preferences.js";
 
 export class WindowManager {
   readonly #windows = new Map<string, BrowserWindow>();
@@ -19,8 +20,11 @@ export class WindowManager {
       autoHideMenuBar: true,
       title: "Moon Browser",
       backgroundColor: "#090a10",
-      ...options
+      ...options,
+      webPreferences: secureWebPreferences(options.webPreferences)
     });
+
+    denyWebviewAttachment(window.webContents);
 
     this.#windows.set(id, window);
     if (context.private) this.#privateWindows.add(id);
