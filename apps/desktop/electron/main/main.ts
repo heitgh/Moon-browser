@@ -244,7 +244,10 @@ app.whenReady().then(async () => {
     if (nativeUpdates.state.supported) await nativeUpdates.download(updates.available);
     else await shell.openExternal(updates.available.url);
   });
-  ipc.register("updates:open-page", async event => { updateWindow(event); if (!updates.available) throw new Error("No checked update is available"); await shell.openExternal(updates.available.url); });
+  ipc.register("updates:open-page", async event => {
+    if (!windows.idForWebContents(event.sender)) throw new Error("Janela do Moon indisponível.");
+    await shell.openExternal(updates.available?.url ?? "https://github.com/heitgh/Moon-browser/releases");
+  });
   ipc.register("updates:install", async event => {
     const id = updateWindow(event);
     if (nativeUpdates.state.phase !== "downloaded") throw new Error("Nenhuma atualização pronta.");

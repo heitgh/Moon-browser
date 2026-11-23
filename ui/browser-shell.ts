@@ -130,6 +130,7 @@ class BrowserShell {
   readonly #securityPill = this.#toolbar.securityPill;
   readonly #securityText = this.#toolbar.securityText;
   readonly #status = el("div", "moon-status");
+  readonly #updateButton = btn("moon-update-entry", "Verificar atualizações", "download");
   readonly #privateBadge = el("div", "moon-private-badge", "ANÔNIMO");
   readonly #profileName = el("span", "", "Padrão");
   readonly #zenExit = btn("moon-zen-exit", "Sair do modo Foco (Ctrl+Shift+Z)", "close");
@@ -235,27 +236,50 @@ class BrowserShell {
   }
 
   async #checkUpdates(manual = true): Promise<void> {
-    if (this.#windowPrivate || this.#windowGuest) { if (manual) this.#flash("Atualize em uma janela normal do Moon."); return; }
+    if (this.#windowPrivate || this.#windowGuest) { if (manual) this.#showUpdateNotice(null, "Confira os lançamentos oficiais abaixo. Verificação e instalação nativa exigem uma janela normal do Moon."); return; }
+    if (!this.#bridge?.checkUpdates) { if (manual) this.#flash("Verifique atualizações no aplicativo desktop."); return; }
+    if (this.#updateButton.disabled) return;
+    this.#updateButton.disabled = true;
+    this.#updateButton.setAttribute("aria-busy", "true");
     try {
-      const update = await this.#bridge?.checkUpdates?.();
+      const update = await this.#bridge.checkUpdates();
+      this.#setUpdateEntry(update ?? null);
       if (!update && !manual) return;
       if (update && !manual && sessionStorage.getItem("moon:update-later") === update.version) return;
-      document.querySelector(".moon-update-notice")?.remove();
-      const notice = el("section", "moon-update-notice"); notice.setAttribute("aria-label", "Atualização disponível"); notice.setAttribute("role", "status");
-      notice.append(el("strong", "", update ? `Moon ${update.version} disponível` : "Moon e Chromium — versão atual"), el("p", "", update?.notes ?? "Nenhuma versão mais recente disponível neste canal."));
-      const engine = this.#nativeUpdate;
-      notice.append(el("p", "", `Moon ${engine?.moon ?? ""} · Chromium ${engine?.chromium ?? "—"} · Electron ${engine?.electron ?? "—"}. O motor é atualizado junto do Moon, não separadamente.`));
+      this.#showUpdateNotice(update ?? null);
+    } catch {
+      this.#setUpdateEntry(null, true);
+      if (manual) this.#showUpdateNotice(null, "Não foi possível verificar atualizações. Tente novamente quando houver conexão.");
+    } finally { this.#updateButton.disabled = false; this.#updateButton.removeAttribute("aria-busy"); }
+  }
+
+  #setUpdateEntry(update: { readonly version: string } | null, error = false): void {
+    const label = update ? `Atualização Moon ${update.version} disponível` : error ? "Falha ao verificar atualizações; tentar novamente" : "Verificar atualizações";
+    this.#updateButton.setAttribute("aria-label", label);
+    this.#updateButton.title = label;
+    this.#updateButton.classList.toggle("has-update", Boolean(update));
+    this.#updateButton.classList.toggle("has-error", error);
+  }
+
+  #showUpdateNotice(update: { readonly version: string; readonly notes: string } | null, message?: string): void {
+    document.querySelector(".moon-update-notice")?.remove();
+    const privateContext = this.#windowPrivate || this.#windowGuest;
+    const notice = el("section", "moon-update-notice"); notice.setAttribute("aria-label", update ? "Atualização disponível" : "Estado das atualizações"); notice.setAttribute("role", message && !privateContext ? "alert" : "status");
+    notice.append(el("strong", "", update ? `Moon ${update.version} disponível` : privateContext ? "Atualizações do Moon" : message ? "Falha na verificação" : "Nenhuma atualização disponível"), el("p", "", message ?? update?.notes ?? "Nenhuma atualização mais recente foi publicada neste canal."));
+    const engine = this.#nativeUpdate;
+    if (engine) notice.append(el("p", "", `Moon ${engine.moon} · Chromium ${engine.chromium} · Electron ${engine.electron}. O motor é atualizado junto do Moon, não separadamente.`));
+    if (!this.#windowPrivate && !this.#windowGuest) {
       const preference = el("label"); const automatic = el("input"); automatic.type = "checkbox"; automatic.checked = load<boolean>("moon:automatic-updates", true); automatic.addEventListener("change", () => save("moon:automatic-updates", automatic.checked)); preference.append(automatic, el("span", "", "Verificar atualizações ao abrir e a cada 6 horas")); notice.append(preference);
-      if (update) {
-        const download = btn("moon-primary-button", "Baixar atualização"); download.textContent = engine?.supported ? "Baixar Moon e Chromium" : "Baixar instalador oficial"; download.dataset.updateDownload = "true";
-        download.addEventListener("click", () => { void this.#bridge?.downloadUpdate?.().catch(error => this.#showError(error)); });
-        const page = btn("moon-secondary-button", "Abrir página oficial da atualização"); page.textContent = "Página oficial"; page.addEventListener("click", () => { void this.#bridge?.openUpdatePage?.().catch(error => this.#showError(error)); }); notice.append(download, page);
-        if (!engine?.supported) notice.append(el("p", "", "Este formato exige instalação manual. Atualização nativa: Windows instalado e Linux AppImage."));
-      }
-      notice.append(el("div", "moon-update-native"));
-      const later = btn("moon-secondary-button", "Adiar atualização"); later.textContent = "Depois"; later.addEventListener("click", () => { if (update) sessionStorage.setItem("moon:update-later", update.version); notice.remove(); }); notice.append(later); (this.container.querySelector(".moon-customization-modal") ?? this.container.querySelector(".moon-browser-main"))!.append(notice);
-      this.#renderNativeUpdateControls();
-    } catch (error) { if (manual) this.#showError(error); }
+    }
+    if (update && engine?.supported) {
+      const download = btn("moon-primary-button", "Baixar atualização"); download.textContent = "Baixar Moon e Chromium"; download.dataset.updateDownload = "true";
+      download.addEventListener("click", () => { void this.#bridge?.downloadUpdate?.().catch(error => this.#showError(error)); }); notice.append(download);
+    }
+    if (update && !engine?.supported) notice.append(el("p", "", "Este formato exige instalação manual. Escolha o instalador na página oficial. Atualização nativa: Windows instalado e Linux AppImage assinados."));
+    const page = btn("moon-secondary-button", update ? "Abrir página oficial da atualização" : "Abrir lançamentos oficiais do Moon"); page.textContent = update ? "Página oficial" : "Ver lançamentos oficiais"; page.addEventListener("click", () => { void this.#bridge?.openUpdatePage?.().catch(error => this.#showError(error)); }); notice.append(page);
+    notice.append(el("div", "moon-update-native"));
+    const later = btn("moon-secondary-button", update ? "Adiar atualização" : "Fechar estado das atualizações"); later.textContent = update ? "Depois" : "Fechar"; later.addEventListener("click", () => { if (update) sessionStorage.setItem("moon:update-later", update.version); notice.remove(); }); notice.append(later); (this.container.querySelector(".moon-customization-modal") ?? this.container.querySelector(".moon-browser-main"))!.append(notice);
+    this.#renderNativeUpdateControls();
   }
 
   #renderNativeUpdateControls(): void {
@@ -291,7 +315,7 @@ class BrowserShell {
     drawerHeader.append(this.#drawerTitle, drawerClose); this.#drawer.append(drawerHeader, this.#drawerBody, drawerResize); this.#bindDrawerResize(drawerResize);
 
     const main = el("section", "moon-browser-main"); const tabsBar = this.#tabsBar; const mark = btn("moon-window-mark", "Gerenciar perfis", "moon"); mark.append(this.#profileName); mark.addEventListener("click", () => this.#toggleDrawer("profiles"));
-    this.#addTab.addEventListener("click", () => void this.#createTab()); this.#privateBadge.hidden = true; this.#privateBadge.title = "O modo anônimo não oculta o tráfego do seu provedor, empresa, escola ou dos sites acessados."; tabsBar.append(mark, this.#tabStrip.element, this.#addTab, this.#privateBadge);
+    this.#addTab.addEventListener("click", () => void this.#createTab()); this.#updateButton.addEventListener("click", () => { void this.#checkUpdates(); }); this.#privateBadge.hidden = true; this.#privateBadge.title = "O modo anônimo não oculta o tráfego do seu provedor, empresa, escola ou dos sites acessados."; tabsBar.append(mark, this.#tabStrip.element, this.#addTab, this.#updateButton, this.#privateBadge);
     const windowControls = el("div", "moon-window-controls");
     for (const [action, label, glyph] of [["minimize", "Minimizar janela", "−"], ["maximize", "Maximizar ou restaurar janela", "□"], ["close", "Fechar janela", "×"]] as const) {
       const control = document.createElement("button"); control.className = `moon-window-control moon-window-${action}`; control.textContent = glyph; control.title = label; control.setAttribute("aria-label", label);

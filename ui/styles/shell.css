@@ -45,6 +45,12 @@
 .moon-add-tab { align-items: center; background: transparent; border-radius: var(--moon-radius-sm); color: var(--moon-text-muted); display: flex; height: var(--moon-control-height); justify-content: center; width: var(--moon-control-height); }
 .moon-add-tab:hover { background: #ffffff0c; color: #fff; }
 .moon-add-tab .moon-icon { height: 16px; width: 16px; }
+.moon-update-entry { align-items: center; background: transparent; border: 1px solid transparent; border-radius: var(--moon-radius-sm); color: var(--moon-text-muted); display: flex; flex: 0 0 auto; height: var(--moon-control-height); justify-content: center; position: relative; width: var(--moon-control-height); }
+.moon-update-entry .moon-icon { height: 16px; width: 16px; }
+.moon-update-entry:hover, .moon-update-entry:focus-visible { background: var(--moon-user-accent-soft); color: var(--moon-user-accent); }
+.moon-update-entry.has-update { color: var(--moon-user-accent); }
+.moon-update-entry.has-update::after, .moon-update-entry.has-error::after { background: var(--moon-user-accent); border-radius: 50%; content: ""; height: 7px; position: absolute; right: 3px; top: 3px; width: 7px; }
+.moon-update-entry.has-error::after { background: #f59e0b; }
 .moon-toolbar-v2 { align-items: center; background: var(--moon-bg); border-bottom: 1px solid var(--moon-border); display: flex; gap: var(--moon-space-1); padding: var(--moon-space-1) var(--moon-space-3); }
 .moon-nav-button { align-items: center; background: transparent; border-radius: var(--moon-radius-sm); color: var(--moon-text-muted); display: flex; height: var(--moon-control-height); justify-content: center; min-width: var(--moon-control-height); padding: 0; }
 .moon-nav-button:hover:not(:disabled) { background: #ffffff0c; color: #fff; }

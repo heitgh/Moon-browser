@@ -2,6 +2,7 @@
 
 ## 0.6.0-alpha.8 — em desenvolvimento; não publicada
 
+- O botão de atualizações agora fica visível na barra de abas, mantém um indicador quando há versão nova e permite verificar novamente após falha de rede; o painel sempre oferece a página oficial de lançamentos, inclusive em janelas anônimas por ação manual.
 - Opções de isolamento, sandbox, segurança web e conteúdo inseguro centralizadas em todas as janelas, views e popups.
 - Anexação de webviews negada; redirecionamentos de abas para protocolos privilegiados bloqueados.
 - Canal IPC de zoom restrito ao documento local registrado ou à aba web pertencente à janela.

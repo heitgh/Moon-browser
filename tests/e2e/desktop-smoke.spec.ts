@@ -634,6 +634,51 @@ test("manages workspace metadata and deletes populated areas without orphan tabs
   } finally { await quitDesktop(application); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });
 
+test("keeps manual update status and official releases accessible without a newer version", async () => {
+  const userData = await mkdtemp(join(tmpdir(), "moon-update-status-"));
+  const application = await electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData, MOON_TEST_OFFLINE: "1" } });
+  try {
+    await application.evaluate(({ shell }) => {
+      Object.defineProperty(shell, "openExternal", { configurable: true, value: (url: string) => { (globalThis as unknown as { checkedUpdateUrl: string }).checkedUpdateUrl = url; return Promise.resolve(); } });
+    });
+    const page = await shellWindow(application); await dismissOnboarding(page);
+    const entry = page.locator(".moon-update-entry"); await expect(entry).toBeVisible();
+    await entry.click();
+    const notice = page.getByLabel("Estado das atualizações", { exact: true });
+    await expect(notice).toContainText("Nenhuma atualização mais recente foi publicada");
+    await notice.getByLabel("Abrir lançamentos oficiais do Moon").click();
+    expect(await application.evaluate(() => (globalThis as unknown as { checkedUpdateUrl: string }).checkedUpdateUrl)).toBe("https://github.com/heitgh/Moon-browser/releases");
+    await page.evaluate(() => (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser.createPrivateWindow());
+    await expect.poll(() => application.windows().filter(candidate => candidate.url().endsWith("/index.html")).length).toBe(2);
+    const privatePage = application.windows().find(candidate => candidate !== page && candidate.url().endsWith("/index.html"))!;
+    const privateSkip = privatePage.getByLabel("Pular configuração inicial");
+    if (await privateSkip.waitFor({ state: "visible", timeout: 1_000 }).then(() => true).catch(() => false)) await privateSkip.click();
+    await privatePage.locator(".moon-update-entry").click();
+    const privateNotice = privatePage.getByLabel("Estado das atualizações", { exact: true });
+    await expect(privateNotice).toContainText("Verificação e instalação nativa exigem uma janela normal");
+    await privateNotice.getByLabel("Abrir lançamentos oficiais do Moon").click();
+    expect(await application.evaluate(() => (globalThis as unknown as { checkedUpdateUrl: string }).checkedUpdateUrl)).toBe("https://github.com/heitgh/Moon-browser/releases");
+  } finally { await quitDesktop(application); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
+});
+
+test("shows failed automatic checks and recovers through the update button", async () => {
+  const userData = await mkdtemp(join(tmpdir(), "moon-update-offline-"));
+  const application = await electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData, MOON_TEST_OFFLINE: "0" } });
+  try {
+    await application.evaluate(() => { globalThis.fetch = () => Promise.reject(new Error("offline")); });
+    const page = await shellWindow(application); await dismissOnboarding(page);
+    const entry = page.locator(".moon-update-entry");
+    await expect(entry).toHaveAttribute("aria-label", "Falha ao verificar atualizações; tentar novamente");
+    await entry.click();
+    const notice = page.getByLabel("Estado das atualizações", { exact: true });
+    await expect(notice).toContainText("Não foi possível verificar atualizações");
+    await application.evaluate(() => { globalThis.fetch = () => Promise.resolve(new Response("[]")); });
+    await entry.click();
+    await expect(notice).toContainText("Nenhuma atualização mais recente foi publicada");
+    await expect(entry).toHaveAttribute("aria-label", "Verificar atualizações");
+  } finally { await quitDesktop(application); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
+});
+
 test("shows checked release notes, defers updates and opens only the checked release", async () => {
   const userData = await mkdtemp(join(tmpdir(), "moon-updates-"));
   const application = await electron.launch({ args: [...platformArguments, `--user-data-dir=${userData}`, "."], cwd: process.cwd(), env: { ...desktopEnv, NODE_ENV: "test", MOON_TEST_PROFILE_DIR: userData, MOON_TEST_OFFLINE: "0" } });
@@ -644,10 +689,11 @@ test("shows checked release notes, defers updates and opens only the checked rel
     });
     const page = await shellWindow(application); await dismissOnboarding(page);
     const notice = page.getByLabel("Atualização disponível", { exact: true }); await expect(notice).toContainText("v99.0.0"); await expect(notice).toContainText("Novidades de teste");
+    const entry = page.locator(".moon-update-entry"); await expect(entry).toHaveAttribute("aria-label", "Atualização Moon v99.0.0 disponível");
     // Dismiss the browsing-surface notice before opening the modal settings overlay.
-    await page.getByLabel("Adiar atualização", { exact: true }).click(); await expect(notice).toHaveCount(0);
+    await page.getByLabel("Adiar atualização", { exact: true }).click(); await expect(notice).toHaveCount(0); await expect(entry).toHaveClass(/has-update/);
     await page.getByLabel("Configurações", { exact: true }).click(); await page.getByLabel("Privacidade e dados", { exact: true }).click();
-    await page.getByLabel("Verificar atualizações", { exact: true }).click(); await page.getByLabel("Baixar atualização", { exact: true }).click();
+    await page.getByLabel("Verificar atualizações", { exact: true }).click(); await page.getByLabel("Abrir página oficial da atualização", { exact: true }).click();
     expect(await application.evaluate(() => (globalThis as unknown as { checkedUpdateUrl: string }).checkedUpdateUrl)).toBe("https://github.com/heitgh/Moon-browser/releases/tag/v99.0.0");
   } finally { await quitDesktop(application); await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); }
 });

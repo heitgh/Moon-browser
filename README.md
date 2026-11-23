@@ -101,6 +101,8 @@ chmod +x Moon-Browser-0.6.0-alpha.5-Linux-x64.AppImage
 
 O código da `0.6.0-alpha.8` está em desenvolvimento. A [auditoria atual](docs/audits/moon-browser-2026-11-23.md) e a [política de release](docs/security/release-policy.md) distinguem as proteções já testadas dos gates que ainda precisam de chaves e máquinas de homologação. Não há instalador alpha.8 publicado.
 
+Em uma janela normal, o botão de download na barra de abas abre o estado das atualizações e permite consultar manualmente o GitHub. Quando uma nova versão do canal for publicada, o botão recebe um indicador e oferece download; builds sem assinatura própria abrem a página oficial. A consulta automática pode ser desligada no painel de atualização, mas a verificação manual continua disponível. Em janelas anônimas ou de convidado, o botão oferece apenas a página oficial. Sem release mais recente publicada, nenhum instalador novo pode ser oferecido.
+
 ## Estado do projeto
 
 ### Etapa 1 em revisão — encerramento e recuperação
