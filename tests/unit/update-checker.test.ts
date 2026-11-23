@@ -9,6 +9,8 @@ describe("advisory update checker", () => {
     expect(selectUpdate("0.6.0-beta.1", releases)?.version).toBe("v0.6.0");
     expect(selectUpdate("0.6.0", releases)).toBeNull();
     expect(selectUpdate("0.6.0-alpha.9", [release("v0.6.0-alpha.10")])?.version).toBe("v0.6.0-alpha.10");
+    expect(selectUpdate("0.6.0-alpha.7", [release("v0.6.0-alpha.8"), release("v0.6.0-alpha.7")])?.version).toBe("v0.6.0-alpha.8");
+    expect(selectUpdate("0.6.0-alpha.8", [release("v0.6.0-alpha.7")])).toBeNull();
   });
   it("rejects foreign, credentialed, non-HTTPS and draft download links", () => {
     for (const url of ["https://evil.test/x", "http://github.com/heitgh/Moon-browser/releases/tag/v1.0.0", "https://github.com/other/repo/releases/tag/v1.0.0", "https://user@github.com/heitgh/Moon-browser/releases/tag/v1.0.0"]) expect(selectUpdate("0.6.0", [release("v1.0.0", url)])).toBeNull();
