@@ -31,6 +31,11 @@ on:
         required: true
         default: false
         type: boolean
+      prepare_signed:
+        description: "Gerar artefatos assinados para homologação, sem publicar"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -72,7 +77,7 @@ jobs:
           cache: npm
 
       - name: Validate requested release tag
-        if: github.event_name == 'workflow_dispatch' && inputs.publish_release
+        if: github.event_name == 'workflow_dispatch' && (inputs.prepare_signed || inputs.publish_release)
         env:
           INPUT_TAG: ${{ inputs.tag }}
         run: node -e 'const expected="v"+require("./package.json").version; if(process.env.INPUT_TAG!==expected) throw new Error("Release tag must be "+expected)'
@@ -91,17 +96,42 @@ jobs:
         run: npm run native:electron
 
       - name: Reject release outside main
-        if: github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref != 'refs/heads/main'
+        if: github.event_name == 'workflow_dispatch' && (inputs.prepare_signed || inputs.publish_release) && github.ref != 'refs/heads/main'
         run: node -e 'throw new Error("Signed releases must run from main")'
 
+      - name: Check Windows signing prerequisites
+        if: runner.os == 'Windows' && github.event_name == 'workflow_dispatch' && (inputs.prepare_signed || inputs.publish_release) && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+          MOON_WINDOWS_PUBLISHER_NAME: ${{ secrets.WINDOWS_PUBLISHER_NAME }}
+        run: |
+          foreach ($name in @('CSC_LINK', 'CSC_KEY_PASSWORD', 'MOON_WINDOWS_PUBLISHER_NAME')) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) { throw "Missing $name" }
+          }
+
+      - name: Check Linux signing prerequisites
+        if: runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && (inputs.prepare_signed || inputs.publish_release) && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          LINUX_UPDATE_SIGNING_KEY_B64: ${{ secrets.LINUX_UPDATE_SIGNING_KEY_B64 }}
+          LINUX_GPG_PRIVATE_KEY_B64: ${{ secrets.LINUX_GPG_PRIVATE_KEY_B64 }}
+          LINUX_GPG_FINGERPRINT: ${{ secrets.LINUX_GPG_FINGERPRINT }}
+          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+        run: |
+          for name in LINUX_UPDATE_SIGNING_KEY_B64 LINUX_GPG_PRIVATE_KEY_B64 LINUX_GPG_FINGERPRINT LINUX_GPG_PASSPHRASE; do
+            if [[ -z "${!name:-}" ]]; then echo "Missing $name" >&2; exit 1; fi
+          done
+
       - name: Build unsigned test installers
-        if: github.event_name != 'workflow_dispatch' || !inputs.publish_release || github.ref != 'refs/heads/main'
+        if: github.event_name != 'workflow_dispatch' || (!inputs.prepare_signed && !inputs.publish_release) || github.ref != 'refs/heads/main'
         env:
           MOON_RELEASE_SIGNED: "0"
         run: npm run build:desktop
 
       - name: Build signed Windows installers
-        if: runner.os == 'Windows' && github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main'
+        if: runner.os == 'Windows' && github.event_name == 'workflow_dispatch' && (inputs.prepare_signed || inputs.publish_release) && github.ref == 'refs/heads/main'
         env:
           MOON_RELEASE_SIGNED: "1"
           CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
@@ -110,7 +140,7 @@ jobs:
         run: npm run build:desktop
 
       - name: Build signed Linux installers
-        if: runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main'
+        if: runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && (inputs.prepare_signed || inputs.publish_release) && github.ref == 'refs/heads/main'
         env:
           MOON_RELEASE_SIGNED: "1"
           LINUX_UPDATE_SIGNING_KEY_B64: ${{ secrets.LINUX_UPDATE_SIGNING_KEY_B64 }}
@@ -120,13 +150,16 @@ jobs:
         run: npm run verify:fuses
 
       - name: Verify Windows Authenticode signature
-        if: runner.os == 'Windows' && github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main'
+        if: runner.os == 'Windows' && github.event_name == 'workflow_dispatch' && (inputs.prepare_signed || inputs.publish_release) && github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           MOON_WINDOWS_PUBLISHER_NAME: ${{ secrets.WINDOWS_PUBLISHER_NAME }}
         run: |
-          $files = @(Get-ChildItem release -File -Filter *.exe)
-          if ($files.Count -ne 2) { throw "Expected setup and portable executables" }
+          $installers = @(Get-ChildItem release -File -Filter *.exe)
+          if ($installers.Count -ne 2) { throw "Expected setup and portable executables" }
+          $appExecutables = @(Get-ChildItem 'release/win-unpacked' -File -Filter *.exe)
+          if ($appExecutables.Count -ne 1) { throw "Expected one unpacked application executable" }
+          $files = @($installers) + @($appExecutables)
           foreach ($file in $files) {
             $signature = Get-AuthenticodeSignature $file.FullName
             if ($signature.Status -ne 'Valid' -or -not $signature.SignerCertificate) {
@@ -170,7 +203,7 @@ jobs:
           node -e 'const bom=require("./release/SBOM.cdx.json"); if(bom.bomFormat!=="CycloneDX" || !Array.isArray(bom.components) || !bom.components.length) process.exit(1)'
 
       - name: Sign and verify Linux release assets
-        if: runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main'
+        if: runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && (inputs.prepare_signed || inputs.publish_release) && github.ref == 'refs/heads/main'
         shell: bash
         env:
           LINUX_GPG_PRIVATE_KEY_B64: ${{ secrets.LINUX_GPG_PRIVATE_KEY_B64 }}
@@ -187,9 +220,7 @@ jobs:
           path: |
             release/*.exe
             release/*.exe.blockmap
-            release/alpha.yml
-            release/beta.yml
-            release/latest.yml
+            release/*.yml
             release/SHA256SUMS-windows.txt
           if-no-files-found: error
           retention-days: 14
@@ -201,9 +232,7 @@ jobs:
           name: ${{ matrix.artifact }}
           path: |
             release/*.AppImage
-            release/alpha-linux.yml
-            release/beta-linux.yml
-            release/latest-linux.yml
+            release/*.yml
             release/*.deb
             release/*.rpm
             release/*.pacman
@@ -271,7 +300,7 @@ jobs:
             *-beta.*) channel=beta; prerelease=(--prerelease) ;;
             *) channel=latest; prerelease=() ;;
           esac
-          metadata=( "release/${channel}.yml" "release/${channel}-linux.yml" )
+          metadata=( "release/signed-${channel}.yml" "release/signed-${channel}-linux.yml" )
           for manifest in "${metadata[@]}"; do
             if [[ ! -s "$manifest" ]]; then echo "Missing native update metadata: $manifest" >&2; exit 1; fi
           done

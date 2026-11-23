@@ -20,7 +20,10 @@ function harness(version = "0.6.0-alpha.6") {
   return { native, emit, factory, service };
 }
 it("pins the native feed to the checked official release and rejects mismatched tags", () => {
-  expect(updateFeed(update)).toEqual({ url: "https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.6/", channel: "alpha" });
+  expect(updateFeed(update)).toEqual({ url: "https://github.com/heitgh/Moon-browser/releases/download/v0.6.0-alpha.6/", channel: "signed-alpha" });
+  for (const [version, channel] of [["v0.6.0-beta.1", "signed-beta"], ["v0.6.0", "signed-latest"]]) {
+    expect(updateFeed({ ...update, version, url: `https://github.com/heitgh/Moon-browser/releases/tag/${version}` }).channel).toBe(channel);
+  }
   for (const url of ["https://evil.test/", update.url + "?x=1", update.url.replace("alpha.6", "alpha.7")]) expect(() => updateFeed({ ...update, url })).toThrow();
 });
 it("downloads with progress and installs only after an explicit second action", async () => {
