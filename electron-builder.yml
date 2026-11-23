@@ -19,6 +19,12 @@ files:
   - access-preload.cjs
   - package.json
 asar: true
+electronFuses:
+  runAsNode: false
+  enableNodeCliInspectArguments: false
+  enableNodeOptionsEnvironmentVariable: false
+  onlyLoadAppFromAsar: true
+  enableEmbeddedAsarIntegrityValidation: true
 asarUnpack:
   - node_modules/better-sqlite3/**
 linux:
@@ -72,4 +78,3 @@ publish:
   owner: heitgh
   repo: Moon-browser
   releaseType: prerelease
-  channel: alpha

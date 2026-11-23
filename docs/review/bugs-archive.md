@@ -1,5 +1,8 @@
 # Bugs do Moon Browser
 
+Arquivo histórico. Para o estado atual e riscos de release, consulte
+[`../audits/moon-browser-2026-11-23.md`](../audits/moon-browser-2026-11-23.md).
+
 ## Etapa 1 em revisão — 30/10/2026
 
 MB-016 permanece aberto. Esta branch ordena drenagem de IPC, persistência, destruição
@@ -7,7 +10,7 @@ efetiva das páginas e fechamento/checkpoint dos bancos. Foram observados encerr
 por sinal em headless, além dos timeouts anteriores; passagem isolada não encerra o bug.
 Recuperação agora trata falha do perfil selecionado e reconstrução confirmada de registro
 danificado, preservando os originais. Resultados e limites atuais estão em
-`docs/review/stage1-shutdown-recovery.md`; não confundir com a release alpha.5.
+`stage1-shutdown-recovery.md`; não confundir com a release alpha.5.
 
 Atualizado em 26 de outubro de 2026.
 
@@ -41,7 +44,7 @@ Ao reportar regressão, registre SO, versão do Moon, URL, horário, passos, com
 | MB-015 | Protótipo de IA local | Não implementado; flag ai desativada, fora do primeiro pacote. |
 | MB-016 | Timeout intermitente ao encerrar Electron no E2E | Aberto: workflow independente encontrou timeout em Close context no Linux e no ensaio de perfis Windows; a mesma árvore passou no workflow de release. A repetição completa passou em Windows/Linux; causa raiz não comprovada, investigação permanece aberta. |
 
-Detalhes: [relatório de validação](docs/review/next-update-validation.md).
+Detalhes: [relatório de validação](next-update-validation.md).
 
 ## Próxima atualização — implementação em desenvolvimento
 
@@ -49,4 +52,4 @@ Detalhes: [relatório de validação](docs/review/next-update-validation.md).
 - **MB-016:** prazo global e ensaio de 30 ciclos adicionados. Foi identificada e corrigida outra condição de corrida: fechar durante loadFile resultava em saída 1. Isso não comprova a causa dos timeouts históricos; permanece pendente a homologação Windows/desktop.
 - **Migrações:** backup prévio consistente, guarda de versões desconhecidas e integridade na abertura implementados e testados. UI de recuperação não implementada.
 
-Veja [validação do primeiro conjunto](docs/review/alpha5-security-stability.md). Nenhuma nova release foi publicada por esta alteração.
+Veja [validação do primeiro conjunto](alpha5-security-stability.md). Nenhuma nova release foi publicada por aquela alteração.

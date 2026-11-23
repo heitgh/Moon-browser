@@ -8,6 +8,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import type { WindowManager } from "../main/window-manager.js";
 import type { SessionRequestPipeline } from "../security/session-request-pipeline.js";
 import { shouldBypassContentBlocking } from "../browser/compatibility-policy.js";
+import { GHOSTERY_RULES_COMMIT, pinnedGhosteryRulesUrl } from "./adblock-rules-source.js";
 
 export type AdblockPhase = "loading" | "active" | "disabled" | "failed";
 export interface AdblockStatus {
@@ -33,8 +34,8 @@ export class ElectronAdblockService {
 
   async initialize(): Promise<void> {
     try {
-      const cachePath = join(app.getPath("userData"), "adblock-engine.bin");
-      this.#blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch, {
+      const cachePath = join(app.getPath("userData"), `adblock-engine-${GHOSTERY_RULES_COMMIT.slice(0, 12)}.bin`);
+      this.#blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(url => fetch(pinnedGhosteryRulesUrl(url)), {
         path: cachePath,
         read: readFile,
         write: writeFile

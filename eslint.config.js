@@ -9,6 +9,7 @@ export default [
       "dist/**",
       "release/**",
       "coverage/**",
+      ".codex/skills/**",
       "src/**",
       "sunshine/**",
       "pkg/**"

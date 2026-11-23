@@ -3,6 +3,7 @@ import updaterPackage from "electron-updater";
 import type { AppUpdater } from "electron-updater";
 import type { AvailableUpdate } from "./update-checker.js";
 import type { NativeUpdateState } from "../../../../packages/ipc/native-update-contract.js";
+import { verifyDownloadedAppImage } from "./update-signature.js";
 
 export function updateFeed(update: AvailableUpdate): { url: string; channel: string } {
   const tag = update.version;
@@ -15,13 +16,13 @@ export class NativeUpdater {
   #busy = false;
   #state: NativeUpdateState;
   constructor(
-    readonly runtime: { packaged: boolean; platform: string; portable: boolean; appImage: boolean; moon: string; chromium: string; electron: string },
+    readonly runtime: { packaged: boolean; platform: string; portable: boolean; appImage: boolean; signedWindowsRelease?: boolean; linuxUpdatePublicKey?: string; moon: string; chromium: string; electron: string },
     readonly emit: (state: NativeUpdateState) => void,
     readonly factory: (url: string, channel: string) => AppUpdater = (url, channel) => runtime.platform === "win32"
       ? new updaterPackage.NsisUpdater({ provider: "generic", url, channel })
       : new updaterPackage.AppImageUpdater({ provider: "generic", url, channel })
   ) {
-    this.#state = { phase: "idle", supported: runtime.packaged && ((runtime.platform === "win32" && !runtime.portable) || (runtime.platform === "linux" && runtime.appImage)), moon: runtime.moon, chromium: runtime.chromium, electron: runtime.electron };
+    this.#state = { phase: "idle", supported: runtime.packaged && ((runtime.platform === "win32" && !runtime.portable && runtime.signedWindowsRelease === true) || (runtime.platform === "linux" && runtime.appImage && Boolean(runtime.linuxUpdatePublicKey))), moon: runtime.moon, chromium: runtime.chromium, electron: runtime.electron };
   }
   get state(): NativeUpdateState { return this.#state; }
   async download(update: AvailableUpdate): Promise<void> {
@@ -40,7 +41,8 @@ export class NativeUpdater {
       const result = await updater.checkForUpdates();
       if (!result || result.updateInfo.version.replace(/^v/, "") !== update.version.replace(/^v/, "")) throw new Error("O pacote não corresponde à versão conferida.");
       this.#set({ phase: "downloading", percent: 0, message: "Baixando Moon e Chromium…" });
-      await updater.downloadUpdate();
+      const files = await updater.downloadUpdate();
+      if (this.runtime.platform === "linux") await verifyDownloadedAppImage(files, update.version, feed.url, this.runtime.linuxUpdatePublicKey!);
       this.#set({ phase: "downloaded", percent: 100, message: "Pacote verificado. Salve seu trabalho antes de instalar." });
     } catch {
       this.#set({ phase: "error", message: "Não foi possível baixar e verificar a atualização. Tente novamente ou abra a página oficial." });

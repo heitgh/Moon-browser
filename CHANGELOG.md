@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.0-alpha.8 — em desenvolvimento; não publicada
+
+- Opções de isolamento, sandbox, segurança web e conteúdo inseguro centralizadas em todas as janelas, views e popups.
+- Anexação de webviews negada; redirecionamentos de abas para protocolos privilegiados bloqueados.
+- Canal IPC de zoom restrito ao documento local registrado ou à aba web pertencente à janela.
+- Cinco fuses configurados no empacotador e verificados no binário gerado pelo CI.
+- Testes negativos adicionados para configurações, protocolos e emissor do IPC.
+- O instalador Windows de release agora exige Authenticode e publisher; AppImage de release embute chave Ed25519 e só instala update com assinatura verificada. Builds sem raiz de confiança usam a página oficial.
+- Workflow manual exige assinatura GPG dos pacotes Linux, SBOM CycloneDX, checksums e verificação dos artefatos. Chaves de produção e homologação de upgrade ainda pendentes.
+- Fechamento nativo da janela privada limpa dados de site, cache HTTP, cache de autenticação e DNS; E2E cobre cookies, localStorage, IndexedDB, Cache Storage, service workers e zoom.
+- Listas Ghostery passaram a usar commit fixo em vez de `master`; a primeira consulta automática ainda requer revisão de consentimento ou empacotamento de regras.
+- Benchmark local reprodutível para 10/30 abas, inicialização, CPU, RAM, abertura de aba e disco; custos altos documentados sem alegar ganho de desempenho.
+- BUGS histórico arquivado em `docs/review/`, matriz de compatibilidade e documentação de rede/release revisadas.
+
 ## Em revisão — etapa 5: privacidade (não publicada)
 
 - Central de privacidade por perfil, exceções por origem, filtro de cookies HTTP, permissões e limpeza de dados do site.

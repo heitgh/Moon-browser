@@ -5,9 +5,12 @@ on:
     paths:
       - .github/workflows/release-desktop.yml
       - electron-builder.yml
+      - electron-builder.channel.cjs
+      - electron-builder.release.cjs
       - package.json
       - package-lock.json
       - scripts/build/**
+      - scripts/release/**
       - apps/desktop/**
       - packages/**
       - ui/**
@@ -16,19 +19,12 @@ on:
       - main.js
       - preload.cjs
       - tsconfig*.json
-  push:
-    branches:
-      - main
-    tags:
-      - "v*"
-    paths:
-      - .github/release-trigger
   workflow_dispatch:
     inputs:
       tag:
         description: "Tag da release (ex.: v0.6.0-alpha.1)"
         required: true
-        default: "v0.6.0-alpha.5"
+        default: "v0.6.0-alpha.8"
         type: string
       publish_release:
         description: "Publicar os instaladores em GitHub Releases"
@@ -75,6 +71,12 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Validate requested release tag
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: node -e 'const expected="v"+require("./package.json").version; if(process.env.INPUT_TAG!==expected) throw new Error("Release tag must be "+expected)'
+
       - name: Install dependencies
         run: npm ci
 
@@ -88,8 +90,53 @@ jobs:
       - name: Rebuild native dependencies for Electron
         run: npm run native:electron
 
-      - name: Build installers
+      - name: Reject release outside main
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref != 'refs/heads/main'
+        run: node -e 'throw new Error("Signed releases must run from main")'
+
+      - name: Build unsigned test installers
+        if: github.event_name != 'workflow_dispatch' || !inputs.publish_release || github.ref != 'refs/heads/main'
+        env:
+          MOON_RELEASE_SIGNED: "0"
         run: npm run build:desktop
+
+      - name: Build signed Windows installers
+        if: runner.os == 'Windows' && github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main'
+        env:
+          MOON_RELEASE_SIGNED: "1"
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+          MOON_WINDOWS_PUBLISHER_NAME: ${{ secrets.WINDOWS_PUBLISHER_NAME }}
+        run: npm run build:desktop
+
+      - name: Build signed Linux installers
+        if: runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main'
+        env:
+          MOON_RELEASE_SIGNED: "1"
+          LINUX_UPDATE_SIGNING_KEY_B64: ${{ secrets.LINUX_UPDATE_SIGNING_KEY_B64 }}
+        run: npm run build:desktop
+
+      - name: Verify Electron fuses in unpacked application
+        run: npm run verify:fuses
+
+      - name: Verify Windows Authenticode signature
+        if: runner.os == 'Windows' && github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          MOON_WINDOWS_PUBLISHER_NAME: ${{ secrets.WINDOWS_PUBLISHER_NAME }}
+        run: |
+          $files = @(Get-ChildItem release -File -Filter *.exe)
+          if ($files.Count -ne 2) { throw "Expected setup and portable executables" }
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature $file.FullName
+            if ($signature.Status -ne 'Valid' -or -not $signature.SignerCertificate) {
+              throw "Invalid Authenticode signature on $($file.Name)"
+            }
+            if ($signature.SignerCertificate.Subject -ne $env:MOON_WINDOWS_PUBLISHER_NAME) {
+              throw "Unexpected publisher on $($file.Name)"
+            }
+          }
+          node -e 'const fs=require("node:fs"); const asar=require("@electron/asar"); const yaml=require("js-yaml"); const config=yaml.load(fs.readFileSync("release/win-unpacked/resources/app-update.yml","utf8")); if(config.publisherName!==process.env.MOON_WINDOWS_PUBLISHER_NAME) throw new Error("Updater publisher is not embedded"); if(asar.extractFile("release/win-unpacked/resources/app.asar","dist/types/security/moon-signed-windows-release").toString()!=="signed-release\n") throw new Error("Signed release marker is absent")'
 
       - name: Create Windows checksums
         if: runner.os == 'Windows'
@@ -115,6 +162,23 @@ jobs:
           fi
           sha256sum "${files[@]}" > SHA256SUMS-linux.txt
 
+      - name: Generate CycloneDX SBOM
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          npm sbom --sbom-format cyclonedx --omit=dev > release/SBOM.cdx.json
+          node -e 'const bom=require("./release/SBOM.cdx.json"); if(bom.bomFormat!=="CycloneDX" || !Array.isArray(bom.components) || !bom.components.length) process.exit(1)'
+
+      - name: Sign and verify Linux release assets
+        if: runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          LINUX_GPG_PRIVATE_KEY_B64: ${{ secrets.LINUX_GPG_PRIVATE_KEY_B64 }}
+          LINUX_GPG_FINGERPRINT: ${{ secrets.LINUX_GPG_FINGERPRINT }}
+          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+          LINUX_UPDATE_SIGNING_KEY_B64: ${{ secrets.LINUX_UPDATE_SIGNING_KEY_B64 }}
+        run: bash scripts/release/sign-linux.sh
+
       - name: Upload Windows installers
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
@@ -124,6 +188,8 @@ jobs:
             release/*.exe
             release/*.exe.blockmap
             release/alpha.yml
+            release/beta.yml
+            release/latest.yml
             release/SHA256SUMS-windows.txt
           if-no-files-found: error
           retention-days: 14
@@ -136,10 +202,16 @@ jobs:
           path: |
             release/*.AppImage
             release/alpha-linux.yml
+            release/beta-linux.yml
+            release/latest-linux.yml
             release/*.deb
             release/*.rpm
             release/*.pacman
             release/SHA256SUMS-linux.txt
+            release/SBOM.cdx.json
+            release/*.asc
+            release/*.sig
+            release/moon-update-public.pem
           if-no-files-found: error
           retention-days: 14
 
@@ -147,9 +219,7 @@ jobs:
     name: Publish GitHub Release
     environment: release-approval
     needs: [build, quality]
-    if: >-
-      (github.event_name == 'workflow_dispatch' && inputs.publish_release) ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_release && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -164,24 +234,11 @@ jobs:
         env:
           INPUT_TAG: ${{ inputs.tag }}
         run: |
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            tag="$INPUT_TAG"
-          elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
-            tag="$GITHUB_REF_NAME"
-          else
-            tag=v$(node -p "require('./package.json').version")
-          fi
+          tag="$INPUT_TAG"
           expected="v$(node -p "require('./package.json').version")"
           if [[ "$tag" != "$expected" ]]; then
             echo "A tag precisa corresponder à versão compilada: $expected" >&2
             exit 1
-          fi
-          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            trigger="$(grep -E '^v[0-9]' .github/release-trigger | head -n 1)"
-            if [[ "$trigger" != "$expected" ]]; then
-              echo "O release-trigger precisa corresponder à versão compilada: $expected" >&2
-              exit 1
-            fi
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
@@ -192,6 +249,11 @@ jobs:
           path: release
           merge-multiple: true
 
+      - name: Verify signed release assets
+        env:
+          LINUX_GPG_FINGERPRINT: ${{ secrets.LINUX_GPG_FINGERPRINT }}
+        run: bash scripts/release/verify-assets.sh
+
       - name: Publish release and direct-download assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -199,12 +261,17 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          assets=( release/*.exe release/*.AppImage release/*.deb release/*.rpm release/*.pacman release/SHA256SUMS-*.txt )
-          if (( ${#assets[@]} != 8 )); then
-            echo "Expected six installers and two checksum files; refusing incomplete publication." >&2
+          assets=( release/*.exe release/*.AppImage release/*.deb release/*.rpm release/*.pacman release/SHA256SUMS-*.txt release/SBOM.cdx.json release/moon-update-public.pem release/*.asc release/*.sig )
+          if (( ${#assets[@]} != 19 )); then
+            echo "Expected six installers, two checksums, SBOM, two public keys and eight signatures." >&2
             exit 1
           fi
-          metadata=( release/alpha.yml release/alpha-linux.yml )
+          case "$RELEASE_TAG" in
+            *-alpha.*) channel=alpha; prerelease=(--prerelease) ;;
+            *-beta.*) channel=beta; prerelease=(--prerelease) ;;
+            *) channel=latest; prerelease=() ;;
+          esac
+          metadata=( "release/${channel}.yml" "release/${channel}-linux.yml" )
           for manifest in "${metadata[@]}"; do
             if [[ ! -s "$manifest" ]]; then echo "Missing native update metadata: $manifest" >&2; exit 1; fi
           done
@@ -220,13 +287,13 @@ jobs:
                 --target "$GITHUB_SHA" \
                 --title "Moon Browser $RELEASE_TAG" \
                 --notes-file "$notes_file" \
-                --prerelease
+                "${prerelease[@]}"
             else
               gh release create "$RELEASE_TAG" "${assets[@]}" \
                 --repo "$GITHUB_REPOSITORY" \
                 --target "$GITHUB_SHA" \
                 --title "Moon Browser $RELEASE_TAG" \
                 --generate-notes \
-                --prerelease
+                "${prerelease[@]}"
             fi
           fi

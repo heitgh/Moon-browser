@@ -1,4 +1,5 @@
 import { WebContentsView, type BaseWindow } from "electron";
+import { denyWebviewAttachment, secureWebPreferences } from "../security/web-preferences.js";
 
 export class ElectronBrowserSurface {
   readonly view: WebContentsView;
@@ -11,7 +12,8 @@ export class ElectronBrowserSurface {
     readonly window: BaseWindow,
     options: Electron.WebContentsViewConstructorOptions = {}
   ) {
-    this.view = new WebContentsView(options);
+    this.view = new WebContentsView({ ...options, webPreferences: secureWebPreferences(options.webPreferences) });
+    denyWebviewAttachment(this.view.webContents);
     this.window.contentView.addChildView(this.view);
     this.view.setVisible(false);
   }

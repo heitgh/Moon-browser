@@ -26,6 +26,8 @@ import type { SitePermissionService } from "../security/site-permission-service.
 import type { SitePermissionRecord } from "../../../../packages/ipc/site-permission-contract.js";
 import { decideWindowOpen, isSafeWebPopupUrl } from "./window-open-policy.js";
 import { configureCompatibilityWebContents, isRecoverableRendererExit, navigationFailureMessage } from "./compatibility-policy.js";
+import { denyWebviewAttachment, isWebNavigation, secureWebPreferences } from "../security/web-preferences.js";
+import { clearPrivateSession } from "../security/private-session.js";
 import type { ProfileHistoryEntry, ProfileHistoryNavigationType } from "../../../../packages/ipc/profile-data-contract.js";
 
 export interface BrowserNavigationState {
@@ -170,10 +172,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
     const guest = this.windows.isGuest(windowId);
     const partitionArea = options.partitionWorkspaceId ?? options.workspaceId;
     const surface = new ElectronBrowserSurface(`surface-${id}`, id, window, {
-      webPreferences: {
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
+      webPreferences: secureWebPreferences({
         disableHtmlFullscreenWindowResize: true,
         preload: join(app.getAppPath(), "zoom-preload.cjs"),
         partition: options.private
@@ -183,7 +182,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
           : partitionArea
             ? `persist:profile:${profileId}:workspace:${partitionArea}`
             : `persist:profile:${profileId}:default`
-      }
+      })
     });
     this.downloads?.attach(surface.view.webContents.session, this.downloads.scopeForWindow(windowId), this.windows.isPrivate(windowId) ? windowId : undefined);
     this.privacy?.registerSession(surface.view.webContents.session, profileId, !options.private && !guest);
@@ -583,7 +582,7 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       this.#permissionRequests.delete(requestId);
     }
     await Promise.all([...privateSessions].map(async session => {
-      await Promise.all([session.clearCache(), session.clearStorageData()]);
+      await clearPrivateSession(session);
       this.#privatePermissions.delete(session);
     }));
   }
@@ -620,10 +619,11 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
       openElectronContextMenu({ windowId, window, contents, params, tab: { id, workspaceId: tab.workspaceId, partitionWorkspaceId: tab.partitionWorkspaceId, sessionId: tab.sessionId, private: tab.private }, searchUrl: selection => (this.#searchTemplates.get(windowId) ?? "https://duckduckgo.com/?q={query}").replace("{query}", encodeURIComponent(selection)), createTab: (url, source) => this.createTab(windowId, { url, active: true, workspaceId: source.workspaceId, partitionWorkspaceId: source.partitionWorkspaceId, sessionId: source.sessionId, private: source.private }), navigate: (tabId, url) => this.navigate(tabId, url) });
     });
 
-    contents.on("will-navigate", event => {
-      const protocol = new URL(event.url).protocol;
-      if (protocol !== "http:" && protocol !== "https:") event.preventDefault();
-    });
+    const blockUnsafeNavigation = (event: Electron.Event & { readonly url: string }): void => {
+      if (!isWebNavigation(event.url)) event.preventDefault();
+    };
+    contents.on("will-navigate", blockUnsafeNavigation);
+    contents.on("will-redirect", blockUnsafeNavigation);
     contents.on("did-start-navigation", details => {
       if (details.isMainFrame) this.#documentVersions.set(contents, (this.#documentVersions.get(contents) ?? 0) + 1);
     });
@@ -695,12 +695,13 @@ export class ElectronBrowserManager implements ElectronBrowserBackend {
         overrideBrowserWindowOptions: {
           parent, width: 520, height: 720, minWidth: 360, minHeight: 480, show: false, autoHideMenuBar: true,
           title: "Autenticação — Moon Browser", backgroundColor: "#090a10",
-          webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false, session: contents.session }
+          webPreferences: secureWebPreferences({ session: contents.session })
         }
       };
     });
     contents.on("did-create-window", popup => {
       this.#auxiliaryWindows.set(popup.id, { tabId: id, window: popup });
+      denyWebviewAttachment(popup.webContents);
       popup.setMenuBarVisibility(false);
       this.downloads?.attach(popup.webContents.session, this.downloads.scopeForWindow(windowId), this.windows.isPrivate(windowId) ? windowId : undefined);
       this.requestPipeline?.attach(popup.webContents.session);

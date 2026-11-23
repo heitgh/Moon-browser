@@ -277,6 +277,7 @@ test("exports and imports customization through the real desktop bridge", async 
     const window = await shellWindow(application);
     await dismissOnboarding(window);
     await application.evaluate(({ dialog }, path) => {
+      (globalThis as typeof globalThis & { moonOriginalSaveDialog?: PropertyDescriptor }).moonOriginalSaveDialog = Object.getOwnPropertyDescriptor(dialog, "showSaveDialog");
       Object.defineProperty(dialog, "showSaveDialog", {
         configurable: true,
         value: () => Promise.resolve({ canceled: false, filePath: path })
@@ -294,6 +295,7 @@ test("exports and imports customization through the real desktop bridge", async 
     await selectValue(window, "Modo", "dark");
     await expect.poll(() => window.evaluate(() => document.documentElement.dataset.moonTheme)).toBe("dark");
     await application.evaluate(({ dialog }, path) => {
+      (globalThis as typeof globalThis & { moonOriginalOpenDialog?: PropertyDescriptor }).moonOriginalOpenDialog = Object.getOwnPropertyDescriptor(dialog, "showOpenDialog");
       Object.defineProperty(dialog, "showOpenDialog", {
         configurable: true,
         value: () => Promise.resolve({ canceled: false, filePaths: [path] })
@@ -301,11 +303,18 @@ test("exports and imports customization through the real desktop bridge", async 
       return true;
     }, exportPath);
     await window.getByLabel("Privacidade e dados", { exact: true }).click();
-    window.once("dialog", dialog => { void dialog.accept().catch(() => undefined); });
+    await window.evaluate(() => { globalThis.confirm = () => true; });
     await window.getByLabel("Importar personalização").click();
     await expect.poll(() => window.evaluate(() => document.documentElement.dataset.moonTheme)).toBe("light");
     await window.getByLabel("Aplicar personalização").click();
   } finally {
+    if (child.exitCode === null && child.signalCode === null) await application.evaluate(({ dialog }) => {
+      const originals = globalThis as typeof globalThis & { moonOriginalSaveDialog?: PropertyDescriptor; moonOriginalOpenDialog?: PropertyDescriptor };
+      for (const [name, descriptor] of [["showSaveDialog", originals.moonOriginalSaveDialog], ["showOpenDialog", originals.moonOriginalOpenDialog]] as const) {
+        if (descriptor) Object.defineProperty(dialog, name, descriptor);
+        else Reflect.deleteProperty(dialog, name);
+      }
+    }).catch(() => undefined);
     // Preserve the original crash/error instead of masking it with process()
     // after Playwright has already disposed the terminated application.
     if (child.exitCode === null && child.signalCode === null) await quitDesktop(application);
@@ -485,7 +494,7 @@ test("research reads real sources, saves notes and opt-in memory, and recovers a
     await page.getByLabel("Salvar como nota", { exact: true }).click();
     await expect(page.getByRole("status")).toContainText("Nota salva");
     await page.locator(".moon-drawer-body").evaluate(node => { node.scrollTop = 0; });
-    await page.locator(".moon-drawer").screenshot({ path: "assets/screenshots/update-research.png" });
+    await page.locator(".moon-drawer").screenshot({ path: test.info().outputPath("research.png") });
     await page.getByLabel("O que o Moon lembra sobre mim?", { exact: true }).click();
     await page.getByLabel("Sessões", { exact: true }).check();
     await expect(page.locator(".moon-research")).toHaveAttribute("aria-busy", "false");
@@ -502,7 +511,7 @@ test("research reads real sources, saves notes and opt-in memory, and recovers a
     await expect(page.locator(".moon-research-status")).toContainText("1 abas restauradas");
     await page.getByLabel("Retomar Sessão de biologia", { exact: true }).click();
     await expect(page.locator(".moon-research-status")).toContainText("0 abas restauradas");
-    await page.locator(".moon-drawer").screenshot({ path: "assets/screenshots/update-memory.png" });
+    await page.locator(".moon-drawer").screenshot({ path: test.info().outputPath("memory.png") });
     const crossWorkspace = await page.evaluate(async () => {
       const bridge = (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser;
       const tabs = await bridge.getTabs();
@@ -519,7 +528,7 @@ test("research reads real sources, saves notes and opt-in memory, and recovers a
     await page.keyboard.press("Control+Shift+P"); await page.getByLabel("Buscar na Central de comandos").fill("Trechos principais");
     await expect(page.locator('.moon-command-result[data-kind="note"]')).toBeVisible();
     await page.keyboard.press("Enter"); await expect(page.locator(".moon-drawer-title")).toHaveText("Bloco de notas");
-    await page.locator(".moon-drawer").screenshot({ path: "assets/screenshots/update-study-note.png" });
+    await page.locator(".moon-drawer").screenshot({ path: test.info().outputPath("study-note.png") });
     const privatePagePromise = application.waitForEvent("window");
     await page.evaluate(() => (window as unknown as { moonBrowser: import("../../ui/browser-shell/contracts.js").MoonBrowserBridge }).moonBrowser.createPrivateWindow());
     const privatePage = await privatePagePromise; await privatePage.waitForLoadState();

@@ -18,8 +18,12 @@ import { changeInterfaceZoom, installInterfaceWheel, installZoomShortcuts } from
 import { NativeUpdater } from "../services/native-updater.js";
 import { app, ipcMain, shell, dialog, BrowserWindow } from "electron";
 import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { assertRecoveryDocument } from "../ipc/recovery-ipc-policy.js";
+import { trustedWheelWindowId } from "../ipc/ipc-policy.js";
+import { denyWebviewAttachment, secureWebPreferences } from "../security/web-preferences.js";
+import { clearPrivateSession } from "../security/private-session.js";
 import { ElectronBrowserManager } from "../browser/browser-manager.js";
 import { registerBrowserIpc } from "../ipc/browser-ipc.js";
 import { registerProductIpc } from "../ipc/product-ipc.js";
@@ -75,9 +79,9 @@ async function showRecoveryWindow(profileDirectory: string): Promise<void> {
     width: 760, height: 780, minWidth: 520, minHeight: 580,
     title: "Moon Browser — Recuperação de perfil",
     backgroundColor: "#10121a", autoHideMenuBar: true,
-    webPreferences: { preload: join(appRoot, "recovery-preload.cjs"),
-      nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: false }
+    webPreferences: secureWebPreferences({ preload: join(appRoot, "recovery-preload.cjs") })
   });
+  denyWebviewAttachment(window.webContents);
   recoveryWindow = window;
   let recoveryBusy = false;
   const runRecovery = async (event: Electron.IpcMainInvokeEvent, operation: (service: ProfileRecoveryService) => Promise<string>): Promise<string> => {
@@ -163,18 +167,14 @@ async function createMainWindow(privateMode = false, profileId = defaultProfileI
   const id = windows.create({
     title: privateMode ? `Moon Browser — Janela anônima · ${localProfile.name}` : `Moon Browser — ${localProfile.name}`,
     backgroundColor: privateMode ? "#11101a" : "#090a10",
-    webPreferences: {
+    webPreferences: secureWebPreferences({
       preload: join(appRoot, "preload.cjs"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      webviewTag: false,
       partition: privateMode
         ? `moon-shell-private:${randomUUID()}`
         : localProfile.kind === "guest"
           ? `moon-shell:${profileId}`
           : `persist:moon-shell:${profileId}`
-    }
+    })
   }, { private: privateMode, guest: localProfile.kind === "guest", profileId });
   const window = windows.require(id);
   installZoomShortcuts(window.webContents, action => browser.zoomActivePage(id, action));
@@ -191,7 +191,8 @@ async function createMainWindow(privateMode = false, profileId = defaultProfileI
     event.preventDefault();
     if (closing) return;
     closing = true;
-    void application?.closeWindow(id).then(() => {
+    void application?.closeWindow(id).then(async () => {
+      if (privateMode || localProfile.kind === "guest") await clearPrivateSession(window.webContents.session);
       if (!window.isDestroyed()) window.destroy();
     }).catch(error => {
       closing = false;
@@ -223,7 +224,9 @@ app.whenReady().then(async () => {
   const offlineTest = process.env.NODE_ENV === "test" && process.env.MOON_TEST_OFFLINE === "1";
   const updates = new UpdateChecker(app.getVersion());
   ipc.register("updates:check", event => { updateWindow(event); return offlineTest ? null : updates.check(); });
-  const nativeUpdates = new NativeUpdater({ packaged: app.isPackaged, platform: process.platform, portable: Boolean(process.env.PORTABLE_EXECUTABLE_DIR), appImage: Boolean(process.env.APPIMAGE), moon: app.getVersion(), chromium: process.versions.chrome, electron: process.versions.electron }, state => {
+  const releaseSecurityPath = join(app.getAppPath(), "dist/types/security");
+  const publicKeyPath = join(releaseSecurityPath, "moon-update-public.pem");
+  const nativeUpdates = new NativeUpdater({ packaged: app.isPackaged, platform: process.platform, portable: Boolean(process.env.PORTABLE_EXECUTABLE_DIR), appImage: Boolean(process.env.APPIMAGE), signedWindowsRelease: existsSync(join(releaseSecurityPath, "moon-signed-windows-release")), linuxUpdatePublicKey: existsSync(publicKeyPath) ? readFileSync(publicKeyPath, "utf8") : undefined, moon: app.getVersion(), chromium: process.versions.chrome, electron: process.versions.electron }, state => {
     for (const window of windows.list()) {
       const id = windows.idForWebContents(window.webContents);
       if (id && !windows.isPrivate(id) && !windows.isGuest(id)) window.webContents.send("updates:state", state);
@@ -307,8 +310,8 @@ app.whenReady().then(async () => {
   });
   ipcMain.on("browser:ui-wheel", (event, direction: unknown) => {
     if (direction !== "in" && direction !== "out") return;
-    if (event.sender.isDestroyed() || !event.senderFrame || event.senderFrame !== event.sender.mainFrame || event.senderFrame.detached) return;
-    const id = browser.windowIdForContents(event.sender); const window = id ? windows.get(id) : undefined;
+    const id = trustedWheelWindowId(event, windows, app.getAppPath(), contents => browser.windowIdForContents(contents));
+    const window = id ? windows.get(id) : undefined;
     if (window) setImmediate(() => changeInterfaceZoom(window.webContents, direction));
   });
   registerBrowserIpc(ipc, application, windows, profileId => createMainWindow(true, profileId));

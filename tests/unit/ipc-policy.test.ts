@@ -1,7 +1,7 @@
 import { pathToFileURL } from "node:url";
 import { resolve, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { assertBoundedPayload, assertShellCaller } from "../../apps/desktop/electron/ipc/ipc-policy.js";
+import { assertBoundedPayload, assertShellCaller, trustedWheelWindowId } from "../../apps/desktop/electron/ipc/ipc-policy.js";
 import type { WindowManager } from "../../apps/desktop/electron/main/window-manager.js";
 function fixture() {
   const frame = { url: pathToFileURL(join(resolve("/moon"), "index.html")).href, detached: false };
@@ -31,5 +31,29 @@ describe("privileged IPC boundary", () => {
     expect(() => assertBoundedPayload({ url: "https://example.com", tabId: "1" })).not.toThrow();
     for (const value of [NaN, Infinity, new Date(), "x".repeat(8_000_001), JSON.parse('{"__proto__":{}}')]) expect(() => assertBoundedPayload(value)).toThrow();
     const cycle: unknown[] = []; cycle.push(cycle); expect(() => assertBoundedPayload(cycle)).toThrow();
+  });
+});
+
+describe("wheel IPC boundary", () => {
+  it("allows the registered shell and an owned web tab", () => {
+    const h = fixture();
+    expect(trustedWheelWindowId(h.event, h.windows, "/moon", () => undefined)).toBe("registered");
+    h.windows.idForWebContents = () => undefined;
+    h.frame.url = "https://example.com/";
+    expect(trustedWheelWindowId(h.event, h.windows, "/moon", () => "registered")).toBe("registered");
+  });
+
+  it("rejects remote shells, iframes, unowned tabs and privileged schemes", () => {
+    const h = fixture();
+    h.frame.url = "https://example.com/";
+    expect(trustedWheelWindowId(h.event, h.windows, "/moon", () => "registered")).toBeUndefined();
+    h.windows.idForWebContents = () => undefined;
+    for (const url of ["file:///tmp/secret", "chrome://settings", "devtools://devtools"]) {
+      h.frame.url = url;
+      expect(trustedWheelWindowId(h.event, h.windows, "/moon", () => "registered")).toBeUndefined();
+    }
+    h.frame.url = "https://example.com/";
+    expect(trustedWheelWindowId(h.event, h.windows, "/moon", () => undefined)).toBeUndefined();
+    expect(trustedWheelWindowId({ ...h.event, senderFrame: { ...h.frame } } as Electron.IpcMainInvokeEvent, h.windows, "/moon", () => "registered")).toBeUndefined();
   });
 });
