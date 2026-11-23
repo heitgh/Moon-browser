@@ -27,4 +27,8 @@ O acesso de leitura aos segredos via `gh api repos/heitgh/Moon-browser/actions/s
 - `npm run typecheck`, `npm run lint`, `bash -n` nos scripts de assinatura e `git diff --check` passaram.
 - Os 7 testes focados de `native-updater` e `release-channel` passaram. O workflow YAML foi analisado por `js-yaml`.
 - Um AppImage de teste com chave Ed25519 **temporária** gerou `signed-alpha-linux.yml` sem `alpha-linux.yml`; `npm run verify:fuses` confirmou os cinco fuses. A chave pública extraída do ASAR coincidiu com a chave de saída do build. Este artefato local não é publicável.
-- Pendente: `prepare_signed=true` nos runners oficiais, certificado/chaves de produção, verificação de Windows e instalação/upgrade em máquinas reais.
+- Pendente: ensaio `prepare_signed=true` com credenciais de produção completas, verificação de Windows e instalação/upgrade em máquinas reais.
+
+## Primeiro ensaio oficial
+
+O [workflow `45252762103`](https://github.com/heitgh/Moon-browser/actions/runs/45252762103), executado na `main` após atualizar Electron para `45.4.1`, usou `prepare_signed=true` e `publish_release=false`. Os dois jobs de build falharam antes de assinar: o Windows informou falta de `WINDOWS_CSC_LINK` (variável `CSC_LINK` no runner) e o Linux informou falta de `LINUX_UPDATE_SIGNING_KEY_B64`. A checagem antiga parava no primeiro segredo ausente; os demais ainda precisam ser verificados. Nenhum instalador `alpha.8` foi publicado. A checagem foi movida para antes de `npm ci` e passou a listar todos os nomes ausentes para o próximo ensaio.
