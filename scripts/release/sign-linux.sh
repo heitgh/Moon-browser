@@ -15,6 +15,9 @@ case "$version" in
   *-beta.*) channel=beta ;;
   *) channel=latest ;;
 esac
+if [[ -e "release/${channel}-linux.yml" ]]; then
+  echo "Legacy update metadata must not be present in a signed release" >&2; exit 1
+fi
 
 printf '%s' "$LINUX_GPG_PRIVATE_KEY_B64" | base64 --decode | gpg --batch --import >/dev/null
 gpg --batch --list-secret-keys "$LINUX_GPG_FINGERPRINT" >/dev/null
@@ -33,11 +36,11 @@ for extension in AppImage deb rpm pacman; do
     echo "Missing versioned Linux package: ${extension}" >&2; exit 1
   fi
 done
-grep -Fx "version: ${version}" "release/${channel}-linux.yml" >/dev/null
+grep -Fx "version: ${version}" "release/signed-${channel}-linux.yml" >/dev/null
 node scripts/release/appimage-signature.mjs sign "${packages[0]}" release/moon-update-public.pem "${packages[0]}.sig"
 node -e 'const fs=require("node:fs"); const asar=require("@electron/asar"); if(!asar.extractFile("release/linux-unpacked/resources/app.asar", "dist/types/security/moon-update-public.pem").equals(fs.readFileSync("release/moon-update-public.pem"))) throw new Error("AppImage embeds a different update key")'
 node scripts/release/appimage-signature.mjs verify "${packages[0]}" release/moon-update-public.pem "${packages[0]}.sig"
-files=("${packages[@]}" release/SHA256SUMS-linux.txt release/SBOM.cdx.json "release/${channel}-linux.yml")
+files=("${packages[@]}" release/SHA256SUMS-linux.txt release/SBOM.cdx.json "release/signed-${channel}-linux.yml")
 for file in "${files[@]}"; do
   if [[ ! -s "$file" ]]; then echo "Missing signing input: $file" >&2; exit 1; fi
   printf '%s' "$LINUX_GPG_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \

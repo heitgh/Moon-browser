@@ -8,7 +8,8 @@ import { verifyDownloadedAppImage } from "./update-signature.js";
 export function updateFeed(update: AvailableUpdate): { url: string; channel: string } {
   const tag = update.version;
   if (!/^v?\d+\.\d+\.\d+(?:-(?:alpha|beta)\.\d+)?$/.test(tag) || update.url !== `https://github.com/heitgh/Moon-browser/releases/tag/${tag}`) throw new Error("Invalid official update");
-  return { url: `https://github.com/heitgh/Moon-browser/releases/download/${tag}/`, channel: tag.includes("-alpha.") ? "alpha" : tag.includes("-beta.") ? "beta" : "latest" };
+  const channel = tag.includes("-alpha.") ? "alpha" : tag.includes("-beta.") ? "beta" : "latest";
+  return { url: `https://github.com/heitgh/Moon-browser/releases/download/${tag}/`, channel: `signed-${channel}` };
 }
 
 export class NativeUpdater {
