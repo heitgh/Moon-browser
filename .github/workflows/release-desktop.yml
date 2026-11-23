@@ -82,6 +82,27 @@ jobs:
           INPUT_TAG: ${{ inputs.tag }}
         run: node -e 'const expected="v"+require("./package.json").version; if(process.env.INPUT_TAG!==expected) throw new Error("Release tag must be "+expected)'
 
+      - name: Reject release outside main
+        if: github.event_name == 'workflow_dispatch' && (inputs.prepare_signed || inputs.publish_release) && github.ref != 'refs/heads/main'
+        run: node -e 'throw new Error("Signed releases must run from main")'
+
+      - name: Check Windows signing prerequisites
+        if: runner.os == 'Windows' && github.event_name == 'workflow_dispatch' && (inputs.prepare_signed || inputs.publish_release) && github.ref == 'refs/heads/main'
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+          MOON_WINDOWS_PUBLISHER_NAME: ${{ secrets.WINDOWS_PUBLISHER_NAME }}
+        run: node scripts/release/check-signing-prerequisites.mjs win32
+
+      - name: Check Linux signing prerequisites
+        if: runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && (inputs.prepare_signed || inputs.publish_release) && github.ref == 'refs/heads/main'
+        env:
+          LINUX_UPDATE_SIGNING_KEY_B64: ${{ secrets.LINUX_UPDATE_SIGNING_KEY_B64 }}
+          LINUX_GPG_PRIVATE_KEY_B64: ${{ secrets.LINUX_GPG_PRIVATE_KEY_B64 }}
+          LINUX_GPG_FINGERPRINT: ${{ secrets.LINUX_GPG_FINGERPRINT }}
+          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+        run: node scripts/release/check-signing-prerequisites.mjs linux
+
       - name: Install dependencies
         run: npm ci
 
@@ -94,35 +115,6 @@ jobs:
 
       - name: Rebuild native dependencies for Electron
         run: npm run native:electron
-
-      - name: Reject release outside main
-        if: github.event_name == 'workflow_dispatch' && (inputs.prepare_signed || inputs.publish_release) && github.ref != 'refs/heads/main'
-        run: node -e 'throw new Error("Signed releases must run from main")'
-
-      - name: Check Windows signing prerequisites
-        if: runner.os == 'Windows' && github.event_name == 'workflow_dispatch' && (inputs.prepare_signed || inputs.publish_release) && github.ref == 'refs/heads/main'
-        shell: pwsh
-        env:
-          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
-          MOON_WINDOWS_PUBLISHER_NAME: ${{ secrets.WINDOWS_PUBLISHER_NAME }}
-        run: |
-          foreach ($name in @('CSC_LINK', 'CSC_KEY_PASSWORD', 'MOON_WINDOWS_PUBLISHER_NAME')) {
-            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) { throw "Missing $name" }
-          }
-
-      - name: Check Linux signing prerequisites
-        if: runner.os == 'Linux' && github.event_name == 'workflow_dispatch' && (inputs.prepare_signed || inputs.publish_release) && github.ref == 'refs/heads/main'
-        shell: bash
-        env:
-          LINUX_UPDATE_SIGNING_KEY_B64: ${{ secrets.LINUX_UPDATE_SIGNING_KEY_B64 }}
-          LINUX_GPG_PRIVATE_KEY_B64: ${{ secrets.LINUX_GPG_PRIVATE_KEY_B64 }}
-          LINUX_GPG_FINGERPRINT: ${{ secrets.LINUX_GPG_FINGERPRINT }}
-          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
-        run: |
-          for name in LINUX_UPDATE_SIGNING_KEY_B64 LINUX_GPG_PRIVATE_KEY_B64 LINUX_GPG_FINGERPRINT LINUX_GPG_PASSPHRASE; do
-            if [[ -z "${!name:-}" ]]; then echo "Missing $name" >&2; exit 1; fi
-          done
 
       - name: Build unsigned test installers
         if: github.event_name != 'workflow_dispatch' || (!inputs.prepare_signed && !inputs.publish_release) || github.ref != 'refs/heads/main'
