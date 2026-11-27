@@ -4,7 +4,7 @@
 
 - Runtime de desenvolvimento fixado em Electron 45.5.0 (Chromium 156.0.8078.109); pacote e atualização ainda exigem homologação assinada.
 - A consulta de atualizações descarta a oferta anterior enquanto verifica novamente e após falha de rede, impedindo download com estado obsoleto.
-- A biblioteca de wallpapers rejeita imagens indecodificáveis ou acima de 16 megapixels/8192 px por lado antes de gravá-las no perfil.
+- A biblioteca de wallpapers rejeita imagens indecodificáveis ou acima de 16 megapixels/8192 px por lado antes de gravá-las no perfil; miniaturas limitam ambas as dimensões a 320 px.
 - Ensaio assinado de release agora pode rodar sem publicação; Windows verifica instalador, portátil e executável interno. Feed `signed-alpha` separa a atualização verificada da `alpha.8` do feed legado; a passagem da `alpha.7` exige instalação manual uma vez.
 - O botão de atualizações agora fica visível na barra de abas, mantém um indicador quando há versão nova e permite verificar novamente após falha de rede; o painel sempre oferece a página oficial de lançamentos, inclusive em janelas anônimas por ação manual.
 - Opções de isolamento, sandbox, segurança web e conteúdo inseguro centralizadas em todas as janelas, views e popups.

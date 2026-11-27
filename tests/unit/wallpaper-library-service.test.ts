@@ -30,7 +30,7 @@ async function importFixture(width: number, height: number, empty = false) {
   electron.createFromBuffer.mockReturnValue({
     isEmpty: () => empty,
     getSize: () => ({ width, height }),
-    resize: () => ({ toDataURL: () => "data:image/png;base64,dGh1bWI=" }),
+    resize: vi.fn(() => ({ toDataURL: () => "data:image/png;base64,dGh1bWI=" })),
   });
   const storage = { listWallpapers: vi.fn(async () => []), saveWallpaper: vi.fn(async () => undefined) };
   const service = new WallpaperLibraryService(storage as unknown as ConstructorParameters<typeof WallpaperLibraryService>[0]);
@@ -51,5 +51,12 @@ describe("wallpaper library import", () => {
       await expect(service.importFromDialog()).rejects.toThrow(/decodificado|megapixels/);
       expect(storage.saveWallpaper).not.toHaveBeenCalled();
     }
+  });
+
+  it("bounds both dimensions of an extreme portrait thumbnail", async () => {
+    const { service } = await importFixture(1, 8192);
+    await service.importFromDialog();
+    const image = electron.createFromBuffer.mock.results[0]?.value;
+    expect(image.resize).toHaveBeenCalledWith({ width: 1, height: 320, quality: "good" });
   });
 });

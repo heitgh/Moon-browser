@@ -155,7 +155,13 @@ function imageMime(buffer: Buffer): WallpaperLibrarySummary["mimeType"] | undefi
 }
 
 function thumbnailData(image: Electron.NativeImage): string {
-  return image.resize({ width: 320, quality: "good" }).toDataURL();
+  const { width, height } = image.getSize();
+  const scale = Math.min(1, 320 / Math.max(width, height));
+  return image.resize({
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+    quality: "good",
+  }).toDataURL();
 }
 
 function dataBuffer(data: string, mimeType: string): Buffer {
