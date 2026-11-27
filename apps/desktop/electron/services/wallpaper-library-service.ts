@@ -85,6 +85,11 @@ export class WallpaperLibraryService {
     const buffer = await readFile(path);
     const mimeType = imageMime(buffer);
     if (!mimeType) throw new Error("O conteúdo do arquivo não corresponde a PNG, JPEG, WebP ou GIF.");
+    const decoded = nativeImage.createFromBuffer(buffer);
+    const { width, height } = decoded.getSize();
+    if (decoded.isEmpty() || !width || !height || width > 8_192 || height > 8_192 || width * height > 16_777_216) {
+      throw new Error("O wallpaper não pôde ser decodificado ou excede 16 megapixels ou 8192 px por lado.");
+    }
     const hash = createHash("sha256").update(buffer).digest("hex");
     const records = await this.storage.listWallpapers();
     const duplicate = records.filter(isManaged).find(record => record.hash === hash && record.id !== replacing?.id);
@@ -97,7 +102,7 @@ export class WallpaperLibraryService {
       name: replacing?.name ?? (basename(path, extname(path)).slice(0, 120) || "Wallpaper"),
       source: data,
       type: "image",
-      thumbnailData: thumbnailData(buffer, mimeType, data),
+      thumbnailData: thumbnailData(decoded),
       mimeType,
       bytes: buffer.byteLength,
       hash,
@@ -149,14 +154,8 @@ function imageMime(buffer: Buffer): WallpaperLibrarySummary["mimeType"] | undefi
   return undefined;
 }
 
-function thumbnailData(buffer: Buffer, mimeType: WallpaperLibrarySummary["mimeType"], fallback: string): string {
-  try {
-    const image = nativeImage.createFromBuffer(buffer);
-    if (image.isEmpty()) return fallback;
-    return image.resize({ width: 320, quality: "good" }).toDataURL();
-  } catch {
-    return mimeType === "image/gif" || mimeType === "image/webp" ? fallback : fallback;
-  }
+function thumbnailData(image: Electron.NativeImage): string {
+  return image.resize({ width: 320, quality: "good" }).toDataURL();
 }
 
 function dataBuffer(data: string, mimeType: string): Buffer {

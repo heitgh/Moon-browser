@@ -36,7 +36,8 @@ export class UpdateChecker {
   constructor(readonly current: string) {}
   check(): Promise<AvailableUpdate | null> {
     if (this.#inflight) return this.#inflight;
-    this.#inflight = this.#fetch().finally(() => { this.#inflight = undefined; });
+    this.available = null;
+    this.#inflight = this.#fetch().catch(error => { this.available = null; throw error; }).finally(() => { this.#inflight = undefined; });
     return this.#inflight;
   }
   async #fetch(): Promise<AvailableUpdate | null> {

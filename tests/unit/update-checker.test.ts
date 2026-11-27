@@ -30,4 +30,24 @@ describe("advisory update checker", () => {
     await expect(first).rejects.toThrow("offline"); expect(checker.available).toBeNull();
     expect((await checker.check())?.version).toBe("v1.0.0"); expect(fetcher).toHaveBeenCalledTimes(2);
   });
+  it("clears a previously offered release when a later check fails", async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify([release("v1.0.0")]))).mockRejectedValueOnce(new Error("offline"));
+    vi.stubGlobal("fetch", fetcher);
+    const checker = new UpdateChecker("0.6.0");
+    expect((await checker.check())?.version).toBe("v1.0.0");
+    await expect(checker.check()).rejects.toThrow("offline");
+    expect(checker.available).toBeNull();
+  });
+  it("keeps the candidate unavailable during a pending refresh", async () => {
+    let finish!: (response: Response) => void;
+    const pending = new Promise<Response>(resolve => { finish = resolve; });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(JSON.stringify([release("v1.0.0")]))).mockReturnValueOnce(pending));
+    const checker = new UpdateChecker("0.6.0");
+    await checker.check();
+    const refresh = checker.check();
+    expect(checker.available).toBeNull();
+    finish(new Response(JSON.stringify([])));
+    await refresh;
+    expect(checker.available).toBeNull();
+  });
 });
