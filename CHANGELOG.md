@@ -2,6 +2,7 @@
 
 ## 0.6.0-alpha.8 — em desenvolvimento; não publicada
 
+- Runtime de desenvolvimento fixado em Electron 45.5.0 (Chromium 156.0.8078.109); pacote e atualização ainda exigem homologação assinada.
 - A consulta de atualizações descarta a oferta anterior enquanto verifica novamente e após falha de rede, impedindo download com estado obsoleto.
 - A biblioteca de wallpapers rejeita imagens indecodificáveis ou acima de 16 megapixels/8192 px por lado antes de gravá-las no perfil.
 - Ensaio assinado de release agora pode rodar sem publicação; Windows verifica instalador, portátil e executável interno. Feed `signed-alpha` separa a atualização verificada da `alpha.8` do feed legado; a passagem da `alpha.7` exige instalação manual uma vez.
